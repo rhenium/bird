@@ -1,0 +1,185 @@
+bird (1.0.13-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Ondřej Surý <ondrej@debian.org>  Sun, 15 Mar 2009 00:27:28 +0100
+
+bird (1.0.12-1) unstable; urgency=low
+
+  * New upstream release. (Closes: #462341, #462344, #427772)
+  * Acknowledge NMU
+  * Fix typo in init.d script (Closes: #476752)
+  * 002_add_DESTDIR.patch:
+    + Honor nostrip option (Closes: #436590)
+  * 005_fix-flex-params.patch, 000_update_config_guess_sub.patch
+    + Removed, merged upstream.
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 12 Nov 2008 16:03:54 +0100
+
+bird (1.0.11-4.1) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Added LSB formatted dependency info in init.d script (closes: #469618)
+
+ -- Peter Eisentraut <petere@debian.org>  Fri, 04 Apr 2008 11:05:04 +0200
+
+bird (1.0.11-4) unstable; urgency=low
+
+  * Fix socket location to /var/run/bird.ctl (Closes: #382104)
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 26 Oct 2006 09:57:15 +0200
+
+bird (1.0.11-3) unstable; urgency=low
+
+  * Change priority from optional to extra.
+  * Manually update config.{guess,sub} since dual build broke
+    autoupdating (Closes: #378213, #378252)
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 13 Jul 2006 11:02:43 -0400
+
+bird (1.0.11-2) unstable; urgency=low
+
+  * 003_birdc-fix-buffer-overflow.patch:
+    + Fix some command line buffer overflow condition (Closes: #317733)
+  * 004_fix_ifr_storage_size_unknown.patch
+    + Make IPv4 compilable again.
+  * 005_fix-flex-params.patch
+    + New flex is more picky about params, fix that.
+  * 006_birdc-include-more-headers.patch
+    + Fix some more warnings by including correct headers.
+  * Prepare for dual IPv4 and IPv6 build:
+    + Upload IPv4 version right now, previous one was only IPv6
+      by accident.
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 13 Jul 2006 11:02:40 -0400
+
+bird (1.0.11-1) unstable; urgency=low
+
+  * New upstream release.
+  * New maintainer.
+  * Acknowledge NMUs (Closes: #133400, #326383, #339663)
+  * Update rules
+    + Use CDBS
+    + Autoupdates tools/config.{guess,sub} (Closes: #300437)
+  * debian/patches/001_netlink.patch
+    + Fixes FTBFS on recent systems
+  * debian/patches/002_destdir.patch
+    + Adds DESTDIR to install: and install-doc: targets in Makefile
+
+ -- Ondřej Surý <ondrej@debian.org>  Sun,  9 Jul 2006 22:32:34 +0200
+
+bird (1.0.4-8.1) unstable; urgency=high
+
+  * Non-maintainer upload.
+  * High-urgency upload for RC bugfix.
+  * Build-depend on libreadline5-dev | libreadline-dev, instead of the
+    removed libreadline4-dev.  Closes: #326383.
+  * Update debian/copyright to include a proper link to the GPL.
+    Closes: #339663.
+
+ -- Steve Langasek <vorlon@debian.org>  Thu, 17 Nov 2005 12:48:24 -0800
+
+bird (1.0.4-8) unstable; urgency=low
+
+  * Rebuild - upload problem
+
+ -- Florian Lohoff <flo@rfc822.org>  Thu,  6 Jan 2005 17:30:01 +0000
+
+bird (1.0.4-7) unstable; urgency=low
+
+  * Dont link /usr/doc -> /usr/share/doc in postinst
+
+ -- Florian Lohoff <flo@rfc822.org>  Thu,  6 Jan 2005 17:29:50 +0000
+
+bird (1.0.4-6) unstable; urgency=low
+
+  * Fix check for rtnetlink support - /proc/ksyms not on 2.6
+    Closes: Bug#248620
+  * Rewrite parts of the long description which hopefully is enough.
+    Closes: Bug#135421
+  * Applied patch for FTBFS bug for gcc 3.4 and 4.0
+    Closes: Bug#266881
+
+ -- Florian Lohoff <flo@rfc822.org>  Thu,  6 Jan 2005 16:23:16 +0000
+
+bird (1.0.4-5) unstable; urgency=low
+
+  * Fix changed option parsing with flex 
+    Closes: Bug#191186
+
+ -- Florian Lohoff <flo@rfc822.org>  Tue, 29 Apr 2003 05:39:53 +0000
+
+bird (1.0.4-4.4) unstable; urgency=low
+
+  * Non-maintainer upload (BSP-2002-11).
+  * Fixed bison files (closes: bug#166599).
+
+ -- Aurelien Jarno <aurel32@debian.org>  Sat, 23 Nov 2002 00:31:39 +0100
+
+bird (1.0.4-4.3) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * conf/confbase.Y: include <stdio.h> since FILE type is used.
+    Closes: Bug#133400.
+
+ -- Jerome Marant <jerome@debian.org>  Sat, 16 Feb 2002 22:17:34 +0100
+
+bird (1.0.4-4.2) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Really added build-depends on libreadline4-dev (closes: #100801)
+  * fix install rule so conf file is installed to debian dir, rather than
+    /etc
+
+ -- Ryan Murray <rmurray@debian.org>  Wed, 15 Aug 2001 21:56:52 -0700
+
+bird (1.0.4-4.1) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Add build-depends libreadline-4.  Closes: #100801
+  * Should now include <time.h>, not <sys/time.h>.
+  * Run libtoolize to get support for new architectures.  Closes: #104930
+
+ -- LaMont Jones <lamont@smallone.fc.hp.com>  Sat, 14 Jul 2001 01:28:52 -0600
+
+bird (1.0.4-4) unstable; urgency=low
+
+  * Another round of Build-Depends fixes - Thanks Roman (Closes: #71567)
+
+ -- Florian Lohoff <flo@rfc822.org>  Wed, 13 Sep 2000 15:27:37 +0200
+
+bird (1.0.4-3) unstable; urgency=low
+
+  * Fixed Build-Depends - No need for specific kernel headers.
+  	(Closes: #71349)
+
+ -- Florian Lohoff <flo@rfc822.org>  Mon, 11 Sep 2000 12:15:37 +0200
+
+bird (1.0.4-2) unstable; urgency=low
+
+  * Fixed copyright - Its GPL but wasnt stated in the copyright file
+  * Fixed make distclean target
+
+ -- Florian Lohoff <flo@rfc822.org>  Fri,  8 Sep 2000 14:07:10 +0200
+
+bird (1.0.4-1) unstable; urgency=low
+
+  * New upstream release 
+
+ -- Florian Lohoff <flo@rfc822.org>  Wed,  6 Sep 2000 18:14:01 +0200
+
+bird (1.0.1-1) unstable; urgency=low
+
+  * New upstream release hopefully fixing memory leaking bugs
+
+ -- Florian Lohoff <flo@rfc822.org>  Wed, 21 Jun 2000 18:17:33 -0700
+
+bird (1.0.0-1) unstable; urgency=low
+
+  * Initial Release.
+
+ -- Florian Lohoff <flo@rfc822.org>  Wed, 14 Jun 2000 17:53:15 +0200
+
+Local variables:
+mode: debian-changelog
+End:

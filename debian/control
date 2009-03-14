@@ -1,0 +1,18 @@
+Source: bird
+Section: net
+Priority: extra
+Build-Depends: bison, debhelper (>= 5.0.0), flex, m4, libreadline5-dev | libreadline-dev, cdbs
+Maintainer: Ondřej Surý <ondrej@debian.org>
+Standards-Version: 3.7.2.0
+
+Package: bird
+Architecture: any
+Depends: ${shlibs:Depends}
+Conflicts: zebra, routed, quagga
+Description: Internet Routing Daemon
+ Bird is internet routing daemons which manages TCP/IP based routing
+ protocols with full support of all modern routing protocols, easy to use
+ configuration interface and powerful route filtering language.
+ .
+ It supports OSPF, RIPv2 (No v1), BGP and redistribution between the
+ protocols with a powerful configuration syntax.
