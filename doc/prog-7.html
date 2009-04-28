@@ -572,6 +572,22 @@ zeroes) and returns the number of ones or -1 if the mask is invalid.
 
 
 <HR><H3>Function</H3>
+<P><I>u32</I>
+<B>u32_log2</B>
+(<I>u32</I> <B>v</B>) --     compute a binary logarithm.
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>u32</I> <B>v</B><DD><P>number
+</DL>
+<H3>Description</H3>
+<P>This function computes a integral part of binary logarithm of given
+integer <B>v</B> and returns it. The computed value is also an index of the
+most significant non-zero bit position.
+
+
+<HR><H3>Function</H3>
 <P><I>int</I>
 <B>patmatch</B>
 (<I>byte *</I> <B>p</B>, <I>byte *</I> <B>s</B>) --     match shell-like patterns

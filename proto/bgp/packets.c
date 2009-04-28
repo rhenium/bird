@@ -252,7 +252,7 @@ bgp_create_update(struct bgp_conn *conn, byte *buf)
       *tmp++ = 0;
       *tmp++ = BGP_AF_IPV6;
       *tmp++ = 1;
-      ea->attrs[0].u.ptr->length = bgp_encode_prefixes(p, tmp, buck, remains-11);
+      ea->attrs[0].u.ptr->length = 3 + bgp_encode_prefixes(p, tmp, buck, remains-11);
       size = bgp_encode_attrs(p, w, ea, remains);
       ASSERT(size >= 0);
       w += size;
@@ -777,19 +777,14 @@ bgp_do_rx_update(struct bgp_conn *conn,
       /* Create fake NEXT_HOP attribute */
       if (len < 1 || (*x != 16 && *x != 32) || len < *x + 2)
 	goto bad;
-      memcpy(bgp_attach_attr_wa(&a0->eattrs, bgp_linpool, BA_NEXT_HOP, 16), x+1, 16);
-      len -= *x + 2;
-      x += *x + 1;
 
-      /* Ignore SNPA info */
-      i = *x++;
-      while (i--)
-	{
-	  if (len < 1 || len < 1 + *x)
-	    goto bad;
-	  len -= *x + 1;
-	  x += *x + 1;
-	}
+      byte *nh = bgp_attach_attr_wa(&a0->eattrs, bgp_linpool, BA_NEXT_HOP, 16);
+      memcpy(nh, x+1, 16);
+      ipa_ntoh(*(ip_addr *)nh);
+
+      /* Also ignore one reserved byte */
+      len -= *x + 2;
+      x += *x + 2;
 
       if (bgp_get_nexthop(p, a0))
 	{

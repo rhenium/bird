@@ -26,6 +26,11 @@
 #define OSPF_TRACE(flags, msg, args...) do { if ((p->debug & flags) || OSPF_FORCE_DEBUG) \
   log(L_TRACE "%s: " msg, p->name , ## args ); } while(0)
 
+#define OSPF_PACKET(dumpfn, buffer, msg, args...) \
+do { if ((p->debug & D_PACKETS) || OSPF_FORCE_DEBUG) \
+{ log(L_TRACE "%s: " msg, p->name, ## args ); dumpfn(p, buffer); } } while(0)
+
+
 #include "nest/bird.h"
 
 #include "lib/checksum.h"
@@ -156,7 +161,8 @@ struct ospf_iface
   u16 autype;
   u16 helloint;			/* number of seconds between hello sending */
   list *passwords;
-  u32 csn;                      /* Crypt seq num. that will be sent net */
+  u32 csn;                      /* Last used crypt seq number */
+  bird_clock_t csn_use;         /* Last time when packet with that CSN was sent */
   ip_addr drip;			/* Designated router */
   u32 drid;
   ip_addr bdrip;		/* Backup DR */
