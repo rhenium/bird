@@ -1,4 +1,4 @@
-bird (1.0.14-1~jaunty+1) jaunty-backports; urgency=low
+bird (1.0.14-1~jaunty+1) jaunty; urgency=low
 
   * Backport for Ubuntu 9.04
 
