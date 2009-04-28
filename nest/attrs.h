@@ -13,6 +13,8 @@
 
 #define AS_PATH_SET		1	/* Types of path segments */
 #define AS_PATH_SEQUENCE	2
+#define AS_PATH_CONFED_SEQUENCE	3
+#define AS_PATH_CONFED_SET	4
 
 #define AS_PATH_MAXLEN		10000
 
@@ -30,14 +32,15 @@ int as_path_get_first(struct adata *path, u32 *orig_as);
 int as_path_get_last(struct adata *path, u32 *last_as);
 int as_path_is_member(struct adata *path, u32 as);
 
+#define PM_ASN		0
+#define PM_QUESTION	1
+#define PM_ASTERISK	2
 
 struct f_path_mask {
   struct f_path_mask *next;
+  int kind;
   u32 val;
-  int any;
 };
-
-// #define PM_ANY -1
 
 int as_path_match(struct adata *path, struct f_path_mask *mask);
 

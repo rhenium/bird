@@ -726,12 +726,13 @@ calculation is necessary. This is described in 13.2 of RFC 2328.
 <HR><H3>Function</H3>
 <P><I>void</I>
 <B>ospf_dbdes_send</B>
-(<I>struct ospf_neighbor *</I> <B>n</B>) --  transmit database description packet
+(<I>struct ospf_neighbor *</I> <B>n</B>, <I>int</I> <B>next</B>) --  transmit database description packet
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
 <DT><I>struct ospf_neighbor *</I> <B>n</B><DD><P>neighbor
+<DT><I>int</I> <B>next</B><DD><P>whether to send a next packet in a sequence (1) or to retransmit the old one (0)
 </DL>
 <H3>Description</H3>
 <P>Sending of a database description packet is described in 10.6 of RFC 2328.

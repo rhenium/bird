@@ -1,8 +1,199 @@
-commit 5d6fed67ceb14dacfc17b41acf58666996754281
+commit f8fbda6fb0c30fdc6e5182679e7bf1eb2fb9c8e9
 Author: Ondrej Filip <feela@majklik.network.cz>
-Date:   Sat Mar 14 16:01:51 2009 +0100
+Date:   Tue Apr 28 11:53:12 2009 +0200
 
-    New release - 1.0.13
+    Small formatting typo in documentation.
+
+commit 73841442d916490fa6a9b5967dbb1f797ca3dac1
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Tue Apr 28 10:20:50 2009 +0200
+
+    Gendist script adapted to git.
+
+commit 11e0568f8b7a51584c7d0fa60368050dfba17193
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 28 09:46:59 2009 +0200
+
+    NEWS and version update
+
+commit 64cf11f544257cae443d899111be1299b1ec0684
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Apr 23 23:15:07 2009 +0200
+
+    Fixes BGPv6 bug - missing endianity conversion.
+    
+    Also removes code skipping SNPAs
+    (obsoleted by newer RFCs, should be ignored).
+
+commit f307842ad85396f8186fa049d551b6cde9925484
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Apr 23 14:44:02 2009 +0200
+
+    Fixes BGPv6 bug - mandatory attributes weren't validated;
+
+commit 8f0c887a52fb19cee14725f66d435cebf2010390
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Apr 23 14:16:05 2009 +0200
+
+    Fixe bug in BGPv6 that causes to send invalid network withdraws.
+
+commit b9539e78d8ebfa9e13d7b61ec9278b76abefdac3
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Apr 23 12:36:24 2009 +0200
+
+    Fixes bug in BGPv6 causing crash by checking missing attributes.
+
+commit e366625c0ef21d02caf2dab1935862ace1e10fed
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Apr 17 18:43:11 2009 +0200
+
+    Fixes mixed-up messages on netlink socket
+    
+    Under specific circumstances there might be two mixed-up
+    netlink sessions (one for scan, the other for route change
+    request). This patch separates netlink scans and requests
+    to two fds (and seq counters).
+    
+    This should fix http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=428865
+
+commit c8a6b9a3d199444fd45879dd5cc5ececd9624822
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Apr 17 01:48:36 2009 +0200
+
+    Rewrite of buggy AS path matching.
+    
+    Old AS path maching supposes thath AS number appears
+    only once in AS path, but that is not true. It also
+    contains some bugs related to AS path sets.
+    
+    New code does not use any assumptions about semantic
+    structure of AS path. It is asymptotically slower than
+    the old code, but on real paths it is not significant.
+    
+    It also allows '?' for matching one arbitrary AS number.
+
+commit 024c310b537abc3ddbac3054de71fd759d422824
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 8 20:15:01 2009 +0200
+
+    Fixes broken cryptographic authentication in OSPF
+    
+    Cryptographic authentication in OSPF is defective by
+    design - there might be several packets independently
+    sent to the network (for example HELLO, LSUPD and LSACK)
+    where they might be reordered and that causes crypt.
+    sequence number error.
+    
+    That can be workarounded by not incresing sequence number
+    too often. Now we update it only when last packet was sent
+    before at least one second. This can constitute a risk of
+    replay attacks, but RFC supposes something similar (like time
+    in seconds used as CSN).
+
+commit b722fe7ebdf7e11f097ed0a85302769de2ac10fb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Apr 6 16:53:06 2009 +0200
+
+    Fixes bug in OSPF packet retransmission.
+    
+    If a DBDES packet from a master to a slave is lost, then the old code
+    does not retransmit it and instead send a next one with the same
+    sequence number. That leads to silent desynchronization of LSA
+    databases.
+
+commit 8298d780be5a5b00c31c10a37a5f3a1353d6e234
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Apr 6 16:17:47 2009 +0200
+
+    Better OSPF packet tracing log messages.
+    
+    Replaces old OSPF packet tracing messages with
+    uniform messages with packet dumps.
+
+commit bcb81251b4e37b96743aa1cdf790f30ef41a465e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Mar 31 21:30:58 2009 +0200
+
+    Documentation update
+
+commit c60cdd8c3926a1b3d9156327e8aae64986084ff4
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Mar 31 21:17:00 2009 +0200
+
+    Cleanup changes
+
+commit b1a597e0c3821c791a41278454e74261cf1b95fb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Mar 31 12:55:57 2009 +0200
+
+    Reimplementation of prefix sets.
+    
+    Prefix sets were broken beyond any repair and have to be reimplemented.
+    They are reimplemented using a trie with bitmasks in nodes.
+    There is also change in the interpretation of minus prefix pattern,
+    but the old interpretation was already inconsistent with
+    the documentation and broken.
+    
+    There is also some bugfixes in filter code related to set variables.
+
+commit 1733d080c9f60de69e843f22e138f27240a8176c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Mar 25 19:15:26 2009 +0100
+
+    Minor text updates.
+
+commit 40b65f947aed065c03c5f2d5c66c6c794a5aadda
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Mar 25 19:05:52 2009 +0100
+
+    Fixes bug in pipe route filtering.
+    
+    Routes comming through pipe from primary to secondary table were
+    filtered by both EXPORT and IMPORT filters, but they should be
+    only filtered by EXPORT filters.
+
+commit 4d7d0cb137b700a17751b5a565539357304f9080
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Mar 25 18:29:17 2009 +0100
+
+    Fixes minor bug in pipe.
+    
+    Missing macro leads to not calling some of protocol's
+    callbacks.
+
+commit 3d574679b8cceb1362bb973e7dfe9981fc93b79b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Mar 20 12:58:21 2009 +0100
+
+    Fix bugs related to kernel table synchronization.
+    
+    KRF_INSTALLED flag was not cleared during reconfiguration
+    that lead to not removing routes during reconfigure when
+    export rules changed.
+    
+    We also should not try to remove routes we didi not installed,
+    on Linux this leads to warnings (as kernel checks route source
+    field and do not allow to remove non-bird routes) but we should
+    not rely on it.
+
+commit 48d79d521cc13f11eafa129a4216512403b83115
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Mar 18 20:30:21 2009 +0100
+
+    Better handling of AS4 optional attribute errors
+    
+    AS4 optional attribute errors were handled by session
+    drop (according to BGP RFC). This patch implements
+    error handling according to new BGP AS4 draft (*)
+     - ignoring invalid AS4 optional attributes.
+    
+    (*) http://www.ietf.org/internet-drafts/draft-chen-rfc4893bis-02.txt
+
+commit eb875dbbe1afaceaf3645384f2a35c98b4c5b5f6
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Mar 14 22:18:49 2009 +0100
+
+    Documentation fixes.
 
 commit ad586334d51a0aef9de868e9586198e402576599
 Author: Ondrej Zajicek <santiago@crfreenet.org>
