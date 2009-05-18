@@ -1,9 +1,3 @@
-bird (1.0.14-1~jaunty+1) jaunty; urgency=low
-
-  * Backport for Ubuntu 9.04
-
- -- Ondřej Surý <ondrej@debian.org>  Tue, 28 Apr 2009 16:28:30 +0200
-
 bird (1.0.14-1) unstable; urgency=low
 
   * New Upstream Version
