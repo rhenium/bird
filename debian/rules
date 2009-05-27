@@ -4,13 +4,14 @@ include /usr/share/cdbs/1/rules/simple-patchsys.mk
 include /usr/share/cdbs/1/class/autotools.mk
 include /usr/share/cdbs/1/rules/utils.mk
 
-export DEB_BUILD_HARDENING=1
-
 CFLAGS = -Wall -g -D_XOPEN_SOURCE=600
 CPPFLAGS = -Wall -g -D_XOPEN_SOURCE=600
 
 DEB_BUILDDIR := build-ipv4
 DEB_BUILDDIR_bird-ipv6 := build-ipv6
+
+DEB_CONFIGURE_SCRIPT_ENV := \
+	DEB_BUILD_HARDENING=1
 
 DEB_CONFIGURE_EXTRA_FLAGS := \
 	--sysconfdir=/etc \
@@ -24,20 +25,19 @@ makebuilddir/bird::
 	mkdir -p build-ipv6
 
 configure/bird::
-	cd build-ipv4 && $(DEB_CONFIGURE_SCRIPT_ENV) $(DEB_CONFIGURE_SCRIPT) \
-	$(DEB_CONFIGURE_NORMAL_ARGS) --disable-maintainer-mode $(cdbs_configure_flags) \
+	cd $(DEB_BUILDDIR) && $(DEB_CONFIGURE_INVOKE) $(cdbs_configure_flags) \
 	$(DEB_CONFIGURE_EXTRA_FLAGS) $(DEB_CONFIGURE_USER_FLAGS) --disable-ipv6
 
-	cd build-ipv6 && $(DEB_CONFIGURE_SCRIPT_ENV) $(DEB_CONFIGURE_SCRIPT) \
-	$(DEB_CONFIGURE_NORMAL_ARGS) --disable-maintainer-mode $(cdbs_configure_flags) \
-	$(DEB_CONFIGURE_EXTRA_FLAGS) $(DEB_CONFIGURE_USER_FLAGS) --enable-ipv6
+#	cd build-ipv6 && $(DEB_CONFIGURE_INVOKE) $(cdbs_configure_flags) \
+#	$(DEB_CONFIGURE_EXTRA_FLAGS) $(DEB_CONFIGURE_USER_FLAGS) --enable-ipv6
 
 build/bird::
-	make -C build-ipv4
-	make -C build-ipv6
+	make -C $(DEB_BUILDDIR)
+#	make -C build-ipv6
 
 install/bird::
-	make -C build-ipv4 install DESTDIR=$(CURDIR)/debian/tmp/
+	make -C $(DEB_BUILDDIR) install DESTDIR=$(CURDIR)/debian/tmp/
+#	make -C build-ipv6 install DESTDIR=$(CURDIR)/debian/tmp-ipv6/
 
 clean::
 	-rm -rf debian/tmp-ipv6 build-ipv4 build-ipv6

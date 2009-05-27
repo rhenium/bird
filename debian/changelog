@@ -1,6 +1,7 @@
 bird (1.0.15-1) unstable; urgency=low
 
-  * New Upstream Version
+  * New Upstream Version (Closes: #428865)
+  * Disable IPv6 build (it was not installed anyway)
 
  -- Ondřej Surý <ondrej@debian.org>  Wed, 27 May 2009 13:57:08 +0200
 
