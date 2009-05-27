@@ -500,10 +500,7 @@ bgp_connect(struct bgp_proto *p)	/* Enter Connect state and start establishing c
   DBG("BGP: Connecting\n");
   s = sk_new(p->p.pool);
   s->type = SK_TCP_ACTIVE;
-  if (ipa_nonzero(p->cf->source_addr))
-    s->saddr = p->cf->source_addr;
-  else
-    s->saddr = p->local_addr;
+  s->saddr = p->source_addr;
   s->daddr = p->cf->remote_ip;
   s->dport = BGP_PORT;
   s->ttl = p->cf->multihop ? : 1;
@@ -609,17 +606,23 @@ static void
 bgp_start_neighbor(struct bgp_proto *p)
 {
   p->local_addr = p->neigh->iface->addr->ip;
-  DBG("BGP: local=%I remote=%I\n", p->local_addr, p->next_hop);
+  p->source_addr = ipa_nonzero(p->cf->source_addr) ? p->cf->source_addr : p->local_addr;
+
+  DBG("BGP: local=%I remote=%I\n", p->source_addr, p->next_hop);
 #ifdef IPV6
   {
     struct ifa *a;
-    p->local_link = ipa_or(ipa_build(0xfe80,0,0,0), ipa_and(p->local_addr, ipa_build(0,0,~0,~0)));
+    p->local_link = IPA_NONE;
     WALK_LIST(a, p->neigh->iface->addrs)
       if (a->scope == SCOPE_LINK)
         {
 	  p->local_link = a->ip;
 	  break;
 	}
+
+    if (! ipa_nonzero(p->local_link))
+      log(L_WARN "%s: Missing link local address on interface %s", p->p.name,  p->neigh->iface->name);
+
     DBG("BGP: Selected link-level address %I\n", p->local_link);
   }
 #endif

@@ -79,6 +79,7 @@ struct bgp_proto {
   ip_addr next_hop;			/* Either the peer or multihop_via */
   struct neighbor *neigh;		/* Neighbor entry corresponding to next_hop */
   ip_addr local_addr;			/* Address of the local end of the link to next_hop */
+  ip_addr source_addr;			/* Address used as advertised next hop, usually local_addr */
   struct event *event;			/* Event for respawning and shutting process */
   struct bgp_bucket **bucket_hash;	/* Hash table of attribute buckets */
   unsigned int hash_size, hash_count, hash_limit;
@@ -146,6 +147,17 @@ void bgp_store_error(struct bgp_proto *p, struct bgp_conn *c, u8 class, u32 code
 
 
 /* attrs.c */
+
+/* Hack: although BA_NEXT_HOP attribute has type EAF_TYPE_IP_ADDRESS, in IPv6
+ * we store two addesses in it - a global address and a link local address.
+ */
+#ifdef IPV6
+#define NEXT_HOP_LENGTH (2*sizeof(ip_addr))
+static inline void set_next_hop(byte *b, ip_addr addr) { ((ip_addr *) b)[0] = addr; ((ip_addr *) b)[1] = IPA_NONE; }
+#else
+#define NEXT_HOP_LENGTH sizeof(ip_addr)
+static inline void set_next_hop(byte *b, ip_addr addr) { ((ip_addr *) b)[0] = addr; }
+#endif
 
 void bgp_attach_attr(struct ea_list **to, struct linpool *pool, unsigned attr, uintptr_t val);
 byte *bgp_attach_attr_wa(struct ea_list **to, struct linpool *pool, unsigned attr, unsigned len);

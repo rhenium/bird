@@ -1,3 +1,171 @@
+commit 4c2507da687cdad1b9d147c1655e5ac46aaaa511
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Tue May 26 10:43:59 2009 +0200
+
+    Warning for BSD system and TCP-MD5.
+
+commit 0c8c86c825f9cebf4c1d9f8d9cd57b2fad84d35b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon May 25 01:41:20 2009 +0200
+
+    Adds INSTALL file.
+
+commit 050ceb867fbb96395c6f7d3207acbb5fe57b8d1c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 22 18:41:52 2009 +0200
+
+    Update versions.
+
+commit 0c51083e97a4288219b29e82be65f399d085adee
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 22 18:08:54 2009 +0200
+
+    NEWS update.
+
+commit ea2ae6dd0ae3f5dd8cd41c1e5a1170a163027725
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 22 17:12:15 2009 +0200
+
+    Change import/preimport to export/preexport to be consistent with filters.
+
+commit d72a0ac2396471ffb2b3a580ee986f950e4d23ae
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 22 15:16:53 2009 +0200
+
+    Fixes serious bug in route attribute handing.
+    
+    ea_same() sometimes returns true for different route attributes,
+    which caused that hash table in BGP does not work correctly and
+    some routes were sent with different attributes.
+
+commit 80f0d6764aa2c54eabdc1b41321a46e8cbcce2b9
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 22 13:37:07 2009 +0200
+
+    Fixes type mismatch on BSD systems.
+
+commit d0c64519e798132b73ae5769b9246acb77b4c5aa
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 22 01:13:07 2009 +0200
+
+    Ugly hack for finding readline on NetBSD
+
+commit 8de11deb9107b0bcfc7bf3922ee7edff3dbcd73a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 22 00:26:30 2009 +0200
+
+    Better checks for M4 in configure.
+
+commit 6c84554b671fce473fe333ab3d8b548a0768882b
+Merge: f434d19... 4d176e1...
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu May 21 09:26:59 2009 +0200
+
+    Merge branch 'master' into dev
+
+commit f434d19174cb2d3054a00248ca609aa87bf8c263
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed May 13 22:04:44 2009 +0200
+
+    Documentation updates
+
+commit 4d176e14509c71823a539b3c8b6103e254296d4f
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Mon May 11 02:01:11 2009 +0200
+
+    'show route protocol <p>' added to CLI.
+
+commit ef9c9ab9b64a6f3b5154e5340ffdcd1d211ec4c5
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Mon May 11 01:32:49 2009 +0200
+
+    OpenBSD port related changes.
+
+commit dd8d2acd3c4ed7d7eb56ca9dbb7c9a6d43e2a869
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Sun May 10 19:23:05 2009 +0200
+
+    Fixed bug in cli help.
+
+commit e755986a342b9a35cb7dd52e055066b1168aef12
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 10 13:15:17 2009 +0200
+
+    Fixes in documentation.
+
+commit 19e10907c197ef123fafdd8a2783f9eb5f4a6f72
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 8 14:37:06 2009 +0200
+
+    Fixes communication on netlink sockets
+    
+    Independent sessions on netlink sockets mixed state
+    in some common variables.
+
+commit 20e94fb85b7097b57089e3912475ac881fd5528d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed May 6 22:02:45 2009 +0200
+
+    A change in OSPF and RIP interface patterns.
+    
+    Allows to add more interface patterns to one common 'options'
+    section like:
+    
+    interface "eth3", "eth4" { options common to eth3 and eth4 };
+    
+    Also removes undocumented and unnecessary ability to specify
+    more interface patterns with different 'options' sections:
+    
+    interface "eth3" { options ... }, "eth4" { options ... };
+
+commit 10ab65a8c9eb846655feacd22c29747743a65328
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed May 6 15:18:52 2009 +0200
+
+    Fixes one recently introduced IPv6 BGP compatibility problem.
+
+commit 2b70f0742e808053f87315433a2a64c749c3ec1d
+Author: Ondrej Filip <feela@mamlas.feela.net>
+Date:   Mon May 4 18:17:46 2009 +0200
+
+    Linux specific TCP-MD5 handling moved to sysdep/linux/sysio.h
+    FreeBSD coded added. BSD cannot set BGP passwords itself.
+    This has to be done by external command.
+
+commit 1bc4b2cc840eb3f48c7e245528ef79c2b0ba50e7
+Author: Ondrej Filip <feela@mamlas.feela.net>
+Date:   Mon May 4 17:49:56 2009 +0200
+
+    Syntax error fix for systems without CONFIG_SELF_CONSCIOUS (KRT_ALLOW_LEARN)
+
+commit b7a735ea9d14ceb5c31712fbe122b54f0d7ec6e7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 29 22:17:40 2009 +0200
+
+    Allow 'third party' BGP updates for originated routes.
+
+commit 4827b69ff43661f4f34d437999b0edaac76f7355
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 29 18:58:24 2009 +0200
+
+    Fixes BGP IPv6 link local next hop handling.
+    
+    When sending 'third party' BGP update, Bird used bogus link local
+    addresses instead of addresses it received before.
+
+commit ad440a570b37e8674ef35f3a18df48f0eb2579eb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 28 18:11:56 2009 +0200
+
+    Fixes handling of 'next hop self' and 'source address' configuration
+    options.
+
+commit a6ee026693a9c24c71dcf846abd32508782e0249
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Tue Apr 28 11:56:33 2009 +0200
+
+    Typo in gendist script.
+
 commit f8fbda6fb0c30fdc6e5182679e7bf1eb2fb9c8e9
 Author: Ondrej Filip <feela@majklik.network.cz>
 Date:   Tue Apr 28 11:53:12 2009 +0200
