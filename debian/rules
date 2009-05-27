@@ -8,7 +8,7 @@ CFLAGS = -Wall -g -D_XOPEN_SOURCE=600
 CPPFLAGS = -Wall -g -D_XOPEN_SOURCE=600
 
 DEB_BUILDDIR := build-ipv4
-DEB_BUILDDIR_bird-ipv6 := build-ipv6
+#DEB_BUILDDIR_bird-ipv6 := build-ipv6
 
 DEB_CONFIGURE_SCRIPT_ENV := \
 	DEB_BUILD_HARDENING=1
@@ -21,23 +21,23 @@ DEB_CONFIGURE_EXTRA_FLAGS := \
 	--with-protocols=all \
 	--enable-client
 
-makebuilddir/bird::
-	mkdir -p build-ipv6
+#makebuilddir/bird::
+#	mkdir -p build-ipv6
 
-configure/bird::
-	cd $(DEB_BUILDDIR) && $(DEB_CONFIGURE_INVOKE) $(cdbs_configure_flags) \
-	$(DEB_CONFIGURE_EXTRA_FLAGS) $(DEB_CONFIGURE_USER_FLAGS) --disable-ipv6
+#configure/bird::
+#	cd $(DEB_BUILDDIR) && $(DEB_CONFIGURE_INVOKE) $(cdbs_configure_flags) \
+#	$(DEB_CONFIGURE_EXTRA_FLAGS) $(DEB_CONFIGURE_USER_FLAGS) --disable-ipv6
 
 #	cd build-ipv6 && $(DEB_CONFIGURE_INVOKE) $(cdbs_configure_flags) \
 #	$(DEB_CONFIGURE_EXTRA_FLAGS) $(DEB_CONFIGURE_USER_FLAGS) --enable-ipv6
 
-build/bird::
-	make -C $(DEB_BUILDDIR)
+#build/bird::
+#	make -C $(DEB_BUILDDIR)
 #	make -C build-ipv6
 
-install/bird::
-	make -C $(DEB_BUILDDIR) install DESTDIR=$(CURDIR)/debian/tmp/
+#install/bird::
+#	make -C $(DEB_BUILDDIR) install DESTDIR=$(CURDIR)/debian/tmp/
 #	make -C build-ipv6 install DESTDIR=$(CURDIR)/debian/tmp-ipv6/
 
-clean::
-	-rm -rf debian/tmp-ipv6 build-ipv4 build-ipv6
+#clean::
+#	-rm -rf debian/tmp-ipv6 build-ipv4 build-ipv6
