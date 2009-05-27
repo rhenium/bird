@@ -644,9 +644,6 @@ EGREP
 GREP
 protocols
 sysdep_dirs
-M4
-BISON
-FLEX
 RANLIB
 INSTALL_DATA
 INSTALL_SCRIPT
@@ -670,6 +667,9 @@ CC
 srcdir_rel_mf
 exedir
 objdir
+M4
+BISON
+FLEX
 target_alias
 host_alias
 build_alias
@@ -722,6 +722,9 @@ with_sysinclude
       ac_precious_vars='build_alias
 host_alias
 target_alias
+FLEX
+BISON
+M4
 CC
 CFLAGS
 LDFLAGS
@@ -1365,6 +1368,9 @@ Optional Packages:
   --with-sysinclude=PATH  search for system includes on specified place
 
 Some influential environment variables:
+  FLEX        location of the Flex program
+  BISON       location of the Bison program
+  M4          location of the M4 program
   CC          C compiler command
   CFLAGS      C compiler flags
   LDFLAGS     linker flags, e.g. -L<lib dir> if you have libraries in a
@@ -1899,6 +1905,9 @@ fi
 if test "${with_sysinclude+set}" = set; then
   withval=$with_sysinclude;
 fi
+
+
+
 
 
 if test "$srcdir" = . ; then
@@ -4281,13 +4290,27 @@ fi
 
   test -n "$M4" && break
 done
-test -n "$M4" || M4="m4"
 
-if test -z "$FLEX" -o -z "$BISON" -o -z "$M4" ; then
-	{ { $as_echo "$as_me:$LINENO: error: Some tools required for building BIRD are missing." >&5
-$as_echo "$as_me: error: Some tools required for building BIRD are missing." >&2;}
+
+test -z "$FLEX"	 && { { $as_echo "$as_me:$LINENO: error: Flex is missing." >&5
+$as_echo "$as_me: error: Flex is missing." >&2;}
    { (exit 1); exit 1; }; }
-	fi
+test -z "$BISON" && { { $as_echo "$as_me:$LINENO: error: Bison is missing." >&5
+$as_echo "$as_me: error: Bison is missing." >&2;}
+   { (exit 1); exit 1; }; }
+test -z "$M4"	 && { { $as_echo "$as_me:$LINENO: error: M4 is missing." >&5
+$as_echo "$as_me: error: M4 is missing." >&2;}
+   { (exit 1); exit 1; }; }
+# Check for GNU $M4
+case `"$M4" --version 2>&1` in
+*GNU*)
+  ;;
+*)
+  { { $as_echo "$as_me:$LINENO: error: Provided M4 is not GNU M4." >&5
+$as_echo "$as_me: error: Provided M4 is not GNU M4." >&2;}
+   { (exit 1); exit 1; }; };;
+esac
+
 
 if test -n "$with_sysconfig" -a "$with_sysconfig" != no ; then
 	if test -f $with_sysconfig ; then
@@ -4310,7 +4333,7 @@ if test "${bird_cv_sys_linux_version+set}" = set; then
 else
 
 cat > conftest.$ac_ext <<EOF
-#line 4313 "configure"
+#line 4336 "configure"
 #include "confdefs.h"
 #include <linux/version.h>
 VERSION: UTS_RELEASE
@@ -4340,7 +4363,7 @@ if test "${bird_cv_sys_linux_version+set}" = set; then
 else
 
 cat > conftest.$ac_ext <<EOF
-#line 4343 "configure"
+#line 4366 "configure"
 #include "confdefs.h"
 #include <linux/version.h>
 VERSION: UTS_RELEASE
@@ -4366,12 +4389,20 @@ $as_echo "$as_me: error: This version of Linux doesn't support IPv6." >&2;}
 					esac
 				;;
 		ipv6:netbsd*)	sysdesc=bsd-v6
+				CPPFLAGS="$CPPFLAGS -I/usr/pkg/include"
+				LDFLAGS="$LDFLAGS -L/usr/pkg/lib"
 				;;
 		ipv4:netbsd*)	sysdesc=bsd
+				CPPFLAGS="$CPPFLAGS -I/usr/pkg/include"
+				LDFLAGS="$LDFLAGS -L/usr/pkg/lib"
 				;;
 		ipv6:freebsd*)	sysdesc=bsd-v6
 				;;
 		ipv4:freebsd*)	sysdesc=bsd
+				;;
+		ipv6:openbsd*)	sysdesc=bsd-v6
+				;;
+		ipv4:openbsd*)	sysdesc=bsd
 				;;
 		*)		{ { $as_echo "$as_me:$LINENO: error: Cannot determine correct system configuration. Please use --with-sysconfig to set it manually." >&5
 $as_echo "$as_me: error: Cannot determine correct system configuration. Please use --with-sysconfig to set it manually." >&2;}

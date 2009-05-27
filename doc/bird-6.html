@@ -121,7 +121,8 @@ for next hop calculation. Default: the address of the local end
 of the interface our neighbor is connected to.
 <P>
 <DT><CODE>password <I>string</I></CODE><DD><P>Use this password for MD5 authentication
-of BGP sessions. Default: no authentication.
+of BGP sessions. Default: no authentication. Password has to be set by
+external utility (e.g. setkey(8)) on BSD systems.
 <P>
 <DT><CODE>rr client</CODE><DD><P>Be a route reflector and treat the neighbor as
 a route reflection client. Default: disabled.
@@ -553,6 +554,8 @@ at periodical intervals of <I>num</I> seconds. The default value is 1.
 Hidden networks are not propagated into other areas.
 <P>
 <DT><CODE>interface <I>pattern</I></CODE><DD><P>Defines that the specified interfaces belong to the area being defined.
+See 
+<A HREF="bird-3.html#dsc-iface">interface</A> common option for detailed description.
 <P>
 <DT><CODE>virtual link <I>id</I></CODE><DD><P>Virtual link to router with the router id. Virtual link acts as a
 point-to-point interface belonging to backbone. The actual area is
@@ -619,19 +622,8 @@ not sent via network, so this mechanismus is quite secure.
 Packets can still be read by an attacker.
 <P>
 <DT><CODE>password "<I>text</I>"</CODE><DD><P>An 8-byte or 16-byte password used for authentication.
-<P>
-<DT><CODE>id <I>num</I></CODE><DD><P>ID of the password, (0-255). If it's not used, BIRD will choose
-ID based on an order of the password item in the interface. For
-example, second password item in one interface will have default
-ID 2.  
-<P>
-<DT><CODE>generate from <I>date</I></CODE><DD><P>The start time of the usage of the password for packet signing.
-<P>
-<DT><CODE>generate to <I>date</I></CODE><DD><P>The last time of the usage of the password for packet signing.
-<P>
-<DT><CODE>accept from <I>date</I></CODE><DD><P>The start time of the usage of the password for packet verification.
-<P>
-<DT><CODE>accept to <I>date</I></CODE><DD><P>The last time of the usage of the password for packet verification.
+See 
+<A HREF="bird-3.html#dsc-pass">password</A> common option for detailed description.
 <P>
 <DT><CODE>neighbors { <I>set</I> } </CODE><DD><P>A set of neighbors to which Hello messages on nonbroadcast networks
 are to be sent. Some of them could be marked as eligible.
@@ -667,7 +659,7 @@ protocol ospf MyOSPF {
                         accept;
                 }
                 reject;
-        };                                                                      
+        };
         area 0.0.0.0 {
                 interface "eth*" {
                         cost 11;
@@ -680,17 +672,15 @@ protocol ospf MyOSPF {
                 interface "ppp*" {
                         cost 100;
                         authentication cryptographic;
-                        passwords {
-                                password "abc" {
-                                        id 1;
-                                        generate to "22-04-2003 11:00:06";
-                                        accept from "17-01-2001 12:01:05";
-                                };
-                                password "def" {
-                                        id 2;
-                                        generate to "22-07-2005 17:03:21";
-                                        accept from "22-02-2001 11:34:06";
-                                };
+                        password "abc" {
+                                id 1;
+                                generate to "22-04-2003 11:00:06";
+                                accept from "17-01-2001 12:01:05";
+                        };
+                        password "def" {
+                                id 2;
+                                generate to "22-07-2005 17:03:21";
+                                accept from "22-02-2001 11:34:06";
                         };
                 };
                 interface "arc0" {
@@ -864,7 +854,7 @@ because there are no good implementations of OSPFv3.
 <DT><CODE>authentication none|plaintext|md5</CODE><DD><P>selects authentication method to be used. <CODE>none</CODE> means that
 packets are not authenticated at all, <CODE>plaintext</CODE> means that a plaintext password is embedded
 into each packet, and <CODE>md5</CODE> means that packets are authenticated using a MD5 cryptographic
-hash. If you set authentication to not-none, it is a good idea to add <CODE>passwords { }</CODE>
+hash. If you set authentication to not-none, it is a good idea to add <CODE>password</CODE>
 section. Default: none.
 <P>
 <DT><CODE>honor always|neighbor|never </CODE><DD><P>specifies when should requests for dumping routing table
@@ -926,8 +916,8 @@ protocol rip MyRIP_test {
         port 1520;
         period 10;
         garbage time 60;
-        interface "eth0" { metric 3; mode multicast; }
-                  "eth1" { metric 2; mode broadcast; };
+        interface "eth0" { metric 3; mode multicast; };
+        interface "eth*" { metric 2; mode broadcast; };
         honor neighbor;
         authentication none;
         import filter { print "importing"; accept; };

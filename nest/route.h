@@ -211,8 +211,9 @@ struct rt_show_data {
   struct filter *filter;
   int verbose;
   struct fib_iterator fit;
-  struct proto *import_protocol;
-  int import_mode, primary_only;
+  struct proto *show_protocol;
+  struct proto *export_protocol;
+  int export_mode, primary_only;
   struct config *running_on_config;
   int net_counter, rt_counter, show_counter;
   int stats, show_for;

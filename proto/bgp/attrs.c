@@ -786,18 +786,13 @@ bgp_create_attrs(struct bgp_proto *p, rte *e, ea_list **attrs, struct linpool *p
 	put_u16(z+2, p->local_as);
     }
 
-  z = bgp_set_attr_wa(ea->attrs+2, pool, BA_NEXT_HOP, sizeof(ip_addr));
+  z = bgp_set_attr_wa(ea->attrs+2, pool, BA_NEXT_HOP, NEXT_HOP_LENGTH);
   if (p->cf->next_hop_self ||
-      !p->is_internal ||
-      rta->dest != RTD_ROUTER)
-    {
-      if (ipa_nonzero(p->cf->source_addr))
-        *(ip_addr *)z = p->cf->source_addr;
-      else
-        *(ip_addr *)z = p->local_addr;
-    }
+      rta->dest != RTD_ROUTER ||
+      (!p->is_internal && (e->attrs->iface != p->neigh->iface)))
+    set_next_hop(z, p->source_addr);
   else
-    *(ip_addr *)z = e->attrs->gw;
+    set_next_hop(z, e->attrs->gw);
 
   bgp_set_attr(ea->attrs+3, BA_LOCAL_PREF, 0);
 
@@ -860,14 +855,15 @@ bgp_update_attrs(struct bgp_proto *p, rte *e, ea_list **attrs, struct linpool *p
     }
 
   a = ea_find(e->attrs->eattrs, EA_CODE(EAP_BGP, BA_NEXT_HOP));
-  if (a && (p->is_internal || (!p->is_internal && e->attrs->iface == p->neigh->iface)))
+  if (a && !p->cf->next_hop_self && (p->is_internal || (!p->is_internal && e->attrs->iface == p->neigh->iface)))
     {
       /* Leave the original next hop attribute, will check later where does it point */
     }
   else
     {
       /* Need to create new one */
-      bgp_attach_attr_ip(attrs, pool, BA_NEXT_HOP, p->local_addr);
+      byte *b = bgp_attach_attr_wa(attrs, pool, BA_NEXT_HOP, NEXT_HOP_LENGTH);
+      set_next_hop(b, p->source_addr);
     }
 
   if (rr)
