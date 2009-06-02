@@ -44,7 +44,7 @@ configure/bird::
 build/bird::
 	make -C $(DEB_BUILDDIR_bird-ipv6)
 
-install/bird::
+install-arch/bird::
 	make -C $(DEB_BUILDDIR_bird-ipv6) install DESTDIR=$(CURDIR)/debian/tmp/
 
 clean::
