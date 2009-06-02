@@ -21,27 +21,31 @@ DEB_CONFIGURE_EXTRA_FLAGS := \
 	--infodir=\$${prefix}/share/info \
 	--localstatedir=/var \
 	--with-protocols=all \
-	--enable-client
+	--enable-client \
+	--disable-ipv6
+
+DEB_CONFIGURE_EXTRA_FLAGS_bird-ipv6 := \
+	--sysconfdir=/etc \
+	--mandir=\$${prefix}/share/man \
+	--infodir=\$${prefix}/share/info \
+	--localstatedir=/var \
+	--with-protocols=all \
+	--enable-client \
+	--disable-ipv6
 
 makebuilddir/bird::
 	mkdir -p $(DEB_BUILDDIR_bird-ipv6)
 
 configure/bird::
-	cd $(DEB_BUILDDIR) && $(DEB_CONFIGURE_SCRIPT_ENV) $(DEB_CONFIGURE_SCRIPT) \
-	$(DEB_CONFIGURE_NORMAL_ARGS) $(cdbs_configure_flags) \
-	$(DEB_CONFIGURE_EXTRA_FLAGS) $(DEB_CONFIGURE_USER_FLAGS) --disable-ipv6
-
 	cd $(DEB_BUILDDIR_bird-ipv6) && $(DEB_CONFIGURE_SCRIPT_ENV) $(DEB_CONFIGURE_SCRIPT) \
 	$(DEB_CONFIGURE_NORMAL_ARGS) $(cdbs_configure_flags) \
-	$(DEB_CONFIGURE_EXTRA_FLAGS) $(DEB_CONFIGURE_USER_FLAGS) --enable-ipv6
+	$(DEB_CONFIGURE_EXTRA_FLAGS_bird-ipv6) $(DEB_CONFIGURE_USER_FLAGS)
 
 build/bird::
-	make -C $(DEB_BUILDDIR)
 	make -C $(DEB_BUILDDIR_bird-ipv6)
 
 install/bird::
-	make -C $(DEB_BUILDDIR) install DESTDIR=$(CURDIR)/debian/tmp/
 	make -C $(DEB_BUILDDIR_bird-ipv6) install DESTDIR=$(CURDIR)/debian/tmp/
 
 clean::
-	-rm -rf $(DEB_BUILDDIR) $(DEB_BUILDDIR_bird-ipv6)
+	-rm -rf $(DEB_BUILDDIR_bird-ipv6)
