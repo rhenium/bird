@@ -1,3 +1,10 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 002_add_DESTDIR.patch by Ondřej Surý <ondrej@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: No description
+
+@DPATCH@
 diff -urNap bird-1.0.12~/tools/Makefile.in bird-1.0.12/tools/Makefile.in
 --- bird-1.0.12~/tools/Makefile.in	2008-10-26 14:36:25.000000000 +0100
 +++ bird-1.0.12/tools/Makefile.in	2008-11-12 15:43:36.000000000 +0100

@@ -1,3 +1,10 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 010_regenerate-configure.patch by Ondřej Surý <ondrej@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: No description
+
+@DPATCH@
 diff --git a/configure b/configure
 index 0e784ef..665afe1 100755
 --- a/configure

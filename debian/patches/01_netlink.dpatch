@@ -1,3 +1,10 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 001_netlink.patch by Ondřej Surý <ondrej@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: No description
+
+@DPATCH@
 diff -urN bird-1.0.11~/sysdep/linux/netlink/netlink.c bird-1.0.11/sysdep/linux/netlink/netlink.c
 --- bird-1.0.11~/sysdep/linux/netlink/netlink.c	2004-06-05 11:58:23.000000000 +0200
 +++ bird-1.0.11/sysdep/linux/netlink/netlink.c	2006-07-10 02:36:42.000000000 +0200

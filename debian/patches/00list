@@ -1,0 +1,7 @@
+01_netlink.dpatch
+02_add_DESTDIR.dpatch
+03_birdc-fix-buffer-overflow.dpatch
+04_fix-ifr-storage-size-unknown.dpatch
+06_birdc-include-more-headers.dpatch
+09_bird-ipv6-configure.dpatch
+10_regenerate-configure.dpatch

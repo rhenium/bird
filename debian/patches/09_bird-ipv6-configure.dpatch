@@ -1,3 +1,10 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 009_bird-ipv6-configure.patch by Ondřej Surý <ondrej@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: No description
+
+@DPATCH@
 diff -urNap bird-1.0.15~/configure.in bird-1.0.15/configure.in
 --- bird-1.0.15~/configure.in	2009-05-27 13:57:07.000000000 +0200
 +++ bird-1.0.15/configure.in	2009-06-02 10:40:27.000000000 +0200
