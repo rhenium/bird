@@ -1,51 +1,117 @@
 #!/usr/bin/make -f
-include /usr/share/cdbs/1/rules/debhelper.mk
-include /usr/share/cdbs/1/rules/simple-patchsys.mk
-include /usr/share/cdbs/1/class/autotools.mk
-include /usr/share/cdbs/1/rules/utils.mk
+# -*- makefile -*-
+# Sample debian/rules that uses debhelper.
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
 
-CFLAGS = -Wall -g -D_XOPEN_SOURCE=600
-CPPFLAGS = -Wall -g -D_XOPEN_SOURCE=600
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
 
-DEB_BUILDDIR := build-ipv4
-DEB_BUILDDIR_bird-ipv6 := build-ipv6
 
-DEB_CONFIGURE_SCRIPT_ENV := \
-	DEB_BUILD_HARDENING=1
-DEB_MAKE_ENVVARS := \
-	DEB_BUILD_HARDENING=1
+# These are used for cross-compiling and for saving the configure script
+# from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+ifneq ($(DEB_HOST_GNU_TYPE),$(DEB_BUILD_GNU_TYPE))
+CROSS= --build $(DEB_BUILD_GNU_TYPE) --host $(DEB_HOST_GNU_TYPE)
+else
+CROSS= --build $(DEB_BUILD_GNU_TYPE)
+endif
 
-DEB_CONFIGURE_EXTRA_FLAGS := \
-	--sysconfdir=/etc \
-	--mandir=\$${prefix}/share/man \
-	--infodir=\$${prefix}/share/info \
-	--localstatedir=/var \
-	--with-protocols=all \
-	--enable-client \
-	--disable-ipv6
+COMMON_FLAGS= -prefix=/usr --sysconfdir=/etc --mandir=\$${prefix}/share/man \
+	--infodir=\$${prefix}/share/info --localstatedir=/var \
+	--with-protocols=all --enable-client 
 
-DEB_CONFIGURE_EXTRA_FLAGS_bird-ipv6 := \
-	--sysconfdir=/etc \
-	--mandir=\$${prefix}/share/man \
-	--infodir=\$${prefix}/share/info \
-	--localstatedir=/var \
-	--with-protocols=all \
-	--enable-client \
-	--disable-ipv6
+build-ipv4/config.status: configure
+	dh_testdir
 
-makebuilddir/bird::
-	mkdir -p $(DEB_BUILDDIR_bird-ipv6)
+ifneq "$(wildcard /usr/share/misc/config.sub)" ""
+	cp -f /usr/share/misc/config.sub tools/config.sub
+endif
+ifneq "$(wildcard /usr/share/misc/config.guess)" ""
+	cp -f /usr/share/misc/config.guess tools/config.guess
+endif
+	mkdir -p build-ipv4
+	cd build-ipv4 && \
+	DEB_BUILD_HARDENING=1 $(CURDIR)/configure $(CROSS) \
+	$(COMMON_FLAGS) \
+	--disable-ipv6 \
+	CFLAGS="$(CFLAGS)" LDFLAGS="-Wl,-z,defs"
 
-configure/bird::
-	cd $(DEB_BUILDDIR_bird-ipv6) && $(DEB_CONFIGURE_SCRIPT_ENV) $(DEB_CONFIGURE_SCRIPT) \
-	$(DEB_CONFIGURE_NORMAL_ARGS) $(cdbs_configure_flags) \
-	$(DEB_CONFIGURE_EXTRA_FLAGS_bird-ipv6) $(DEB_CONFIGURE_USER_FLAGS)
+build-ipv6/config.status:
+	dh_testdir
 
-build/bird::
-	make -C $(DEB_BUILDDIR_bird-ipv6)
+ifneq "$(wildcard /usr/share/misc/config.sub)" ""
+	cp -f /usr/share/misc/config.sub tools/config.sub
+endif
+ifneq "$(wildcard /usr/share/misc/config.guess)" ""
+	cp -f /usr/share/misc/config.guess tools/config.guess
+endif
 
-install-arch/bird::
-	make -C $(DEB_BUILDDIR_bird-ipv6) install DESTDIR=$(CURDIR)/debian/tmp/
+	mkdir -p build-ipv6
 
-clean::
-	-rm -rf $(DEB_BUILDDIR_bird-ipv6)
+	cd build-ipv6 && \
+	DEB_BUILD_HARDENING=1 $(CURDIR)/configure $(CROSS) \
+	$(COMMON_FLAGS) \
+	--enable-ipv6 \
+	CFLAGS="$(CFLAGS)" LDFLAGS="-Wl,-z,defs"
+
+
+build: build-stamp-ipv4 build-stamp-ipv6
+
+build-stamp-ipv4: build-ipv4/config.status 
+	dh_testdir
+	DEB_BUILD_HARDENING=1 $(MAKE) -C build-ipv4
+	touch $@
+
+build-stamp-ipv6: build-ipv6/config.status 
+	dh_testdir
+	DEB_BUILD_HARDENING=1 $(MAKE) -C build-ipv6
+	touch $@
+
+clean: 
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp-ipv4 build-stamp-ipv6
+	rm -rf build-ipv4 build-ipv6
+	rm -f config.sub config.guess
+	dh_clean 
+
+install: build
+	dh_testdir
+	dh_testroot
+	dh_prep  
+	dh_installdirs
+
+	# Add here commands to install the package into debian/bird.
+	$(MAKE) -C build-ipv4 DESTDIR=$(CURDIR)/debian/bird install
+	$(MAKE) -C build-ipv6 DESTDIR=$(CURDIR)/debian/bird install
+
+
+# Build architecture-independent files here.
+binary-indep: install
+# We have nothing to do by default.
+
+# Build architecture-dependent files here.
+binary-arch: install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs ChangeLog
+	dh_installdocs
+	dh_installexamples
+	dh_installinit
+	dh_installman
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install 
