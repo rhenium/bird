@@ -1,3 +1,11 @@
+bird (1.0.15-2) unstable; urgency=low
+
+  * debian/patches/009_bird-ipv6-configure.patch
+    - Enable IPv6 build
+    - Binaries and config files are build with 6-suffix
+
+ -- Ondřej Surý <ondrej@debian.org>  Tue, 02 Jun 2009 10:45:01 +0200
+
 bird (1.0.15-1) unstable; urgency=low
 
   * New Upstream Version (Closes: #428865)

@@ -1,0 +1,64 @@
+diff -urNap bird-1.0.15~/configure.in bird-1.0.15/configure.in
+--- bird-1.0.15~/configure.in	2009-05-27 13:57:07.000000000 +0200
++++ bird-1.0.15/configure.in	2009-06-02 10:40:27.000000000 +0200
+@@ -42,11 +42,13 @@ AC_SUBST(srcdir_rel_mf)
+ 
+ if test "$enable_ipv6" = yes ; then
+ 	ip=ipv6
++	SUFFIX6=6
+ 	if test "$with_protocols" = all ; then
+ 		with_protocols=bgp,pipe,rip,static
+ 	fi
+ else
+ 	ip=ipv4
++	SUFFIX6=""
+ 	if test "$with_protocols" = all ; then
+ 		with_protocols=bgp,ospf,pipe,rip,static
+ 	fi
+@@ -208,6 +210,7 @@ if test "$enable_client" = yes ; then
+ fi
+ AC_SUBST(CLIENT)
+ AC_SUBST(CLIENT_LIBS)
++AC_SUBST(SUFFIX6)
+ 
+ mkdir -p $objdir/sysdep
+ AC_CONFIG_HEADERS([$objdir/sysdep/autoconf.h:sysdep/autoconf.h.in])
+diff -urNap bird-1.0.15~/sysdep/config.h bird-1.0.15/sysdep/config.h
+--- bird-1.0.15~/sysdep/config.h	2009-05-27 13:57:07.000000000 +0200
++++ bird-1.0.15/sysdep/config.h	2009-06-02 10:40:27.000000000 +0200
+@@ -38,11 +38,11 @@ typedef u16 word;
+ /* Path to configuration file */
+ #ifdef IPV6
+ #  ifdef DEBUGGING
+-#    define PATH_CONFIG "bird-6.conf"
+-#    define PATH_CONTROL_SOCKET "bird-6.ctl"
++#    define PATH_CONFIG "bird6.conf"
++#    define PATH_CONTROL_SOCKET "bird6.ctl"
+ #  else
+-#    define PATH_CONFIG PATH_CONFIG_DIR "/bird-6.conf"
+-#    define PATH_CONTROL_SOCKET PATH_CONTROL_SOCKET_DIR "/bird-6.ctl"
++#    define PATH_CONFIG PATH_CONFIG_DIR "/bird6.conf"
++#    define PATH_CONTROL_SOCKET PATH_CONTROL_SOCKET_DIR "/bird6.ctl"
+ #  endif
+ #else
+ #  ifdef DEBUGGING
+diff -urNap bird-1.0.15~/tools/Makefile.in bird-1.0.15/tools/Makefile.in
+--- bird-1.0.15~/tools/Makefile.in	2009-05-27 13:57:07.000000000 +0200
++++ bird-1.0.15/tools/Makefile.in	2009-06-02 10:42:44.000000000 +0200
+@@ -44,12 +44,12 @@ tags:
+ 
+ install: all
+ 	$(INSTALL) -d $(sbindir) $(sysconfdir) $(localstatedir)
+-	$(INSTALL_PROGRAM) -s $(exedir)/bird $(sbindir)/
++	$(INSTALL_PROGRAM) -s $(exedir)/bird $(sbindir)/bird@SUFFIX6@
+ 	if test -n "@CLIENT@" ; then								\
+-		$(INSTALL_PROGRAM) -s $(exedir)/birdc $(sbindir)/ ;				\
++		$(INSTALL_PROGRAM) -s $(exedir)/birdc $(sbindir)/birdc@SUFFIX6@ ;				\
+ 	fi
+-	if ! test -f $(sysconfdir)/bird.conf ; then						\
+-		$(INSTALL_DATA) $(srcdir)/doc/bird.conf.example $(sysconfdir)/bird.conf ;	\
++	if ! test -f $(sysconfdir)/bird@SUFFIX6@.conf ; then						\
++		$(INSTALL_DATA) $(srcdir)/doc/bird.conf.example $(sysconfdir)/bird@SUFFIX6@.conf ;	\
+ 	else											\
+ 		echo "Not overwriting old bird.conf" ;						\
+ 	fi
