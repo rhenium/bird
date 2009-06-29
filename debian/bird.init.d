@@ -58,7 +58,7 @@ do_stop()
 	#   1 if daemon was already stopped
 	#   2 if daemon could not be stopped
 	#   other if a failure occurred
-	start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --name $NAME
+	start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --name $NAME --exec $DAEMON
 	RETVAL="$?"
 	[ "$RETVAL" = 2 ] && return 2
 	# Wait for children to finish too if this is a daemon that forks
@@ -131,4 +131,4 @@ case "$1" in
 	;;
 esac
 
-;
+:
