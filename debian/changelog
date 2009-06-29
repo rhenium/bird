@@ -1,3 +1,9 @@
+bird (1.1.0-1) unstable; urgency=low
+
+  * New Upstream Version.
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 29 Jun 2009 17:19:30 +0200
+
 bird (1.0.15-2) unstable; urgency=low
 
   * debian/patches/009_bird-ipv6-configure.patch
