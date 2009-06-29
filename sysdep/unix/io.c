@@ -30,6 +30,12 @@
 #include "lib/unix.h"
 #include "lib/sysio.h"
 
+/* Maximum number of calls of rx/tx handler for one socket in one
+ * select iteration. Should be small enough to not monopolize CPU by
+ * one protocol instance.
+ */
+#define MAX_STEPS 4
+
 /*
  *	Tracked Files
  */
@@ -593,6 +599,7 @@ sk_new(pool *p)
   s->saddr = s->daddr = IPA_NONE;
   s->sport = s->dport = 0;
   s->tos = s->ttl = -1;
+  s->flags = 0;
   s->iface = NULL;
   s->rbuf = NULL;
   s->rx_hook = NULL;
@@ -703,7 +710,13 @@ sk_setup(sock *s)
   if ((s->tos >= 0) && setsockopt(fd, SOL_IP, IP_TOS, &s->tos, sizeof(s->tos)) < 0)
     WARN("IP_TOS");
 #endif
-  
+
+#ifdef IPV6
+  int v = 1;
+  if ((s->flags & SKF_V6ONLY) && setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &v, sizeof(v)) < 0)
+    WARN("IPV6_V6ONLY");
+#endif
+
   if (s->ttl >= 0)
     err = sk_set_ttl_int(s);
   else
@@ -921,7 +934,8 @@ sk_open(sock *s)
 	}
       fill_in_sockaddr(&sa, s->saddr, port);
 #ifdef CONFIG_SKIP_MC_BIND
-      if (type == SK_IP && bind(fd, (struct sockaddr *) &sa, sizeof(sa)) < 0)
+      if ((type != SK_UDP_MC) && (type != SK_IP_MC) &&
+	  bind(fd, (struct sockaddr *) &sa, sizeof(sa)) < 0)
 #else
       if (bind(fd, (struct sockaddr *) &sa, sizeof(sa)) < 0)
 #endif
@@ -1335,22 +1349,27 @@ io_loop(void)
 	    {
 	      sock *s = current_sock;
 	      int e;
+	      int steps = MAX_STEPS;
 	      if (FD_ISSET(s->fd, &rd) && s->rx_hook)
 		do
 		  {
+		    steps--;
 		    e = sk_read(s);
 		    if (s != current_sock)
 		      goto next;
 		  }
-		while (e && s->rx_hook);
+		while (e && s->rx_hook && steps);
+
+	      steps = MAX_STEPS;
 	      if (FD_ISSET(s->fd, &wr))
 		do
 		  {
+		    steps--;
 		    e = sk_write(s);
 		    if (s != current_sock)
 		      goto next;
 		  }
-		while (e);
+		while (e && steps);
 	      current_sock = sk_next(s);
 	    next: ;
 	    }

@@ -99,6 +99,14 @@ struct area_net
   u32 metric;
 };
 
+struct ospf_stubnet_config
+{
+  node n;
+  struct prefix px;
+  int hidden, summary;
+  u32 cost;
+};
+
 struct ospf_area_config
 {
   node n;
@@ -107,6 +115,7 @@ struct ospf_area_config
   list patt_list;
   list vlink_list;
   list net_list;
+  list stubnet_list;
 };
 
 struct obits
@@ -523,6 +532,7 @@ struct ospf_area
 {
   node n;
   u32 areaid;
+  struct ospf_area_config *ac;	/* Related area config */
   int origrt;			/* Rt lsa origination scheduled? */
   struct top_hash_entry *rt;	/* My own router LSA */
   list cand;			/* List of candidates for RT calc. */
@@ -550,6 +560,8 @@ struct proto_ospf
   int rfc1583;			/* RFC1583 compatibility */
   int ebit;			/* Did I originate any ext lsa? */
   struct ospf_area *backbone;	/* If exists */
+  void *lsab;			/* LSA buffer used when originating router LSAs */
+  int lsab_size, lsab_used;
 };
 
 struct ospf_iface_patt
@@ -585,8 +597,6 @@ int ospf_import_control(struct proto *p, rte **new, ea_list **attrs,
 			struct linpool *pool);
 struct ea_list *ospf_make_tmp_attrs(struct rte *rt, struct linpool *pool);
 void ospf_store_tmp_attrs(struct rte *rt, struct ea_list *attrs);
-void ospf_rt_notify(struct proto *p, net *n, rte *new, rte *old,
-		    ea_list * attrs);
 void schedule_rt_lsa(struct ospf_area *oa);
 void schedule_rtcalc(struct proto_ospf *po);
 void schedule_net_lsa(struct ospf_iface *ifa);

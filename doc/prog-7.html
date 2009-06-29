@@ -706,6 +706,24 @@ failure it calls <B>die()</B> to quit the program instead of returning
 a <I>NULL</I> pointer.
 <P>Wherever possible, please use the memory resources instead.
 
+
+<HR><H3>Function</H3>
+<P><I>void *</I>
+<B>xrealloc</B>
+(<I>void *</I> <B>ptr</B>, <I>unsigned</I> <B>size</B>) --     realloc with checking
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>void *</I> <B>ptr</B><DD><P>original memory block
+<DT><I>unsigned</I> <B>size</B><DD><P>block size
+</DL>
+<H3>Description</H3>
+<P>This function is equivalent to <B>realloc()</B> except that in case of
+failure it calls <B>die()</B> to quit the program instead of returning
+a <I>NULL</I> pointer.
+<P>Wherever possible, please use the memory resources instead.
+
 <P>
 <HR>
 <A HREF="prog-8.html">Next</A>

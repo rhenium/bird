@@ -31,6 +31,7 @@ struct bgp_config {
   int rr_client;			/* Whether neighbor is RR client of me */
   int rs_client;			/* Whether neighbor is RS client of me */
   int advertise_ipv4;			/* Whether we should add IPv4 capability advertisement to OPEN message */
+  u32 route_limit;			/* Number of routes that may be imported, 0 means disable limit */
   unsigned connect_retry_time;
   unsigned hold_time, initial_hold_time;
   unsigned keepalive_time;
@@ -81,6 +82,7 @@ struct bgp_proto {
   ip_addr local_addr;			/* Address of the local end of the link to next_hop */
   ip_addr source_addr;			/* Address used as advertised next hop, usually local_addr */
   struct event *event;			/* Event for respawning and shutting process */
+  struct timer *startup_timer;		/* Timer used to delay protocol startup due to previous errors (startup_delay) */
   struct bgp_bucket **bucket_hash;	/* Hash table of attribute buckets */
   unsigned int hash_size, hash_count, hash_limit;
   struct fib prefix_fib;		/* Prefixes to be sent */
@@ -127,11 +129,14 @@ void bgp_start_timer(struct timer *t, int value);
 void bgp_check(struct bgp_config *c);
 void bgp_error(struct bgp_conn *c, unsigned code, unsigned subcode, byte *data, int len);
 void bgp_close_conn(struct bgp_conn *c);
-void bgp_update_startup_delay(struct bgp_proto *p, struct bgp_conn *conn, unsigned code, unsigned subcode);
+void bgp_update_startup_delay(struct bgp_proto *p);
 void bgp_conn_enter_established_state(struct bgp_conn *conn);
 void bgp_conn_enter_close_state(struct bgp_conn *conn);
 void bgp_conn_enter_idle_state(struct bgp_conn *conn);
 void bgp_store_error(struct bgp_proto *p, struct bgp_conn *c, u8 class, u32 code);
+int bgp_apply_limits(struct bgp_proto *p);
+void bgp_stop(struct bgp_proto *p, unsigned subcode);
+
 
 
 #ifdef LOCAL_DEBUG
@@ -181,7 +186,7 @@ void bgp_kick_tx(void *vconn);
 void bgp_tx(struct birdsock *sk);
 int bgp_rx(struct birdsock *sk, int size);
 const byte * bgp_error_dsc(byte *buff, unsigned code, unsigned subcode);
-void bgp_log_error(struct bgp_proto *p, char *msg, unsigned code, unsigned subcode, byte *data, unsigned len);
+void bgp_log_error(struct bgp_proto *p, u8 class, char *msg, unsigned code, unsigned subcode, byte *data, unsigned len);
 
 /* Packet types */
 
@@ -239,8 +244,9 @@ void bgp_log_error(struct bgp_proto *p, char *msg, unsigned code, unsigned subco
  */
 
 #define BSS_PREPARE		0	/* Used before ordinary BGP started, i. e. waiting for lock */
-#define BSS_CONNECT		1	/* Ordinary BGP connecting */
-#define BSS_CONNECT_NOCAP	2	/* Legacy BGP connecting (without capabilities) */
+#define BSS_DELAY		1	/* Startup delay due to previous errors */
+#define BSS_CONNECT		2	/* Ordinary BGP connecting */
+#define BSS_CONNECT_NOCAP	3	/* Legacy BGP connecting (without capabilities) */
 
 /* Error classes */
 
@@ -256,8 +262,11 @@ void bgp_log_error(struct bgp_proto *p, char *msg, unsigned code, unsigned subco
 
 #define BEM_NEIGHBOR_LOST	1
 #define BEM_INVALID_NEXT_HOP	2
-#define BEM_INVALID_MD5		3	/* MD5 authentication kernel request failed (possibly not supported */
+#define BEM_INVALID_MD5		3	/* MD5 authentication kernel request failed (possibly not supported) */
 
+/* Automatic shutdown error codes */
+
+#define BEA_ROUTE_LIMIT_EXCEEDED 1
 
 /* Well-known communities */
 

@@ -73,10 +73,8 @@ static int bgp_counter;			/* Number of protocol instances using the listening so
 
 static void bgp_close(struct bgp_proto *p, int apply_md5);
 static void bgp_connect(struct bgp_proto *p);
-static void bgp_active(struct bgp_proto *p, int delay);
-static void bgp_initiate(struct bgp_proto *p);
-static void bgp_stop(struct bgp_proto *p);
-static sock *bgp_setup_listen_sk(void);
+static void bgp_active(struct bgp_proto *p);
+static sock *bgp_setup_listen_sk(ip_addr addr, unsigned port, u32 flags);
 
 
 /**
@@ -92,10 +90,11 @@ static sock *bgp_setup_listen_sk(void);
 static int
 bgp_open(struct bgp_proto *p)
 {
+  struct config *cfg = p->cf->c.global;
   bgp_counter++;
 
   if (!bgp_listen_sk)
-    bgp_listen_sk = bgp_setup_listen_sk();
+    bgp_listen_sk = bgp_setup_listen_sk(cfg->listen_bgp_addr, cfg->listen_bgp_port, cfg->listen_bgp_flags);
 
   if (!bgp_linpool)
     bgp_linpool = lp_new(&root_pool, 4080);
@@ -113,8 +112,34 @@ bgp_open(struct bgp_proto *p)
 	}
     }
 
-  p->start_state = p->cf->capabilities ? BSS_CONNECT : BSS_CONNECT_NOCAP;
   return 0;
+}
+
+static void
+bgp_startup(struct bgp_proto *p)
+{
+  BGP_TRACE(D_EVENTS, "Started");
+  p->start_state = p->cf->capabilities ? BSS_CONNECT : BSS_CONNECT_NOCAP;
+  bgp_active(p);
+}
+
+static void
+bgp_startup_timeout(timer *t)
+{
+  bgp_startup(t->data);
+}
+
+
+static void
+bgp_initiate(struct bgp_proto *p)
+{
+  if (p->startup_delay)
+    {
+      BGP_TRACE(D_EVENTS, "Startup delayed by %d seconds", p->startup_delay);
+      bgp_start_timer(p->startup_timer, p->startup_delay);
+    }
+  else
+    bgp_startup(p);
 }
 
 /**
@@ -196,9 +221,6 @@ bgp_close_conn(struct bgp_conn *conn)
 /**
  * bgp_update_startup_delay - update a startup delay
  * @p: BGP instance
- * @conn: related BGP connection
- * @code: BGP error code
- * @subcode: BGP error subcode
  *
  * This function updates a startup delay that is used to postpone next BGP connect.
  * It also handles disable_after_error and might stop BGP instance when error
@@ -207,26 +229,14 @@ bgp_close_conn(struct bgp_conn *conn)
  * It should be called when BGP protocol error happened.
  */
 void
-bgp_update_startup_delay(struct bgp_proto *p, struct bgp_conn *conn, unsigned code, unsigned subcode)
+bgp_update_startup_delay(struct bgp_proto *p)
 {
   struct bgp_config *cf = p->cf;
 
-  /* Don't handle cease messages as errors */
-  if (code == 6 && !subcode)
-    {
-      p->startup_delay = 0;
-      return;
-    }
+  DBG("BGP: Updating startup delay\n");
 
-  /* During start, we only consider errors on outgoing connection, because
-     otherwise delay timer for outgoing connection is already running and
-     we could increase delay time two times (or more) per one attempt to
-     connect.
-  */
-  if ((p->p.proto_state == PS_START) && (conn != &p->outgoing_conn))
-    return;
-
-  DBG("BGP: Updating startup delay %d %d\n", code, subcode);
+  if (p->last_proto_error && ((now - p->last_proto_error) >= cf->error_amnesia_time))
+    p->startup_delay = 0;
 
   p->last_proto_error = now;
 
@@ -234,27 +244,17 @@ bgp_update_startup_delay(struct bgp_proto *p, struct bgp_conn *conn, unsigned co
     {
       p->startup_delay = 0;
       p->p.disabled = 1;
-      if (p->p.proto_state == PS_START)
-	bgp_stop(p);
-
       return;
     }
-
-  if (p->last_proto_error && ((now - p->last_proto_error) >= cf->error_amnesia_time))
-    p->startup_delay = 0;
 
   if (!p->startup_delay)
     p->startup_delay = cf->error_delay_time_min;
   else
-    {
-      p->startup_delay *= 2;
-      if (p->startup_delay > cf->error_delay_time_max)
-	p->startup_delay = cf->error_delay_time_max;
-    }
+    p->startup_delay = MIN(2 * p->startup_delay, cf->error_delay_time_max);
 }
 
 static void
-bgp_graceful_close_conn(struct bgp_conn *conn)
+bgp_graceful_close_conn(struct bgp_conn *conn, unsigned subcode)
 {
   switch (conn->state)
     {
@@ -268,7 +268,7 @@ bgp_graceful_close_conn(struct bgp_conn *conn)
     case BS_OPENSENT:
     case BS_OPENCONFIRM:
     case BS_ESTABLISHED:
-      bgp_error(conn, 6, 0, NULL, 0);
+      bgp_error(conn, 6, subcode, NULL, 0);
       return;
     default:
       bug("bgp_graceful_close_conn: Unknown state %d", conn->state);
@@ -281,7 +281,7 @@ bgp_down(struct bgp_proto *p)
   if (p->start_state > BSS_PREPARE)
     bgp_close(p, 1);
 
-  DBG("BGP: DOWN\n");
+  BGP_TRACE(D_EVENTS, "Down");
   proto_notify_state(&p->p, PS_DOWN);
 }
 
@@ -293,7 +293,7 @@ bgp_decision(void *vp)
   DBG("BGP: Decision start\n");
   if ((p->p.proto_state == PS_START)
       && (p->outgoing_conn.state == BS_IDLE))
-    bgp_initiate(p);
+    bgp_active(p);
 
   if ((p->p.proto_state == PS_STOP)
       && (p->outgoing_conn.state == BS_IDLE)
@@ -301,12 +301,12 @@ bgp_decision(void *vp)
     bgp_down(p);
 }
 
-static void
-bgp_stop(struct bgp_proto *p)
+void
+bgp_stop(struct bgp_proto *p, unsigned subcode)
 {
   proto_notify_state(&p->p, PS_STOP);
-  bgp_graceful_close_conn(&p->outgoing_conn);
-  bgp_graceful_close_conn(&p->incoming_conn);
+  bgp_graceful_close_conn(&p->outgoing_conn, subcode);
+  bgp_graceful_close_conn(&p->incoming_conn, subcode);
   ev_schedule(p->event);
 }
 
@@ -333,7 +333,7 @@ bgp_conn_leave_established_state(struct bgp_proto *p)
   p->conn = NULL;
 
   if (p->p.proto_state == PS_UP)
-    bgp_stop(p);
+    bgp_stop(p, 0);
 }
 
 void
@@ -473,8 +473,9 @@ bgp_setup_sk(struct bgp_proto *p, struct bgp_conn *conn, sock *s)
 }
 
 static void
-bgp_active(struct bgp_proto *p, int delay)
+bgp_active(struct bgp_proto *p)
 {
+  int delay = MAX(1, p->cf->start_delay_time);
   struct bgp_conn *conn = &p->outgoing_conn;
 
   BGP_TRACE(D_EVENTS, "Connect delayed by %d seconds", delay);
@@ -482,6 +483,22 @@ bgp_active(struct bgp_proto *p, int delay)
   conn->state = BS_ACTIVE;
   bgp_start_timer(conn->connect_retry_timer, delay);
 }
+
+int
+bgp_apply_limits(struct bgp_proto *p)
+{
+  if (p->cf->route_limit && (p->p.stats.imp_routes > p->cf->route_limit))
+    {
+      log(L_WARN "%s: Route limit exceeded, shutting down", p->p.name);
+      bgp_store_error(p, NULL, BE_AUTO_DOWN, BEA_ROUTE_LIMIT_EXCEEDED);
+      bgp_update_startup_delay(p);
+      bgp_stop(p, 1); // Errcode 6, 1 - max number of prefixes reached
+      return -1;
+    }
+
+  return 0;
+}
+
 
 /**
  * bgp_connect - initiate an outgoing connection
@@ -522,17 +539,6 @@ bgp_connect(struct bgp_proto *p)	/* Enter Connect state and start establishing c
   bgp_start_timer(conn->connect_retry_timer, p->cf->connect_retry_time);
 }
 
-static void
-bgp_initiate(struct bgp_proto *p)
-{
-  unsigned delay = MAX(p->startup_delay, p->cf->start_delay_time);
-
-  if (delay)
-    bgp_active(p, delay);
-  else
-    bgp_connect(p);
-}
-
 /**
  * bgp_incoming_connection - handle an incoming connection
  * @sk: TCP socket
@@ -549,7 +555,6 @@ static int
 bgp_incoming_connection(sock *sk, int dummy UNUSED)
 {
   struct proto_config *pc;
-  int match = 0;
 
   DBG("BGP: Incoming connection from %I port %d\n", sk->daddr, sk->dport);
   WALK_LIST(pc, config->protos)
@@ -558,36 +563,39 @@ bgp_incoming_connection(sock *sk, int dummy UNUSED)
 	struct bgp_proto *p = (struct bgp_proto *) pc->proto;
 	if (ipa_equal(p->cf->remote_ip, sk->daddr))
 	  {
-	    match = 1;
-	    if ((p->p.proto_state == PS_START || p->p.proto_state == PS_UP) && (p->start_state > BSS_PREPARE))
-	      {
-		BGP_TRACE(D_EVENTS, "Incoming connection from %I port %d", sk->daddr, sk->dport);
-		if (p->incoming_conn.sk)
-		  {
-		    DBG("BGP: But one incoming connection already exists, how is that possible?\n");
-		    break;
-		  }
-		bgp_setup_conn(p, &p->incoming_conn);
-		bgp_setup_sk(p, &p->incoming_conn, sk);
-		sk_set_ttl(sk, p->cf->multihop ? : 1);
-		bgp_send_open(&p->incoming_conn);
-		return 0;
-	      }
+	    /* We are in proper state and there is no other incoming connection */
+	    int acc = (p->p.proto_state == PS_START || p->p.proto_state == PS_UP) &&
+	      (p->start_state >= BSS_CONNECT) && (!p->incoming_conn.sk);
+
+	    BGP_TRACE(D_EVENTS, "Incoming connection from %I (port %d) %s",
+		      sk->daddr, sk->dport, acc ? "accepted" : "rejected");
+
+	    if (!acc)
+	      goto err;
+
+	    bgp_setup_conn(p, &p->incoming_conn);
+	    bgp_setup_sk(p, &p->incoming_conn, sk);
+	    sk_set_ttl(sk, p->cf->multihop ? : 1);
+	    bgp_send_open(&p->incoming_conn);
+	    return 0;
 	  }
       }
-  if (!match)
-    log(L_AUTH "BGP: Unauthorized connect from %I port %d", sk->daddr, sk->dport);
+
+  log(L_WARN "BGP: Unexpected connect from unknown address %I (port %d)", sk->daddr, sk->dport);
+ err:
   rfree(sk);
   return 0;
 }
 
 static sock *
-bgp_setup_listen_sk(void)
+bgp_setup_listen_sk(ip_addr addr, unsigned port, u32 flags)
 {
   sock *s = sk_new(&root_pool);
   DBG("BGP: Creating incoming socket\n");
   s->type = SK_TCP_PASSIVE;
-  s->sport = BGP_PORT;
+  s->saddr = addr;
+  s->sport = port ? port : BGP_PORT;
+  s->flags = flags;
   s->tos = IP_PREC_INTERNET_CONTROL;
   s->rbsize = BGP_RX_BUFFER_SIZE;
   s->tbsize = BGP_TX_BUFFER_SIZE;
@@ -653,7 +661,7 @@ bgp_neigh_notify(neighbor *n)
 	{
 	  BGP_TRACE(D_EVENTS, "Neighbor lost");
 	  bgp_store_error(p, NULL, BE_MISC, BEM_NEIGHBOR_LOST);
-	  bgp_stop(p);
+	  bgp_stop(p, 0);
 	}
     }
 }
@@ -715,6 +723,10 @@ bgp_start(struct proto *P)
   p->event->hook = bgp_decision;
   p->event->data = p;
 
+  p->startup_timer = tm_new(p->p.pool);
+  p->startup_timer->hook = bgp_startup_timeout;
+  p->startup_timer->data = p;
+
   /*
    *  Before attempting to create the connection, we need to lock the
    *  port, so that are sure we're the only instance attempting to talk
@@ -737,11 +749,23 @@ static int
 bgp_shutdown(struct proto *P)
 {
   struct bgp_proto *p = (struct bgp_proto *) P;
+  unsigned subcode;
 
   BGP_TRACE(D_EVENTS, "Shutdown requested");
   bgp_store_error(p, NULL, BE_MAN_DOWN, 0);
+
+  if (P->reconfiguring)
+    {
+      if (P->cf_new)
+	subcode = 6; // Errcode 6, 6 - other configuration change
+      else
+	subcode = 3; // Errcode 6, 3 - peer de-configured
+    }
+  else
+    subcode = 2; // Errcode 6, 2 - administrative shutdown
+
   p->startup_delay = 0;
-  bgp_stop(p);
+  bgp_stop(p, subcode);
 
   return p->p.proto_state;
 }
@@ -753,6 +777,7 @@ bgp_init(struct proto_config *C)
   struct proto *P = proto_new(C, sizeof(struct bgp_proto));
   struct bgp_proto *p = (struct bgp_proto *) P;
 
+  P->accept_ra_types = RA_OPTIMAL;
   P->rt_notify = bgp_rt_notify;
   P->rte_better = bgp_rte_better;
   P->import_control = bgp_import_control;
@@ -779,12 +804,13 @@ bgp_init(struct proto_config *C)
 void
 bgp_error(struct bgp_conn *c, unsigned code, unsigned subcode, byte *data, int len)
 {
+  struct bgp_proto *p = c->bgp;
+
   if (c->state == BS_CLOSE)
     return;
 
-  bgp_log_error(c->bgp, "Error", code, subcode, data, (len > 0) ? len : -len);
-  bgp_store_error(c->bgp, c, BE_BGP_TX, (code << 16) | subcode);
-  bgp_update_startup_delay(c->bgp, c, code, subcode);
+  bgp_log_error(p, BE_BGP_TX, "Error", code, subcode, data, (len > 0) ? len : -len);
+  bgp_store_error(p, c, BE_BGP_TX, (code << 16) | subcode);
   bgp_conn_enter_close_state(c);
 
   c->notify_code = code;
@@ -792,6 +818,12 @@ bgp_error(struct bgp_conn *c, unsigned code, unsigned subcode, byte *data, int l
   c->notify_data = data;
   c->notify_size = (len > 0) ? len : 0;
   bgp_schedule_packet(c, PKT_NOTIFICATION);
+
+  if (code != 6)
+    {
+      bgp_update_startup_delay(p);
+      bgp_stop(p, 0);
+    }
 }
 
 /**
@@ -847,8 +879,9 @@ bgp_check(struct bgp_config *c)
 }
 
 static char *bgp_state_names[] = { "Idle", "Connect", "Active", "OpenSent", "OpenConfirm", "Established", "Close" };
-static char *bgp_err_classes[] = { "", "Error: ", "Socket: ", "Received: ", "BGP Error: ", "Automatic shutdown", ""};
+static char *bgp_err_classes[] = { "", "Error: ", "Socket: ", "Received: ", "BGP Error: ", "Automatic shutdown: ", ""};
 static char *bgp_misc_errors[] = { "", "Neighbor lost", "Invalid next hop", "Kernel MD5 auth failed" };
+static char *bgp_auto_errors[] = { "", "Route limit exceeded"};
 
 
 static void
@@ -871,6 +904,9 @@ bgp_get_status(struct proto *P, byte *buf)
     case BE_BGP_RX:
     case BE_BGP_TX:
       err2 = bgp_error_dsc(errbuf, p->last_error_code >> 16, p->last_error_code & 0xFF);
+      break;
+    case BE_AUTO_DOWN:
+      err2 = bgp_auto_errors[p->last_error_code];
       break;
     }
 

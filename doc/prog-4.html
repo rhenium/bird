@@ -48,7 +48,7 @@ operation (okay too).
 <DT><I>struct f_val</I> <B>v2</B><DD><P>second value
 </DL>
 <H3>Description</H3>
-<P>Compares two values and returns -1, 0, 1 on , =,  or 999 on error.
+<P>Compares two values and returns -1, 0, 1 on &lt;, =, &gt; or 999 on error.
 Tree module relies on this giving consistent results so that it can
 build balanced trees.
 
@@ -139,7 +139,7 @@ underlying bugs, it will rather say 0 on same filters than say
 <H3>Description</H3>
 <P>Search for given value in the tree. I relies on fact that sorted tree is populated
 by <I>f_val</I> structures (that can be compared by <B>val_compare()</B>). In each node of tree, 
-either single value (then t-from==t-to) or range is present.
+either single value (then t-&gt;from==t-&gt;to) or range is present.
 <P>Both set matching and <CODE><B>switch()</B> { }</CODE> construction is implemented using this function,
 thus both are as fast as they can be.
 
@@ -151,7 +151,7 @@ thus both are as fast as they can be.
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>struct f_tree *</I> <B>from</B><DD><P>degenerated tree (linked by <B>tree</B>-left) to be transformed into form suitable for <B>find_tree()</B>
+<DT><I>struct f_tree *</I> <B>from</B><DD><P>degenerated tree (linked by <B>tree</B>-&gt;left) to be transformed into form suitable for <B>find_tree()</B>
 </DL>
 <H3>Description</H3>
 <P>Transforms denerated tree into balanced tree.
@@ -182,7 +182,7 @@ prefixes, it would be simple, but we have to represent a
 set of prefix pattern. Each prefix pattern consists of
 <I>ppaddr</I>/<I>pplen</I> and two integers: <I>low</I> and <I>high</I>, and a prefix
 <I>paddr</I>/<I>plen</I> matches that pattern if the first MIN(<I>plen</I>, <I>pplen</I>)
-bits of <I>paddr</I> and <I>ppaddr</I> are the same and <I>low</I> = <I>plen</I> = <I>high</I>.
+bits of <I>paddr</I> and <I>ppaddr</I> are the same and <I>low</I> &lt;= <I>plen</I> &lt;= <I>high</I>.
 <P>We use a bitmask (<I>accept</I>) to represent accepted prefix lengths
 at a node. As there are 33 prefix lengths (0..32 for IPv4), but
 there is just one prefix of zero length in the whole trie so we 
@@ -191,7 +191,7 @@ prefix 0.0.0.0/0) as a special case, and <I>accept</I> bitmask
 represents accepted prefix lengths from 1 to 32.
 <P>There are two cases in prefix matching - a match when the length
 of the prefix is smaller that the length of the prefix pattern,
-(<I>plen</I>  <I>pplen</I>) and otherwise. The second case is simple - we
+(<I>plen</I> &lt; <I>pplen</I>) and otherwise. The second case is simple - we
 just walk through the trie and look at every visited node
 whether that prefix accepts our prefix length (<I>plen</I>). The
 first case is tricky - we don't want to examine every descendant
@@ -220,8 +220,8 @@ so we have to store them together in <I>accept</I> mask - the first
 <P>- we are in NULL
 - we are out of path (prefixes are inconsistent)
 - we are in the wanted (final) node (node length == <I>plen</I>)
-- we are beyond the end of path (node length  <I>plen</I>)
-- we are still on path and keep walking (node length  <I>plen</I>)
+- we are beyond the end of path (node length &gt; <I>plen</I>)
+- we are still on path and keep walking (node length &lt; <I>plen</I>)
 <P>The walking code in <B>add_node_to_trie()</B> and <B>trie_match_prefix()</B>
 is structured according to these cases.
 <P>
