@@ -1,3 +1,286 @@
+commit bffd4c0b3900b28cfa84131752d44277866cb413
+Author: Ondrej Filip <feela@trubka.network.cz>
+Date:   Sun Jun 28 10:03:24 2009 +0200
+
+    Small typos.
+
+commit f1684ae6c05a52e1757c709dfbbedb5fc8ae1e07
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Sun Jun 28 09:43:29 2009 +0200
+
+    New release 1.1.0!
+
+commit ef86b8465ff7d8e81038f37103594eb9c66d9c58
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Sat Jun 27 18:56:26 2009 +0200
+
+    Unused file removed.
+
+commit 2d785e8d6a646a878c970583aa54a15209fa0e6e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Jun 26 13:33:41 2009 +0200
+
+    Fixes bug on TCP passive socket binding on BSD.
+    
+    BGP on BSD was bound to random port. I am surprised that
+    nobody noticed it already.
+
+commit 5004d02cb9df1f3ee231632a8e89929f4eb4f088
+Merge: 1876e18... 99355da...
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Jun 26 01:06:12 2009 +0200
+
+    Merge branch 'master' into dev
+
+commit 1876e18d32fa4b21888aae2c984b1b61338c3e60
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 25 15:44:43 2009 +0200
+
+    Minor bugfix.
+
+commit 200ede8226a4173b2405bcd1c98cf20604c33545
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 25 14:42:25 2009 +0200
+
+    NEWS and version update.
+
+commit d72cdff411d0bf4ddecaea5d0fc6d4341b4cb3f1
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jun 23 11:08:30 2009 +0200
+
+    Replace 'bind' option with 'listen' option.
+    
+    To be consistent with other daemons.
+
+commit da95a7a7dad6ebf572adfb448dfc1a5c8400e6ab
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jun 23 11:00:38 2009 +0200
+
+    Fixes bug in ORIGIN check.
+
+commit 29c430f8569b90e1962d92a26f96fad7e72d27ec
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jun 23 10:50:57 2009 +0200
+
+    Changes handling of AS_PATH_CONFED_* segments in AS_PATH.
+    
+    Although standard says that if we receive AS_PATH_CONFED_*
+    (and we are not a part of a confederation) segment, we should
+    drop session, nobody does that and it is unwise to do that.
+    
+    Now we drop session just in case that peer ASN is in
+    AS_PATH_CONFED_* segment (to detect peer that considers BIRD
+    as a part of its confederation).
+
+commit 4323099da9e6e8d53072595009731da9b39e9f19
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jun 20 00:59:32 2009 +0200
+
+    Fixes bug in scheduling of callback by main loop.
+    
+    If other side of a socket is sending data faster than
+    BIRD is processing, BIRD does not schedule any other
+    callbacks (events, timers, rx/tx callbacks).
+
+commit 2757985709f0a132427d4f440ec913b6a0064f80
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jun 20 00:40:21 2009 +0200
+
+    Documentation update
+
+commit bf1aec970e9ac0600266fe7a045847a62f18ac3b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Jun 19 23:49:34 2009 +0200
+
+    Adds support for soft reconfiguration.
+
+commit 789772ed4586213d6a7fbb867b9296a01ce1b9c0
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 18 19:20:07 2009 +0200
+
+    Implements option that changes BGP listening socket parametres.
+
+commit 1b3b3e34ecbc281a13d4ca0b99e891ee9c4d5cac
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 18 14:32:44 2009 +0200
+
+    Minor bugfixes.
+
+commit 6f5603badc12dbbf440e8f85b1165cc8f5d671c7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 11 20:51:13 2009 +0200
+
+    Documentation update.
+
+commit 386752028143e78d0a617216d86f95af4024346d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 11 17:25:38 2009 +0200
+
+    Implements an option that allows to change a set of stub networks.
+
+commit 3d15dcdb1cc91c694aa9319b86bb37510d7ed12b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jun 10 23:45:08 2009 +0200
+
+    Changes OSPF to generate stub networks for non-primary addresses.
+    
+    Also does some reorganization in RT LSA announcement.
+
+commit b99d378698641b9821e4b708a90761aeb9bf6cc4
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Jun 7 00:38:38 2009 +0200
+
+    Minor BGP changes related to error wait time.
+
+commit 723826267101cfbb918125f0f270166cd309229d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jun 6 18:56:33 2009 +0200
+
+    Fixes bug related to startup delay change.
+
+commit dd91e467657b2dba84df308d0dc74d268bbfa228
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jun 6 18:16:22 2009 +0200
+
+    Differentiate between error delay and connect/reconnect delay.
+    
+    The difference is here to reject incoming connections in the
+    first case.
+
+commit 2a04b045e480bbf75229f0177abbd7f84d3b7089
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 4 13:38:18 2009 +0200
+
+    Adds route limit documentation.
+
+commit 72b28a041df18f0da2e6a85360d6935c6a2db471
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 4 13:31:09 2009 +0200
+
+    Implements import route limits.
+
+commit 925fe2d3de0e12c644f91f94d13bf388aeda9b57
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 4 01:22:56 2009 +0200
+
+    Implements route statistics and fixes some minor bugs.
+
+commit 99355da18f8598e93d0e55167582da9687eae082
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Tue Jun 2 12:01:24 2009 +0200
+
+    Inlude DESTDIR in install to make life of packagers easier.
+
+commit 26978ec419217fccfbb8901033703ede886e78b7
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Tue Jun 2 11:36:07 2009 +0200
+
+    Clean also ipv6 bird.ctl
+
+commit de8f238fdb85bdba8ce4b5988584403cf5dbcd1e
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Tue Jun 2 11:00:12 2009 +0200
+
+    Error in test fixed.
+
+commit dc16584ac2be1c097acbf8a0b2f6d412214f2a01
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Tue Jun 2 00:28:08 2009 +0200
+
+    Small change to make BIRD's IPv6 packaging easier
+
+commit c07c65d6d079eaf4525f03f5d126d51caa2595d6
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jun 1 23:18:45 2009 +0200
+
+    Escaped debbuging message removed.
+
+commit 92a72a4cbdd010f69e8d054019770e55a47637e0
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jun 1 19:32:41 2009 +0200
+
+    Adds support for dynamic pair and bgp mask expressions.
+
+commit f429d4348275030a9f488046c4021aa377ad1a79
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jun 1 16:20:48 2009 +0200
+
+    Removes some remnant of '|' bgp path separator.
+
+commit f98e2915794e8641f0704b22cbd9b574514f5b23
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jun 1 14:07:13 2009 +0200
+
+    The pipe cleanup.
+
+commit 2d45e09f58c4ce857e10c241cf0e89b51b9ec49c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jun 1 12:10:10 2009 +0200
+
+    Adds opaque/transparent pipe mode selection.
+
+commit 23ac9e9a9eefe13918ee7f21a1d0f271a44d9efd
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 31 15:24:27 2009 +0200
+
+    Changes pipes to transfer all routes between routing table, not just optimal routes.
+
+commit 23e563d86b412632644bdc4a886b0b7fb60e5175
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat May 30 00:35:35 2009 +0200
+
+    Fixes buggy prefix ~ prefix matching.
+
+commit 9be1086d2970633fb5af2a1faaae16d5a1cf48ea
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Fri May 29 23:08:28 2009 +0200
+
+    New type variable 'V' defined in filters. This type is checked
+    only for name, never for value in function filter_same()
+
+commit 43de796b8a10f561d8b3ef64a86e5ce70de01eb5
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Fri May 29 23:04:54 2009 +0200
+
+    Function pm_path_compare() checked just length of the bgpmasks
+
+commit d59405ec6652e95f4825492c7322536bb7044db0
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Fri May 29 23:02:36 2009 +0200
+
+    Typo in warning fixed.
+
+commit 874b868544c3a6ba45ace062091cc3aee007b719
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 29 22:49:30 2009 +0200
+
+    Implements primary address selection base on 'primary' option.
+
+commit 51f4469f03759642870a45634d9b53054e3deb92
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 29 17:36:37 2009 +0200
+
+    Fixes problems with rewriting of kernel device routes.
+
+commit 6f68f066b63e992321ec1873a15c233f567b9aca
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 29 13:32:24 2009 +0200
+
+    Add 'primary' configuration option.
+
+commit 7c3d06b087946cbea4affa4a814e72b7a3556833
+Merge: f571473... 4c2507d...
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu May 28 13:58:51 2009 +0200
+
+    Merge branch 'dev' into ospf
+
+commit a6c9f0648db56175ee9e077e2ca631b678552835
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Thu May 28 13:37:04 2009 +0200
+
+    Missing boolean comparison added.
+
 commit 4c2507da687cdad1b9d147c1655e5ac46aaaa511
 Author: Ondrej Filip <feela@majklik.network.cz>
 Date:   Tue May 26 10:43:59 2009 +0200
@@ -9,6 +292,21 @@ Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon May 25 01:41:20 2009 +0200
 
     Adds INSTALL file.
+
+commit f571473ef3f78f6e38558d306d4d16ce7797e26c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 24 17:55:33 2009 +0200
+
+    Hello packets on PTP networks should have zero netmask.
+    
+    This also ensures that misconfigured routers (one side
+    ptp and one side broadcast) do not make adjacency.
+
+commit 8cc598a5205dbe46f5f249fa4f2de0586438965d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 24 17:51:27 2009 +0200
+
+    Ignore Hello packets from different IP network (than primary).
 
 commit 050ceb867fbb96395c6f7d3207acbb5fe57b8d1c
 Author: Ondrej Zajicek <santiago@crfreenet.org>
@@ -1175,6 +1473,7 @@ commit 60e04f041303fdafd0abf0dec003a9745345c68a
 Author: Ondrej Filip <feela@network.cz>
 Date:   Fri Feb 18 18:51:42 2005 +0000
 
+    
     Minor bugfix: Summary LSA for aggregated area was always propagated with
     metric = 1. Now it's metric of most distant component.
 
@@ -9043,6 +9342,7 @@ commit 163b2073465b1d2f90d23832456e79463fdec308
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Nov 30 10:35:26 1999 +0000
 
+    
     Inicialisation of Topology Graph (TG).
 
 commit ae97b946e99bef043613d210489a926fe4807ec1
@@ -9677,6 +9977,7 @@ commit 8c51f96acff1cfb05d1cf05f4355fce655c32599
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon Aug 9 13:03:28 1999 +0000
 
+    
     Some interface state machine changes. I found some problem in RFC,
     trying to conntact authors.
 
@@ -9828,12 +10129,14 @@ commit 39369d6fbe4b3f73c8110b14623f367c8ffded50
 Author: Ondrej Filip <feela@network.cz>
 Date:   Wed Jun 2 16:31:13 1999 +0000
 
+    
     Fixed stupid bug with hello vs inactim timers.
 
 commit bae0f7dbb111e2c8fbb8a94b59de6e241020ad66
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Jun 1 17:29:56 1999 +0000
 
+    
     Neigbor deleting done. (I have some problems with timers, so it does not
     send hello.)
 
@@ -9841,6 +10144,7 @@ commit cd70d93470498c0b68a084be5aeab5dd45a0df60
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Jun 1 16:35:18 1999 +0000
 
+    
     Detecting of new neighbor added. It starts inactivity timer.
 
 commit bd7f1081f24aa6ca4cdba004478742b730644a91
@@ -9920,6 +10224,7 @@ commit c72b09c8508d71b9a0a998c2dabe475d54b4d014
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 31 19:07:31 1999 +0000
 
+    
     IP socket priority (sock->tos) added. Constant taken from tcpdump of CISCO
     and gated.
 
@@ -9927,6 +10232,7 @@ commit 35ff423d54ebabffc5ab9dd757dfa2a1a70e9676
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 31 18:56:20 1999 +0000
 
+    
     Some RX_Hello checks added.
 
 commit bb027be1e232ca2207a03a8e001441965cc07801
@@ -9940,6 +10246,7 @@ commit 75b84c34e3434209517f2ebc8160f39d33e3735e
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 31 18:24:54 1999 +0000
 
+    
     Sending and receving of hello pkts works. No I will start building neighbor
     database.
 
@@ -10009,12 +10316,14 @@ commit 903a3f3928a5d7c223ff4c0087343cf214f8478d
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 24 21:49:22 1999 +0000
 
+    
     struct ospf_neigbor corrected.
 
 commit c76674f0e98d356ea235ea76fd55d71a3673b123
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 24 21:17:16 1999 +0000
 
+    
     struct ospf_neigbor added. Neigbor state machine implementation can start.
 
 commit 65112dd270dbfa598c1f8a5074bf7224b9e1469c
@@ -10027,12 +10336,14 @@ commit daeb60393d011f8ee1326e212b310983276b6ba1
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 24 17:37:45 1999 +0000
 
+    
     Small bug in ipv4_skip_header.
 
 commit b9f8590025fd5d6dd360f759c5a219d69b975123
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 24 17:29:05 1999 +0000
 
+    
     IP header test added.
 
 commit 4b0d57e53120e404e00f7d252119e45288ceeb71
@@ -10116,12 +10427,14 @@ commit 67ff91302f21f6a40201bcc8a01c9c76eaaf1ed1
 Author: Ondrej Filip <feela@network.cz>
 Date:   Fri May 14 08:46:06 1999 +0000
 
+    
     Netmask checking for hello packets added.
 
 commit 7426ee3d49fab13428f198c78c8b7f3da131382e
 Author: Ondrej Filip <feela@network.cz>
 Date:   Thu May 13 09:18:36 1999 +0000
 
+    
     Checksum control added.
 
 commit 296ecb56eb4d1951d23d74d502d2c48a42eb6eee
@@ -10140,6 +10453,8 @@ commit f7103dfcfe174d39c8aa10eb100550e3ec213981
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue May 11 09:50:02 1999 +0000
 
+    
+    
     Better logging output. Added 'struct proto *' info 'struct ospf iface'.
 
 commit 1a54d44a23de7b0bf0dfe62dd3d09d8167e5a597
@@ -10196,18 +10511,21 @@ commit 59e2188cb7020e43e25c9d5bdcd011f341ddfc1d
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 27 13:04:33 1999 +0000
 
+    
     Just changes of comments.
 
 commit 6376a961332552e2bc178d647f1e5cfa01a1ac32
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 27 12:56:52 1999 +0000
 
+    
     Hello timer implemented.
 
 commit 93bde8dce23ae10476263a84cc40bbe186263fdc
 Author: Ondrej Filip <feela@network.cz>
 Date:   Thu Apr 22 13:12:28 1999 +0000
 
+    
     Work on hello continues.
 
 commit 36bbfc704c7d2153537751e24413db9b9c97bc58
@@ -10227,12 +10545,14 @@ commit b11d8a4f59b3559779938b0a37914a7bc8c07a6b
 Author: Ondrej Filip <feela@network.cz>
 Date:   Wed Apr 14 15:13:44 1999 +0000
 
+    
     Redesigned struct ospf_iface & new struct ospf_sock.
 
 commit b31568a516142e905712bad498914fb6a82dc25b
 Author: Ondrej Filip <feela@network.cz>
 Date:   Wed Apr 14 12:47:18 1999 +0000
 
+    
     Small bug fix in memcpy.
 
 commit 4c5e5e3a1c438cb2e92535e3fabc458aa0d6deb3
@@ -10277,18 +10597,21 @@ commit 4c630a6dd7e02cbbe1cca2c626feb86801ee4d03
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 13 21:46:20 1999 +0000
 
+    
     Added wait timer for eligible BCAST & NBMA interface.
 
 commit 55e7732a5a5fe47752eafe6024ba473bd7959e45
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 13 19:27:44 1999 +0000
 
+    
     Change in ospf_iface. (My bad understanding of lists manipulation.)
 
 commit aec76c6e8e5702144522f0061bc102d26e10b97c
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 13 18:21:53 1999 +0000
 
+    
     IPv6 changes.
 
 commit 43fc099b98594fb3ac6a56a90fd00f42fc98f742
@@ -10303,18 +10626,21 @@ commit 24eaae9e5d0b154ec47d9d4e13649fb066814ef1
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 13 00:46:34 1999 +0000
 
+    
     Small change to stop using loopback.
 
 commit cb2e8c49706c14ea662df44cd3911c1f9db4b4a8
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 13 00:24:05 1999 +0000
 
+    
     A small init change to avoid core dump.
 
 commit 5b1a92e6d4350bcecff4f78b9cfabfb98ca7ce2a
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon Apr 12 23:54:21 1999 +0000
 
+    
     Not all I mean serious. Almost everything will change.
     Changes: struct ospf_iface draft, various constants added...
 
@@ -10806,6 +11132,8 @@ commit c1f8dc9149d3868e5a0f4e4ad97759fb3b177bec
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Mar 9 22:27:43 1999 +0000
 
+    
+    
     Yes, joining the crew. Sorry for being late. Added dummy functions for OSPF.
 
 commit 2575593e0fa9fb84a4cc481928c32519b3fea2cd

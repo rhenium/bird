@@ -225,6 +225,28 @@ chunk, not to the resource, hence you have to free it using
 
 
 <HR><H3>Function</H3>
+<P><I>void *</I>
+<B>mb_realloc</B>
+(<I>pool *</I> <B>p</B>, <I>void *</I> <B>m</B>, <I>unsigned</I> <B>size</B>) --     reallocate a memory block
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>pool *</I> <B>p</B><DD><P>pool
+<DT><I>void *</I> <B>m</B><DD><P>memory block
+<DT><I>unsigned</I> <B>size</B><DD><P>new size of the block
+</DL>
+<H3>Description</H3>
+<P><B>mb_realloc()</B> changes the size of the memory block <B>m</B> to a given size.
+The contents will be unchanged to the minimum of the old and new sizes;
+newly allocated memory will be uninitialized. If <B>m</B> is NULL, the call
+is equivalent to mb_alloc(<B>p</B>, <B>size</B>).
+<P>Like <B>mb_alloc()</B>, <B>mb_realloc()</B> also returns a pointer to the memory
+chunk , not to the resource, hence you have to free it using
+<B>mb_free()</B>, not <B>rfree()</B>.
+
+
+<HR><H3>Function</H3>
 <P><I>void</I>
 <B>mb_free</B>
 (<I>void *</I> <B>m</B>) --     free a memory block
@@ -698,7 +720,7 @@ different TTL.
 (address, password) used to choose password according to
 address of the other side. This function is useful for
 listening socket, for active sockets it is enough to set
-s-password field.
+s-&gt;password field.
 <P>When called with passwd != NULL, the new pair is added,
 When called with passwd == NULL, the existing pair is removed.
 <H3>Result</H3>

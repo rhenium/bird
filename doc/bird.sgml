@@ -249,6 +249,15 @@ protocol rip {
 
 	<tag>router id <m/IPv4 address/</tag> Set BIRD's router ID. It's a world-wide unique identification of your router, usually one of router's IPv4 addresses. Default: in IPv4 version, the lowest IP address of a non-loopback interface. In IPv6 version, this option is mandatory. 
 
+	<tag>listen bgp [address <m/address/] [port <m/port/] [v6only]</tag>
+	This option allows to specify address and port where BGP
+	protocol should listen. It is global option as listening
+	socket is common to all BGP instances. Default is to listen on
+	all addresses (0.0.0.0) and port 179. In IPv6 mode, option
+	<cf/v6only/ can be used to specify that BGP socket should
+	listen to IPv6 connections only. This is needed if you want to
+	run both bird and bird6 on the same port.
+
 	<tag>table <m/name/</tag> Create a new routing table. The default
 	routing table is created implicitly, other routing tables have
 	to be added by this command.
@@ -464,8 +473,16 @@ This argument can be omitted if there exists only a single instance.
 	<tag>enable|disable|restart <m/name/|"<m/pattern/"|all</tag>
 	Enable, disable or restart a given protocol instance, instances matching the <cf><m/pattern/</cf> or <cf/all/ instances.
 
-	<tag>configure ["<m/config file/"]</tag>
-	Reload configuration from a given file.
+	<tag>configure [soft] ["<m/config file/"]</tag>
+	Reload configuration from a given file. BIRD will smoothly
+	switch itself to the new configuration, protocols are
+	reconfigured if possible, restarted otherwise. Changes in
+	filters usualy lead to restart of affected protocols. If
+	<cf/soft> option is used, changes in filters does not cause
+	BIRD to restart affected protocols, therefore already accepted
+	routes (according to old filters) would be still propagated,
+	but new routes would be processed according to the new
+	filters.
 
 	<tag/down/
 	Shut BIRD down.
@@ -572,7 +589,8 @@ incompatible with each other (that is to prevent you from shooting in the foot).
 	  to +2000000000. Overflows are not checked. You can use <cf/0x1234/ syntax to write hexadecimal values.
 
 	<tag/pair/ This is a pair of two short integers. Each component can have values from 0 to
-	  65535. Literals of this type is written as <cf/(1234,5678)/.
+	  65535. Literals of this type are written as <cf/(1234,5678)/. The same syntax can also be
+	  used to construct a pair from two arbitrary integer expressions (for example <cf/(1+2,a)/).
 
 	<tag/string/ This is a string of characters. There are no ways to modify strings in
 	  filters. You can pass them between functions, assign them to variables of type <cf/string/, print
@@ -640,6 +658,8 @@ incompatible with each other (that is to prevent you from shooting in the foot).
 	  For example, if <cf>bgp_path</cf> is 4 3 2 1, then:
 	  <tt>bgp_path &tilde; [= * 4 3 * =]</tt> is true, but 
 	  <tt>bgp_path &tilde; [= * 4 5 * =]</tt> is false.
+	  BGP mask expressions can also contain integer expressions enclosed in parenthesis
+	  and integer variables, for example <tt>[= * 4 (1+2) a =]</tt>.
 	  There is also old syntax that uses / .. / instead of [= .. =] and ? instead of *.
 	<tag/clist/ 
 	  Community list is similar to set of pairs,
@@ -888,6 +908,10 @@ for each neighbor using the following configuration parameters:
 	implementations (Cisco and Quagga). This option is relevant
 	to IPv4 mode with enabled capability advertisement only. Default: on.
 
+	<tag>route limit <m/number/</tag> The maximal number of routes
+	that may be imported from the protocol. If the route limit is
+	exceeded, the connection is closed with error. Default: no limit.
+
 	<tag>disable after error <m/switch/</tag> When an error is encountered (either
 	locally or by the other side), disable the instance automatically
 	and wait for an administrator to fix the problem manually. Default: off.
@@ -1022,7 +1046,7 @@ interfaces from the kernel.
 this protocol in the configuration since almost all other protocols
 require network interfaces to be defined for them to work with.
 
-<p>The only configurable thing is interface scan time:
+<sect1>Configuration
 
 <p><descrip>
 	<tag>scan time <m/number/</tag> Time in seconds between two scans
@@ -1030,14 +1054,34 @@ require network interfaces to be defined for them to work with.
 	interface status changes asynchronously (such as newer versions of
 	Linux), we need to scan the list only in order to avoid confusion by lost
 	notification messages, so the default time is set to a large value.
+
+	<tag>primary  [ "<m/mask/" ] <m/prefix/</tag>
+	If a network interface has more than one network address,
+	BIRD has to choose one of them as a primary one, because some
+	routing protocols (for example OSPFv2) suppose there is only
+	one network address per interface. By default, BIRD chooses
+	the lexicographically smallest address as the primary one.
+
+	This option allows to specify which network address should be
+	chosen as a primary one. Network addresses that match
+	<m/prefix/ are preferred to non-matching addresses. If more
+	<cf/primary/ options are used, the first one has the highest
+	preference. If "<m/mask/" is specified, then such
+	<cf/primary/ option is relevant only to matching network
+	interfaces.
+
+	In all cases, an address marked by operating system as
+	secondary cannot be chosen as the primary one. 
 </descrip>
 
 <p>As the Device protocol doesn't generate any routes, it cannot have
-any attributes. Example configuration looks really simple:
+any attributes. Example configuration looks like this:
 
 <p><code>
 protocol device {
 	scan time 10;		# Scan the interfaces often
+	primary "eth0" 192.168.1.1;
+	primary 192.168.0.0/16;
 }
 </code>
 
@@ -1188,8 +1232,13 @@ protocol ospf &lt;name&gt; {
 			&lt;prefix&gt;;
 			&lt;prefix&gt; hidden;
 		}
-		interface &lt;interface pattern&gt;
-		{
+		stubnet &lt;prefix&gt;;
+		stubnet &lt;prefix&gt; {
+			hidden &lt;switch&gt;;
+			summary &lt;switch&gt;;
+			cost &lt;num&gt;;
+		}
+		interface &lt;interface pattern&gt; {
 			cost &lt;num&gt;;
 			stub &lt;switch&gt;;
 			hello &lt;num&gt;;
@@ -1216,8 +1265,7 @@ protocol ospf &lt;name&gt; {
 				&lt;ip&gt; eligible;
 			};
 		};
-		virtual link &lt;id&gt;
-		{
+		virtual link &lt;id&gt;	{
 			hello &lt;num&gt;;
 			retransmit &lt;num&gt;;
 			wait &lt;num&gt;;
@@ -1258,6 +1306,24 @@ protocol ospf &lt;name&gt; {
          Definition of area IP ranges. This is used in summary lsa origination.
 	 Hidden networks are not propagated into other areas.
 
+	<tag>stubnet <m/prefix/ { <m/options/ }</tag>
+	 Stub networks are networks that are not transit networks
+	 between OSPF routers. They are also propagated through an
+	 OSPF area as a part of a link state database. By default,
+	 BIRD generates a stub network record for each primary network
+	 address on each OSPF interface that does not have any OSPF
+	 neighbors, and also for each non-primary network address on
+	 each OSPF interface. This option allows to alter a set of
+	 stub networks propagated by this router. 
+
+	 Each instance of this option adds a stub network with given
+	 network prefix to the set of propagated stub network, unless
+	 option <cf/hidden/ is used. It also suppresses default stub
+	 networks for given network prefix. When option
+	 <cf/summary/ is used, also default stub networks that are
+	 subnetworks of given stub network are suppressed. This might
+	 be used, for example, to aggregate generated stub networks.
+	 
 	<tag>interface <M>pattern</M></tag>
 	 Defines that the specified interfaces belong to the area being defined.
 	 See <ref id="dsc-iface" name="interface"> common option for detailed description.
@@ -1446,10 +1512,23 @@ and vice versa, depending on what's allowed by the filters. Export filters contr
 of routes from the primary table to the secondary one, import filters control the opposite
 direction.
 
+<p>The Pipe protocol may work in the opaque mode or in the transparent
+mode. In the opaque mode, the Pipe protocol retransmits optimal route
+from one table to the other table in a similar way like other
+protocols send and receive routes. Retransmitted route will have the
+source set to the Pipe protocol, which may limit access to protocol
+specific route attributes. The opaque mode is a default mode.
+
+<p>In transparent mode, the Pipe protocol retransmits all routes from
+one table to the other table, retaining their original source and
+attributes.  If import and export filters are set to accept, then both
+tables would have the same content. The mode can be set by
+<tt/mode/ option.
+
 <p>The primary use of multiple routing tables and the Pipe protocol is for policy routing,
 where handling of a single packet doesn't depend only on its destination address, but also
 on its source address, source interface, protocol type and other similar parameters.
-In many systems (Linux 2.2 being a good example), the kernel allows to enforce routing policies
+In many systems (Linux being a good example), the kernel allows to enforce routing policies
 by defining routing rules which choose one of several routing tables to be used for a packet
 according to its parameters. Setting of these rules is outside the scope of BIRD's work
 (on Linux, you can use the <tt/ip/ command), but you can create several routing tables in BIRD,
@@ -1460,8 +1539,10 @@ another one.
 <sect1>Configuration
 
 <p><descrip>
-	<tag>peer table <m/table/</tag> Define secondary routing table to connect to. The
+	<tag>peer table <m/table/</tag> Defines secondary routing table to connect to. The
 	primary one is selected by the <cf/table/ keyword.
+
+	<tag>mode opaque|transparent</tag> Specifies the mode for the pipe to work in. Default is opaque.
 </descrip>
 
 <sect1>Attributes

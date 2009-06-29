@@ -165,6 +165,10 @@ of RFC 4760, but it is widespread and required by some BGP
 implementations (Cisco and Quagga). This option is relevant
 to IPv4 mode with enabled capability advertisement only. Default: on.
 <P>
+<DT><CODE>route limit <I>number</I></CODE><DD><P>The maximal number of routes
+that may be imported from the protocol. If the route limit is
+exceeded, the connection is closed with error. Default: no limit.
+<P>
 <DT><CODE>disable after error <I>switch</I></CODE><DD><P>When an error is encountered (either
 locally or by the other side), disable the instance automatically
 and wait for an administrator to fix the problem manually. Default: off.
@@ -301,8 +305,8 @@ interfaces from the kernel.
 this protocol in the configuration since almost all other protocols
 require network interfaces to be defined for them to work with.
 <P>
-<P>The only configurable thing is interface scan time:
-<P>
+<H3>Configuration</H3>
+
 <P>
 <DL>
 <DT><CODE>scan time <I>number</I></CODE><DD><P>Time in seconds between two scans
@@ -310,16 +314,33 @@ of the network interface list. On systems where we are notified about
 interface status changes asynchronously (such as newer versions of
 Linux), we need to scan the list only in order to avoid confusion by lost
 notification messages, so the default time is set to a large value.
+<P>
+<DT><CODE>primary  [ "<I>mask</I>" ] <I>prefix</I></CODE><DD><P>If a network interface has more than one network address,
+BIRD has to choose one of them as a primary one, because some
+routing protocols (for example OSPFv2) suppose there is only
+one network address per interface. By default, BIRD chooses
+the lexicographically smallest address as the primary one.
+<P>This option allows to specify which network address should be
+chosen as a primary one. Network addresses that match
+<I>prefix</I> are preferred to non-matching addresses. If more
+<CODE>primary</CODE> options are used, the first one has the highest
+preference. If "<I>mask</I>" is specified, then such
+<CODE>primary</CODE> option is relevant only to matching network
+interfaces.
+<P>In all cases, an address marked by operating system as
+secondary cannot be chosen as the primary one. 
 </DL>
 <P>
 <P>As the Device protocol doesn't generate any routes, it cannot have
-any attributes. Example configuration looks really simple:
+any attributes. Example configuration looks like this:
 <P>
 <P>
 <HR>
 <PRE>
 protocol device {
         scan time 10;           # Scan the interfaces often
+        primary "eth0" 192.168.1.1;
+        primary 192.168.0.0/16;
 }
 </PRE>
 <HR>
@@ -478,52 +499,56 @@ on nonbroadcast networks.
 <P>
 <HR>
 <PRE>
-protocol ospf name {
-        rfc1583compat switch;
-        tick num;
-        area id {
-                stub cost num;
+protocol ospf &lt;name&gt; {
+        rfc1583compat &lt;switch&gt;;
+        tick &lt;num&gt;;
+        area &lt;id&gt; {
+                stub cost &lt;num&gt;;
                 networks {
-                        prefix;
-                        prefix hidden;
+                        &lt;prefix&gt;;
+                        &lt;prefix&gt; hidden;
                 }
-                interface interface pattern
-                {
-                        cost num;
-                        stub switch;
-                        hello num;
-                        poll num;
-                        retransmit num;
-                        priority num;
-                        wait num;
-                        dead count num;
-                        dead num;
-                        rx buffer [normal|large|num];
+                stubnet &lt;prefix&gt;;
+                stubnet &lt;prefix&gt; {
+                        hidden &lt;switch&gt;;
+                        summary &lt;switch&gt;;
+                        cost &lt;num&gt;;
+                }
+                interface &lt;interface pattern&gt; {
+                        cost &lt;num&gt;;
+                        stub &lt;switch&gt;;
+                        hello &lt;num&gt;;
+                        poll &lt;num&gt;;
+                        retransmit &lt;num&gt;;
+                        priority &lt;num&gt;;
+                        wait &lt;num&gt;;
+                        dead count &lt;num&gt;;
+                        dead &lt;num&gt;;
+                        rx buffer [normal|large|&lt;num&gt;];
                         type [broadcast|nonbroadcast|pointopoint];
-                        strict nonbroadcast switch;
+                        strict nonbroadcast &lt;switch&gt;;
                         authentication [none|simple|cryptographics];
-                        password "text";
-                        password "text" {
-                                id num;
-                                generate from "date";
-                                generate to "date";
-                                accept from "date";
-                                accept to "date";
+                        password "&lt;text&gt;";
+                        password "&lt;text&gt;" {
+                                id &lt;num&gt;;
+                                generate from "&lt;date&gt;";
+                                generate to "&lt;date&gt;";
+                                accept from "&lt;date&gt;";
+                                accept to "&lt;date&gt;";
                         };
                         neighbors {
-                                ip;
-                                ip eligible;
+                                &lt;ip&gt;;
+                                &lt;ip&gt; eligible;
                         };
                 };
-                virtual link id
-                {
-                        hello num;
-                        retransmit num;
-                        wait num;
-                        dead count num;
-                        dead num;
+                virtual link &lt;id&gt; {
+                        hello &lt;num&gt;;
+                        retransmit &lt;num&gt;;
+                        wait &lt;num&gt;;
+                        dead count &lt;num&gt;;
+                        dead &lt;num&gt;;
                         authentication [none|simple];
-                        password "text";
+                        password "&lt;text&gt;";
                 };
         };
 }
@@ -552,6 +577,22 @@ at periodical intervals of <I>num</I> seconds. The default value is 1.
 <P>
 <DT><CODE>networks { <I>set</I> }</CODE><DD><P>Definition of area IP ranges. This is used in summary lsa origination.
 Hidden networks are not propagated into other areas.
+<P>
+<DT><CODE>stubnet <I>prefix</I> { <I>options</I> }</CODE><DD><P>Stub networks are networks that are not transit networks
+between OSPF routers. They are also propagated through an
+OSPF area as a part of a link state database. By default,
+BIRD generates a stub network record for each primary network
+address on each OSPF interface that does not have any OSPF
+neighbors, and also for each non-primary network address on
+each OSPF interface. This option allows to alter a set of
+stub networks propagated by this router. 
+<P>Each instance of this option adds a stub network with given
+network prefix to the set of propagated stub network, unless
+option <CODE>hidden</CODE> is used. It also suppresses default stub
+networks for given network prefix. When option
+<CODE>summary</CODE> is used, also default stub networks that are
+subnetworks of given stub network are suppressed. This might
+be used, for example, to aggregate generated stub networks.
 <P>
 <DT><CODE>interface <I>pattern</I></CODE><DD><P>Defines that the specified interfaces belong to the area being defined.
 See 
@@ -725,10 +766,23 @@ and vice versa, depending on what's allowed by the filters. Export filters contr
 of routes from the primary table to the secondary one, import filters control the opposite
 direction.
 <P>
+<P>The Pipe protocol may work in the opaque mode or in the transparent
+mode. In the opaque mode, the Pipe protocol retransmits optimal route
+from one table to the other table in a similar way like other
+protocols send and receive routes. Retransmitted route will have the
+source set to the Pipe protocol, which may limit access to protocol
+specific route attributes. The opaque mode is a default mode.
+<P>
+<P>In transparent mode, the Pipe protocol retransmits all routes from
+one table to the other table, retaining their original source and
+attributes.  If import and export filters are set to accept, then both
+tables would have the same content. The mode can be set by
+<CODE>mode</CODE> option.
+<P>
 <P>The primary use of multiple routing tables and the Pipe protocol is for policy routing,
 where handling of a single packet doesn't depend only on its destination address, but also
 on its source address, source interface, protocol type and other similar parameters.
-In many systems (Linux 2.2 being a good example), the kernel allows to enforce routing policies
+In many systems (Linux being a good example), the kernel allows to enforce routing policies
 by defining routing rules which choose one of several routing tables to be used for a packet
 according to its parameters. Setting of these rules is outside the scope of BIRD's work
 (on Linux, you can use the <CODE>ip</CODE> command), but you can create several routing tables in BIRD,
@@ -740,8 +794,10 @@ another one.
 
 <P>
 <DL>
-<DT><CODE>peer table <I>table</I></CODE><DD><P>Define secondary routing table to connect to. The
+<DT><CODE>peer table <I>table</I></CODE><DD><P>Defines secondary routing table to connect to. The
 primary one is selected by the <CODE>table</CODE> keyword.
+<P>
+<DT><CODE>mode opaque|transparent</CODE><DD><P>Specifies the mode for the pipe to work in. Default is opaque.
 </DL>
 <P>
 <H3>Attributes</H3>
@@ -877,7 +933,7 @@ other than equally configured BIRD. I have warned you.
 <P>
 <DL>
 <DT><CODE>port <I>number</I></CODE><DD><P>selects IP port to operate on, default 520. (This is useful when testing BIRD, if you
-set this to an address 1024, you will not need to run bird with UID==0).
+set this to an address &gt;1024, you will not need to run bird with UID==0).
 <P>
 <DT><CODE>infinity <I>number</I></CODE><DD><P>selects the value of infinity, default is 16. Bigger values will make protocol convergence
 even slower.

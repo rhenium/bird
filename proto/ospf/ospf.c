@@ -76,6 +76,9 @@
 #include <stdlib.h>
 #include "ospf.h"
 
+
+static void ospf_rt_notify(struct proto *p, net * n, rte * new, rte * old UNUSED, ea_list * attrs);
+static void ospf_ifa_notify(struct proto *p, unsigned flags, struct ifa *a);
 static int ospf_rte_better(struct rte *new, struct rte *old);
 static int ospf_rte_same(struct rte *new, struct rte *old);
 static void ospf_disp(timer *timer);
@@ -124,6 +127,9 @@ ospf_start(struct proto *p)
   po->disp_timer->hook = ospf_disp;
   po->disp_timer->recurrent = po->tick;
   tm_start(po->disp_timer, 1);
+  po->lsab_size = 256;
+  po->lsab_used = 0;
+  po->lsab = mb_alloc(p->pool, po->lsab_size);
   init_list(&(po->iface_list));
   init_list(&(po->area_list));
   fib_init(&po->rtf, p->pool, sizeof(ort), 16, ospf_rt_initort);
@@ -142,6 +148,7 @@ ospf_start(struct proto *p)
     oa = mb_allocz(p->pool, sizeof(struct ospf_area));
     add_tail(&po->area_list, NODE oa);
     po->areano++;
+    oa->ac = ac;
     oa->stub = ac->stub;
     oa->areaid = ac->areaid;
     oa->rt = NULL;
@@ -224,8 +231,10 @@ ospf_init(struct proto_config *c)
   p->import_control = ospf_import_control;
   p->make_tmp_attrs = ospf_make_tmp_attrs;
   p->store_tmp_attrs = ospf_store_tmp_attrs;
+  p->accept_ra_types = RA_OPTIMAL;
   p->rt_notify = ospf_rt_notify;
   p->if_notify = ospf_iface_notify;
+  p->ifa_notify = ospf_ifa_notify;
   p->rte_better = ospf_rte_better;
   p->rte_same = ospf_rte_same;
 
@@ -428,7 +437,7 @@ ospf_shutdown(struct proto *p)
   return PS_DOWN;
 }
 
-void
+static void
 ospf_rt_notify(struct proto *p, net * n, rte * new, rte * old UNUSED,
 	       ea_list * attrs)
 {
@@ -470,6 +479,25 @@ ospf_rt_notify(struct proto *p, net * n, rte * new, rte * old UNUSED,
       }
     }
   }
+}
+
+static void
+ospf_ifa_notify(struct proto *p, unsigned flags, struct ifa *a)
+{
+  struct proto_ospf *po = (struct proto_ospf *) p;
+  struct ospf_iface *ifa;
+  
+  if ((a->flags & IA_SECONDARY) || (a->flags & IA_UNNUMBERED))
+    return;
+
+  WALK_LIST(ifa, po->iface_list)
+    {
+      if (ifa->iface == a->iface)
+	{
+	  schedule_rt_lsa(ifa->oa);
+	  return;
+	}
+    }
 }
 
 static void
@@ -602,8 +630,30 @@ ospf_reconfigure(struct proto *p, struct proto_config *c)
     if (!oa)
       return 0;
 
+    oa->ac = newac;
     oa->stub = newac->stub;
     if (newac->stub && (oa->areaid == 0)) oa->stub = 0;
+
+    /* Check stubnet_list */
+    struct ospf_stubnet_config *oldsn = HEAD(oldac->stubnet_list);
+    struct ospf_stubnet_config *newsn = HEAD(newac->stubnet_list);
+
+    while (((NODE(oldsn))->next != NULL) && ((NODE(newsn))->next != NULL))
+      {
+	if (!ipa_equal(oldsn->px.addr, newsn->px.addr) ||
+	    (oldsn->px.len != newsn->px.len) ||
+	    (oldsn->hidden != newsn->hidden) ||
+	    (oldsn->summary != newsn->summary) ||
+	    (oldsn->cost != newsn->cost))
+	  break;
+
+	oldsn = (struct ospf_stubnet_config *)(NODE(oldsn))->next;
+	newsn = (struct ospf_stubnet_config *)(NODE(newsn))->next;
+      }
+
+    /* If there is no change, both pointers should be NULL */
+    if (((NODE(oldsn))->next) != ((NODE(newsn))->next))
+      schedule_rt_lsa(oa);
 
     /* Change net_list */
     FIB_WALK(&oa->net_fib, nf)	/* First check if some networks are deleted */

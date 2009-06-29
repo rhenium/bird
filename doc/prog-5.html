@@ -126,15 +126,12 @@ closes its socket and frees all resources associated with it.
 <HR><H3>Function</H3>
 <P><I>void</I>
 <B>bgp_update_startup_delay</B>
-(<I>struct bgp_proto *</I> <B>p</B>, <I>struct bgp_conn *</I> <B>conn</B>, <I>unsigned</I> <B>code</B>, <I>unsigned</I> <B>subcode</B>) --     update a startup delay
+(<I>struct bgp_proto *</I> <B>p</B>) --     update a startup delay
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
 <DT><I>struct bgp_proto *</I> <B>p</B><DD><P>BGP instance
-<DT><I>struct bgp_conn *</I> <B>conn</B><DD><P>related BGP connection
-<DT><I>unsigned</I> <B>code</B><DD><P>BGP error code
-<DT><I>unsigned</I> <B>subcode</B><DD><P>BGP error subcode
 </DL>
 <H3>Description</H3>
 <P>This function updates a startup delay that is used to postpone next BGP connect.
@@ -231,7 +228,7 @@ and store that error to last_error variables of <B>p</B>
 <P>Whenever the transmit buffers of the underlying TCP connection
 are free and we have any packets queued for sending, the socket functions
 call <B>bgp_fire_tx()</B> which takes care of selecting the highest priority packet
-queued (Notification  Keepalive  Open  Update), assembling its header
+queued (Notification &gt; Keepalive &gt; Open &gt; Update), assembling its header
 and body and sending it to the connection.
 
 
@@ -377,7 +374,7 @@ describes the link-state database. It allows fast search, addition
 and deletion. Each LSA is kept in two pieces: header and body. Both of them are
 kept in the endianity of the CPU.
 <P>The heart beat of ospf is <B>ospf_disp()</B>. It is called at regular intervals
-(<I>proto_ospf</I>-tick). It is responsible for aging and flushing of LSAs in
+(<I>proto_ospf</I>-&gt;tick). It is responsible for aging and flushing of LSAs in
 the database, for routing table calculaction and it call <B>area_disp()</B> of every
 ospf_area.
 <P>The function <B>area_disp()</B> is
@@ -416,7 +413,7 @@ and conserves memory.
 <H3>Open Shortest Path First (OSPF)</H3>
 <P>router LSA and routing table cleanup
 <H3>Description</H3>
-<P>It invokes aging and when <B>ospf_area</B>-origrt is set to 1, start
+<P>It invokes aging and when <B>ospf_area</B>-&gt;origrt is set to 1, start
 function for origination of router LSA and network LSAs.
 
 
@@ -428,7 +425,7 @@ function for origination of router LSA and network LSAs.
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>timer *</I> <B>timer</B><DD><P>timer usually called every <B>proto_ospf</B>-tick second, <B>timer</B>-data
+<DT><I>timer *</I> <B>timer</B><DD><P>timer usually called every <B>proto_ospf</B>-&gt;tick second, <B>timer</B>-&gt;data
 point to <B>proto_ospf</B>
 </DL>
 
@@ -532,14 +529,14 @@ In other case, new instance of network LSA is originated.
 </DL>
 <H3>Description</H3>
 <P>This is a fix for the previous static use of MAXNETS which did
-only work correct if MAXNETS  possible IPs for given prefix.
+only work correct if MAXNETS &lt; possible IPs for given prefix.
 This solution is kind of a hack as there can now only be one
 route for /32 type entries but this is better than the crashes
 I did experience whith close together /32 routes originating
 on different hosts.
 <H3>Description</H3>
 <P>This is a fix for the previous static use of MAXNETS which did
-only work correct if MAXNETS  possible IPs for given prefix.
+only work correct if MAXNETS &lt; possible IPs for given prefix.
 This solution is kind of a hack as there can now only be one
 route for /32 type entries but this is better than the crashes
 I did experience whith close together /32 routes originating
@@ -616,7 +613,7 @@ RFC 2328. The only difference is that state <I>NEIGHBOR_ATTEMPT</I> is not
 used. We discover neighbors on nonbroadcast networks in the
 same way as on broadcast networks. The only difference is in
 sending hello packets. These are sent to IPs listed in
-<B>ospf_iface</B>-nbma_list .
+<B>ospf_iface</B>-&gt;nbma_list .
 
 
 <HR><H3>Function</H3>

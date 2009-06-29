@@ -38,7 +38,7 @@ int var;
                 var = 1;
                 rip_metric = 1;
         }
-        if rip_metric  10 then
+        if rip_metric &gt; 10 then
                 reject "RIP metric is too big";
         else
                 accept "ok";
@@ -97,7 +97,7 @@ bird> show route
 127.0.0.0/8        dev lo [direct1 23:21] (240)
 bird> show route ?
 show route [&lt;prefix>] [table &lt;t>] [filter &lt;f>] [all] [primary]...
-bird> show route filter { if 127.0.0.5  net then accept; }
+bird> show route filter { if 127.0.0.5 ~ net then accept; }
 127.0.0.0/8        dev lo [direct1 23:21] (240)
 bird>
 </PRE>
@@ -118,7 +118,8 @@ statements.
 to +2000000000. Overflows are not checked. You can use <CODE>0x1234</CODE> syntax to write hexadecimal values.
 <P>
 <DT><CODE>pair</CODE><DD><P>This is a pair of two short integers. Each component can have values from 0 to
-65535. Literals of this type is written as <CODE>(1234,5678)</CODE>.
+65535. Literals of this type are written as <CODE>(1234,5678)</CODE>. The same syntax can also be
+used to construct a pair from two arbitrary integer expressions (for example <CODE>(1+2,a)</CODE>).
 <P>
 <DT><CODE>string</CODE><DD><P>This is a string of characters. There are no ways to modify strings in
 filters. You can pass them between functions, assign them to variables of type <CODE>string</CODE>, print
@@ -143,8 +144,8 @@ sets.
 <P>Sets of prefixes are special: their literals does not allow ranges, but allows
 prefix patterns that are written as <CODE><I>ipaddress</I>/<I>pxlen</I>{<I>low</I>,<I>high</I>}</CODE>.
 Prefix <CODE><I>ip1</I>/<I>len1</I></CODE> matches prefix pattern <CODE><I>ip2</I>/<I>len2</I>{<I>l</I>,<I>h</I>}</CODE> iff 
-the first <CODE>min(len1, len2)</CODE> bits of <CODE>ip1</CODE> and <CODE>ip2</CODE> are identical and <CODE>len1 = ip1 = len2</CODE>.
-A valid prefix pattern has to satisfy <CODE>low = high</CODE>, but <CODE>pxlen</CODE> is not constrained by <CODE>low</CODE>
+the first <CODE>min(len1, len2)</CODE> bits of <CODE>ip1</CODE> and <CODE>ip2</CODE> are identical and <CODE>len1 &lt;= ip1 &lt;= len2</CODE>.
+A valid prefix pattern has to satisfy <CODE>low &lt;= high</CODE>, but <CODE>pxlen</CODE> is not constrained by <CODE>low</CODE>
 or <CODE>high</CODE>. Obviously, a prefix matches a prefix set literal iff it matches any prefix pattern in the
 prefix set literal.
 <P>There are also two shorthands for prefix patterns: <CODE><I>address</I>/<I>len</I>+</CODE> is a shorthand for
@@ -156,8 +157,8 @@ and all its supernets (network prefixes that contain it).
 prefix <CODE>1.0.0.0/8</CODE>, all subprefixes of <CODE>2.0.0.0/8</CODE>, all superprefixes of <CODE>3.0.0.0/8</CODE> and prefixes
 <CODE>4.X.X.X</CODE> whose prefix length is 16 to 24. <CODE>[ 0.0.0.0/0{20,24} ]</CODE> matches all prefixes (regardless of
 IP address) whose prefix length is 20 to 24, <CODE>[ 1.2.3.4/32- ]</CODE> matches any prefix that contains IP address
-<CODE>1.2.3.4</CODE>. <CODE>1.2.0.0/16  [ 1.0.0.0/8{15,17} ]</CODE> is true,
-but <CODE>1.0.0.0/16  [ 1.0.0.0/8- ]</CODE> is false.
+<CODE>1.2.3.4</CODE>. <CODE>1.2.0.0/16 ~ [ 1.0.0.0/8{15,17} ]</CODE> is true,
+but <CODE>1.0.0.0/16 ~ [ 1.0.0.0/8- ]</CODE> is false.
 <P>Cisco-style patterns like <CODE>10.0.0.0/8 ge 16 le 24</CODE> can be expressed
 in Bird as <CODE>10.0.0.0/8{16,24}</CODE>, <CODE>192.168.0.0/16 le 24</CODE> as 
 <CODE>192.168.0.0/16{16,24}</CODE> and <CODE>192.168.0.0/16 ge 24</CODE> as
@@ -170,13 +171,15 @@ type. Enumeration types are incompatible with each other.
 <DT><CODE>bgppath</CODE><DD><P>BGP path is a list of autonomous system numbers. You can't write literals of this type.
 <P>
 <DT><CODE>bgpmask</CODE><DD><P>BGP masks are patterns used for BGP path matching
-(using <CODE>path  [= 2 3 5 * =]</CODE> syntax). The masks
+(using <CODE>path ~ [= 2 3 5 * =]</CODE> syntax). The masks
 resemble wildcard patterns as used by UNIX shells. Autonomous
 system numbers match themselves, <CODE>*</CODE> matches any (even empty)
 sequence of arbitrary AS numbers and <CODE>?</CODE> matches one arbitrary AS number.
 For example, if <CODE>bgp_path</CODE> is 4 3 2 1, then:
-<CODE>bgp_path  [= * 4 3 * =]</CODE> is true, but 
-<CODE>bgp_path  [= * 4 5 * =]</CODE> is false.
+<CODE>bgp_path ~ [= * 4 3 * =]</CODE> is true, but 
+<CODE>bgp_path ~ [= * 4 5 * =]</CODE> is false.
+BGP mask expressions can also contain integer expressions enclosed in parenthesis
+and integer variables, for example <CODE>[= * 4 (1+2) a =]</CODE>.
 There is also old syntax that uses / .. / instead of [= .. =] and ? instead of *.
 <DT><CODE>clist</CODE><DD><P>Community list is similar to set of pairs,
 except that unlike other sets, it can be modified.
@@ -188,8 +191,8 @@ There exist no literals of this type.
 </H2>
 
 <P>The filter language supports common integer operators <CODE>(+,-,*,/)</CODE>, parentheses <CODE>(a*(b+c))</CODE>, comparison
-<CODE>(a=b, a!=b, ab, a=b)</CODE>. Logical operations include unary not (<CODE>!</CODE>), and (<CODE></CODE>) and or (<CODE></CODE>). 
-Special operators include <CODE></CODE> for "is element of a set" operation - it can be
+<CODE>(a=b, a!=b, a&lt;b, a&gt;=b)</CODE>. Logical operations include unary not (<CODE>!</CODE>), and (<CODE>&amp;&amp;</CODE>) and or (<CODE>||</CODE>). 
+Special operators include <CODE>~</CODE> for "is element of a set" operation - it can be
 used on element and set of elements of the same type (returning true if element is contained in the given set), or
 on two strings (returning true if first string matches a shell-like pattern stored in second string) or on IP and prefix (returning true if IP is within the range defined by that prefix), or on
 prefix and prefix (returning true if first prefix is more specific than second one) or on bgppath and bgpmask (returning true if the path matches the mask) or on pair and clist (returning true if the community is element of the community list).
@@ -207,7 +210,7 @@ clause may be omitted. If the <CODE><I>boolean expression</I></CODE> is true, <C
 <P>
 <P>The <CODE>case</CODE> is similar to case from Pascal. Syntax is <CODE>case <I>expr</I> { else |
 <I>num_or_prefix [ .. num_or_prefix]</I>: <I>statement</I> ; [ ... ] }</CODE>. The expression after
-<CODE>case</CODE> can be of any type which can be on the left side of the  operator and anything that could
+<CODE>case</CODE> can be of any type which can be on the left side of the ~ operator and anything that could
 be a member of a set is allowed before <CODE>:</CODE>. Multiple commands are allowed without <CODE>{}</CODE> grouping.
 If <CODE><I>expr</I></CODE> matches one of the <CODE>:</CODE> clauses, statements between it and next <CODE>:</CODE> statement are executed. If <CODE><I>expr</I></CODE> matches neither of the <CODE>:</CODE> clauses, the statements after <CODE>else:</CODE> are executed.
 <P>

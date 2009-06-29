@@ -64,10 +64,14 @@ pm_path_compare(struct f_path_mask *m1, struct f_path_mask *m2)
   while (1) {
     if ((!m1) || (!m2))
       return !((!m1) && (!m2));
+
+    if ((m1->kind != m2->kind) || (m1->val != m2->val)) return 1;
     m1 = m1->next;
     m2 = m2->next;
   }
 }
+
+u32 f_eval_asn(struct f_inst *expr);
 
 static void
 pm_format(struct f_path_mask *p, byte *buf, unsigned int size)
@@ -82,10 +86,24 @@ pm_format(struct f_path_mask *p, byte *buf, unsigned int size)
 	  return;
 	}
 
-      if (p->kind == PM_ASN)
-	buf += bsprintf(buf, " %u", p->val);
-      else
-	buf += bsprintf(buf, (p->kind == PM_ASTERISK) ? " *" : " ?");
+      switch(p->kind)
+	{
+	case PM_ASN:
+	  buf += bsprintf(buf, " %u", p->val);
+	  break;
+
+	case PM_QUESTION:
+	  buf += bsprintf(buf, " ?");
+	  break;
+
+	case PM_ASTERISK:
+	  buf += bsprintf(buf, " *");
+	  break;
+
+	case PM_ASN_EXPR:
+	  buf += bsprintf(buf, " %u", f_eval_asn((struct f_inst *) p->val));
+	  break;
+	}
 
       p = p->next;
     }
@@ -120,7 +138,8 @@ val_compare(struct f_val v1, struct f_val v2)
   }
   switch (v1.type) {
   case T_ENUM:
-  case T_INT: 
+  case T_INT:
+  case T_BOOL:
   case T_PAIR:
     if (v1.val.i == v2.val.i) return 0;
     if (v1.val.i < v2.val.i) return -1;
@@ -140,7 +159,7 @@ val_compare(struct f_val v1, struct f_val v2)
   case T_STRING:
     return strcmp(v1.val.s, v2.val.s);
   default:
-    debug( "Compare of unkown entities: %x\n", v1.type );
+    debug( "Compare of unknown entities: %x\n", v1.type );
     return CMP_ERROR;
   }
 }
@@ -178,25 +197,11 @@ val_simple_in_range(struct f_val v1, struct f_val v2)
     return patmatch(v2.val.s, v1.val.s);
 
   if ((v1.type == T_IP) && (v2.type == T_PREFIX))
-    return !(ipa_compare(ipa_and(v2.val.px.ip, ipa_mkmask(v2.val.px.len)), ipa_and(v1.val.px.ip, ipa_mkmask(v2.val.px.len))));
+    return ipa_in_net(v1.val.px.ip, v2.val.px.ip, v2.val.px.len);
 
-  if ((v1.type == T_PREFIX) && (v2.type == T_PREFIX)) {
+  if ((v1.type == T_PREFIX) && (v2.type == T_PREFIX))
+    return ipa_in_net(v1.val.px.ip, v2.val.px.ip, v2.val.px.len) && (v1.val.px.len >= v2.val.px.len);
 
-    if (v1.val.px.len & (LEN_PLUS | LEN_MINUS | LEN_RANGE))
-      return CMP_ERROR;
-
-    int p1 = v1.val.px.len & LEN_MASK;
-    int p2 = v2.val.px.len & LEN_MASK;
-    ip_addr mask = ipa_mkmask(MIN(p1, p2));
-
-    if (ipa_compare(ipa_and(v2.val.px.ip, mask), ipa_and(v1.val.px.ip, mask)))
-      return 0;
-
-    int l, h;
-    f_prefix_get_bounds(&v2.val.px, &l, &h);
-
-    return ((l <= v1.val.px.len) && (v1.val.px.len <= h));
-  }
   return CMP_ERROR;
 }
 
@@ -347,6 +352,7 @@ interpret(struct f_inst *what)
 {
   struct symbol *sym;
   struct f_val v1, v2, res;
+  unsigned u1, u2;
   int i;
 
   res.type = T_VOID;
@@ -407,6 +413,18 @@ interpret(struct f_inst *what)
     res.type = v1.type;
     if (res.type != T_BOOL) runtime( "Can't do boolean operation on non-booleans" );
     res.val.i = v1.val.i || v2.val.i;
+    break;
+
+  case P('m','p'):
+    TWOARGS_C;
+    if ((v1.type != T_INT) || (v2.type != T_INT))
+      runtime( "Can't operate with value of non-integer type in pair constructor" );
+    u1 = v1.val.i;
+    u2 = v2.val.i;
+    if ((u1 > 0xFFFF) || (u2 > 0xFFFF))
+      runtime( "Can't operate with value out of bounds in pair constructor" );
+    res.val.i = (u1 << 16) | u2;
+    res.type = T_PAIR;
     break;
 
 /* Relational operators */
@@ -486,6 +504,7 @@ interpret(struct f_inst *what)
     else
       res.val.i = what->a2.i;
     break;
+  case 'V':
   case 'C':
     res = * ((struct f_val *) what->a1.p);
     break;
@@ -824,6 +843,7 @@ i_same(struct f_inst *f1, struct f_inst *f2)
   case '/':
   case '|':
   case '&':
+  case P('m','p'):
   case P('!','='):
   case P('=','='):
   case '<':
@@ -852,10 +872,12 @@ i_same(struct f_inst *f1, struct f_inst *f2)
     case T_PREFIX_SET:
       if (!trie_same(f1->a2.p, f2->a2.p))
 	return 0;
+      break;
 
     case T_SET:
       if (!same_tree(f1->a2.p, f2->a2.p))
 	return 0;
+      break;
 
     case T_STRING:
       if (strcmp(f1->a2.p, f2->a2.p))
@@ -868,6 +890,10 @@ i_same(struct f_inst *f1, struct f_inst *f2)
     break;
   case 'C': 
     if (val_compare(* (struct f_val *) f1->a1.p, * (struct f_val *) f2->a1.p))
+      return 0;
+    break;
+  case 'V': 
+    if (strcmp((char *) f1->a2.p, (char *) f2->a2.p))
       return 0;
     break;
   case 'p': case 'L': ONEARG; break;
@@ -944,6 +970,16 @@ f_eval_int(struct f_inst *expr)
   res = interpret(expr);
   if (res.type != T_INT)
     cf_error("Integer expression expected");
+  return res.val.i;
+}
+
+u32
+f_eval_asn(struct f_inst *expr)
+{
+  struct f_val res = interpret(expr);
+  if (res.type != T_INT)
+    cf_error("Can't operate with value of non-integer type in AS path mask constructor");
+ 
   return res.val.i;
 }
 
