@@ -1846,6 +1846,18 @@ to call it again when the output is transferred to the user.
 <P>The <B>this_cli</B> variable points to a <I>cli</I> structure of the session being
 currently parsed, but it's of course available only in command handlers
 not entered using the <B>cont</B> hook.
+<P>TX buffer management works as follows: At cli.tx_buf there is a
+list of TX buffers (struct cli_out), cli.tx_write is the buffer
+currently used by the producer (<B>cli_printf()</B>, <B>cli_alloc_out()</B>) and
+cli.tx_pos is the buffer currently used by the consumer
+(<B>cli_write()</B>, in system dependent code). The producer uses
+cli_out.wpos ptr as the current write position and the consumer
+uses cli_out.outpos ptr as the current read position. When the
+producer produces something, it calls <B>cli_write_trigger()</B>. If there
+is not enough space in the current buffer, the producer allocates
+the new one. When the consumer processes everything in the buffer
+queue, it calls <B>cli_written()</B>, tha frees all buffers (except the
+first one) and schedules cli.event .
 <P>
 <P><HR><H3>Function</H3>
 <P><I>void</I>

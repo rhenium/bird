@@ -154,8 +154,7 @@ ospf_rt_spfa(struct ospf_area *oa)
   if (oa->rt == NULL)
     return;
 
-  OSPF_TRACE(D_EVENTS, "Starting routing table calculation for area %I",
-	     oa->areaid);
+  OSPF_TRACE(D_EVENTS, "Starting routing table calculation for area %R", oa->areaid);
 
   if (oa->rt->dist != LSINFINITY)
     bug("Aging was not processed.");
@@ -168,8 +167,8 @@ ospf_rt_spfa(struct ospf_area *oa)
   oa->rt->dist = 0;
   oa->rt->color = CANDIDATE;
   add_head(&oa->cand, &oa->rt->cn);
-  DBG("RT LSA: rt: %I, id: %I, type: %u\n", oa->rt->lsa.rt,
-      oa->rt->lsa.id, oa->rt->lsa.type);
+  DBG("RT LSA: rt: %R, id: %R, type: %u\n",
+      oa->rt->lsa.rt, oa->rt->lsa.id, oa->rt->lsa.type);
 
   while (!EMPTY_LIST(oa->cand))
   {
@@ -177,8 +176,8 @@ ospf_rt_spfa(struct ospf_area *oa)
     act = SKIP_BACK(struct top_hash_entry, cn, n);
     rem_node(n);
 
-    DBG("Working on LSA: rt: %I, id: %I, type: %u\n", act->lsa.rt,
-	act->lsa.id, act->lsa.type);
+    DBG("Working on LSA: rt: %R, id: %R, type: %u\n",
+	act->lsa.rt, act->lsa.id, act->lsa.type);
 
     act->color = INSPF;
     switch (act->lsa.type)
@@ -208,7 +207,7 @@ ospf_rt_spfa(struct ospf_area *oa)
       {
 	tmp = NULL;
 	rtl = (rr + i);
-	DBG("     Working on link: %I (type: %u)  ", rtl->id, rtl->type);
+	DBG("     Working on link: %R (type: %u)  ", rtl->id, rtl->type);
 	switch (rtl->type)
 	{
 	case LSART_STUB:
@@ -265,7 +264,7 @@ ospf_rt_spfa(struct ospf_area *oa)
 	  DBG("PTP found.\n");
 	  break;
 	default:
-	  log("Unknown link type in router lsa. (rid = %I)", act->lsa.id);
+	  log("Unknown link type in router lsa. (rid = %R)", act->lsa.id);
 	  break;
 	}
 	if (tmp)
@@ -292,8 +291,8 @@ ospf_rt_spfa(struct ospf_area *oa)
       for (i = 0; i < (act->lsa.length - sizeof(struct ospf_lsa_header) -
 		       sizeof(struct ospf_lsa_net)) / sizeof(u32); i++)
       {
-	DBG("     Working on router %I ", *(rts + i));
-	tmp = ospf_hash_find(po->gr, oa->areaid, *(rts + i), *(rts + i), LSA_T_RT);
+	DBG("     Working on router %R ", rts[i]);
+	tmp = ospf_hash_find(po->gr, oa->areaid, rts[i], rts[i], LSA_T_RT);
 	if (tmp != NULL)
 	  DBG("Found :-)\n");
 	else
@@ -314,7 +313,7 @@ ospf_rt_spfa(struct ospf_area *oa)
       {
         if ((iface->state != OSPF_IS_PTP) || (iface->iface != tmp->nhi->iface) || (!ipa_equal(iface->vip, tmp->lb)))
         {
-          OSPF_TRACE(D_EVENTS, "Vlink peer %I found", tmp->lsa.id);
+          OSPF_TRACE(D_EVENTS, "Vlink peer %R found", tmp->lsa.id);
           ospf_iface_sm(iface, ISM_DOWN);
           iface->iface = tmp->nhi->iface;
           iface->vip = tmp->lb;
@@ -325,7 +324,7 @@ ospf_rt_spfa(struct ospf_area *oa)
       {
         if (iface->state > OSPF_IS_DOWN)
         {
-          OSPF_TRACE(D_EVENTS, "Vlink peer %I lost", iface->vid);
+          OSPF_TRACE(D_EVENTS, "Vlink peer %R lost", iface->vid);
           ospf_iface_sm(iface, ISM_DOWN);
         }
       }
@@ -372,7 +371,7 @@ link_back(struct ospf_area *oa, struct top_hash_entry *fol, struct top_hash_entr
           }
 	  break;
 	default:
-	  log("Unknown link type in router lsa. (rid = %I)", fol->lsa.id);
+	  log("Unknown link type in router lsa. (rid = %R)", fol->lsa.id);
 	  break;
 	}
       }
@@ -390,7 +389,7 @@ link_back(struct ospf_area *oa, struct top_hash_entry *fol, struct top_hash_entr
       }
       break;
     default:
-      bug("Unknown lsa type. (id = %I)", fol->lsa.id);
+      bug("Unknown lsa type. (id = %R)", fol->lsa.id);
   }
   return 0;
 }
@@ -480,7 +479,7 @@ ospf_rt_sum(struct ospf_area *oa)
   int mlen = -1, type = -1;
   union ospf_lsa_sum_tm *tm;
 
-  OSPF_TRACE(D_EVENTS, "Starting routing table calculation for inter-area (area %I)", oa->areaid);
+  OSPF_TRACE(D_EVENTS, "Starting routing table calculation for inter-area (area %R)", oa->areaid);
 
   WALK_SLIST(en, po->lsal)
   {
@@ -663,7 +662,7 @@ ospf_ext_spf(struct proto_ospf *po)
     le = en->lsa_body;
     lt = (struct ospf_lsa_ext_tos *) (le + 1);
 
-    DBG("%s: Working on LSA. ID: %I, RT: %I, Type: %u, Mask %I\n",
+    DBG("%s: Working on LSA. ID: %R, RT: %R, Type: %u, Mask %I\n",
 	p->name, en->lsa.id, en->lsa.rt, en->lsa.type, le->netmask);
 
     if ((lt->etm.metric & METRIC_MASK) == LSINFINITY)
@@ -672,7 +671,7 @@ ospf_ext_spf(struct proto_ospf *po)
     mlen = ipa_mklen(le->netmask);
     if ((mlen < 0) || (mlen > 32))
     {
-      log("%s: Invalid mask in LSA. ID: %I, RT: %I, Type: %u, Mask %I",
+      log("%s: Invalid mask in LSA. ID: %R, RT: %R, Type: %u, Mask %I",
 	  p->name, en->lsa.id, en->lsa.rt, en->lsa.type, le->netmask);
       continue;
     }
@@ -796,8 +795,8 @@ add_cand(list * l, struct top_hash_entry *en, struct top_hash_entry *par,
   if (!link_back(oa, en, par))
     return;
 
-  DBG("     Adding candidate: rt: %I, id: %I, type: %u\n", en->lsa.rt,
-      en->lsa.id, en->lsa.type);
+  DBG("     Adding candidate: rt: %R, id: %R, type: %u\n",
+      en->lsa.rt, en->lsa.id, en->lsa.type);
 
   en->nhi = NULL;
   en->nh = IPA_NONE;
@@ -859,7 +858,7 @@ calc_next_hop(struct top_hash_entry *en, struct top_hash_entry *par,
   if (ipa_equal(par->nh, IPA_NONE))
   {
     neighbor *nn;
-    DBG("     Next hop calculating for id: %I rt: %I type: %u\n",
+    DBG("     Next hop calculating for id: %R rt: %R type: %u\n",
 	en->lsa.id, en->lsa.rt, en->lsa.type);
 
     if (par == oa->rt)
@@ -914,7 +913,7 @@ calc_next_hop(struct top_hash_entry *en, struct top_hash_entry *par,
     }
     else
     {				/* Parent is some RT neighbor */
-      log(L_ERR "Router's parent has no next hop. (EN=%I, PAR=%I)",
+      log(L_ERR "Router's parent has no next hop. (EN=%R, PAR=%R)",
 	  en->lsa.id, par->lsa.id);
       /* I hope this would never happen */
       return;

@@ -627,7 +627,8 @@ available space to avoid buffer overflows and it allows some more
 <H3>format specifiers</H3>
 <P><CODE><I>I</I></CODE> for formatting of IP addresses (any non-zero
 width is automatically replaced by standard IP address width which
-depends on whether we use IPv4 or IPv6; <CODE>%#I</CODE> gives hexadecimal format)
+depends on whether we use IPv4 or IPv6; <CODE>%#I</CODE> gives hexadecimal format),
+<CODE><I>R</I></CODE> for Router / Network ID (u32 value printed as IPv4 address)
 and <CODE><I>m</I></CODE> resp. <CODE><I>M</I></CODE> for error messages (uses <B>strerror()</B> to translate <B>errno</B> code to
 message text). On the other hand, it doesn't support floating
 point numbers.
