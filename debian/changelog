@@ -1,3 +1,9 @@
+bird (1.1.2-1) unstable; urgency=low
+
+  * New Upstream Version
+
+ -- Ondřej Surý <ondrej@debian.org>  Sun, 23 Aug 2009 23:16:19 +0200
+
 bird (1.1.1-1) unstable; urgency=low
 
   * New Upstream Version
