@@ -1,3 +1,34 @@
+commit a0c405501fa6a0df8472f1598256e725cec753fd
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Sun Aug 23 23:04:59 2009 +0200
+
+    Version 1.1.2
+
+commit d2f8d0a509d96d752c86f8807e7f6644467e5af5
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Sun Aug 23 23:03:31 2009 +0200
+
+    Version 1.1.2
+
+commit 2ef58837dcb7b78edc193bc9ef1da316bba86998
+Merge: 86975e5... 5516a66...
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Aug 21 09:46:49 2009 +0200
+
+    Merge commit 'origin/master' into dev
+
+commit 86975e584eeabbc4f3111f2d100f05ca00579d31
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Aug 21 09:43:31 2009 +0200
+
+    Allow more kernel routing tables in IPv6.
+
+commit fee78355b480294f28c3c6814953297dca92d4a0
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Aug 21 09:31:35 2009 +0200
+
+    Fixes bug in eattr binary search.
+
 commit 5516a66d492497ba8776212defb3117ed1dbfbf8
 Author: Ondrej Filip <feela@majklik.network.cz>
 Date:   Sun Aug 16 22:41:07 2009 +0200
