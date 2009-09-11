@@ -1131,6 +1131,8 @@ as4_aggregator_valid(struct adata *aggr)
 
   if ((a[0] == 0) || (a[1] == 0))
     return 0;
+
+  return 1;
 }
 
 
@@ -1189,7 +1191,7 @@ bgp_reconstruct_4b_atts(struct bgp_proto *p, rta *a, struct linpool *pool)
     if (a4)
       log(L_WARN "%s: AS4_AGGREGATOR attribute received, but AGGREGATOR attribute is missing", p->p.name);
 
-  int p2_len = as_path_getlen(p2->u.ptr);
+  int p2_len = as_path_getlen_int(p2->u.ptr, 2);
   int p4_len = p4 ? validate_as4_path(p, p4->u.ptr) : -1;
 
   if (p4 && (p4_len < 0))
@@ -1245,7 +1247,6 @@ bgp_decode_attrs(struct bgp_conn *conn, byte *attr, unsigned int len, struct lin
   int errcode;
   byte *z, *attr_start;
   byte seen[256/8];
-  eattr *e;
   ea_list *ea;
   struct adata *ad;
 
