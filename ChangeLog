@@ -1,3 +1,65 @@
+commit 43c7a1ffa07dda2a9f37c046e1cd9a75242db2b7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Sep 30 18:48:38 2009 +0200
+
+    New version.
+
+commit aa7088fe2646e53b5168f7ea4e5bd098f891951c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Sep 30 16:34:47 2009 +0200
+
+    Fixes one previous commit.
+
+commit a5bf5f781cf921bd1e092b7f9ae6ccdbf7424428
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Sep 24 23:14:44 2009 +0200
+
+    Show bad peer AS number in log in decimal.
+
+commit be6e39ebbf7ed107abde6fc1a18e8827ca47a7c1
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Sep 24 22:12:11 2009 +0200
+
+    Passive option.
+
+commit 2d507e64b7d7029906aac30dbea317795b5339de
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Sep 24 19:08:14 2009 +0200
+
+    Do not allow gateway routes with NULL iface.
+
+commit 54fe0d9230be440d9f627ff7f94a202e6117e1b9
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Sep 18 13:59:04 2009 +0200
+
+    Fixes setting of IP addresses to route attributes (NEXT_HOP).
+
+commit db96fccb31bc0436ec182ff825f592d6c16dc930
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Sep 18 01:11:09 2009 +0200
+
+    Fixes bug in filter rta copy-on-write.
+    
+    Filters should try to copy-on-write just cached rtas.
+
+commit 46eb80d5d50a2b284cae19444149d57d857a8e02
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Sep 17 17:52:36 2009 +0200
+
+    Fixes headers for uintptr_t (and build on NetBSD).
+
+commit f4c6ca8c9c7ca7c0d481e6059396beed6adc768d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Sep 17 13:35:37 2009 +0200
+
+    Fixes preference bounds.
+
+commit 0781e9c62cd34175eb4e3bc61ffe785d08538727
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Sep 17 12:40:02 2009 +0200
+
+    Fixes preference in transparent pipes.
+
 commit 5eb4d0180ed92cee31d962fbc4d0175a7e1d5933
 Author: Ondrej Filip <feela@majklik.network.cz>
 Date:   Fri Sep 11 12:20:30 2009 +0200
