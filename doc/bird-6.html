@@ -124,6 +124,11 @@ of the interface our neighbor is connected to.
 of BGP sessions. Default: no authentication. Password has to be set by
 external utility (e.g. setkey(8)) on BSD systems.
 <P>
+<DT><CODE>passive <I>switch</I></CODE><DD><P>Standard BGP behavior is both
+initiating outgoing connections and accepting incoming
+connections. In passive mode, outgoing connections are not
+initiated. Default: off.
+<P>
 <DT><CODE>rr client</CODE><DD><P>Be a route reflector and treat the neighbor as
 a route reflection client. Default: disabled.
 <P>
