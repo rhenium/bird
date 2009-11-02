@@ -137,6 +137,10 @@ or only of the types selected: <CODE>states</CODE> for protocol state changes
 <CODE>events</CODE> for events internal to the protocol and
 <CODE>packets</CODE> for packets sent and received by the protocol. Default: off.
 <P>
+<DT><CODE>router id <I>IPv4 address</I></CODE><DD><P>This option can be used to override global
+router id for a given protocol. This option is not yet implemented for OSPF
+protocol. Default: uses global router id.
+<P>
 <DT><CODE>import all | none | filter <I>name</I> | filter { <I>filter commands</I> } | where <I>filter expression</I></CODE><DD><P>Specify a filter to be used for filtering routes coming from the protocol to the routing table. <CODE>all</CODE> is shorthand for <CODE>where true</CODE> and <CODE>none</CODE> is shorthand for <CODE>where false</CODE>. Default: <CODE>all</CODE>.
 <P>
 <DT><CODE>export <I>filter</I></CODE><DD><P>This is similar to the <CODE>import</CODE> keyword, except that it
