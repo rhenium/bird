@@ -1,3 +1,80 @@
+commit b7c0e93ebd40cdc4f6e89067a3e5f7293263c7f9
+Merge: 7965e17... f1f1e89...
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Nov 2 16:27:17 2009 +0100
+
+    Merge commit 'origin/master' into dev
+
+commit 7965e17d67e8e2e68d96a8471f4828c0dc0d0b21
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Nov 2 16:25:05 2009 +0100
+
+    Fixes build in Debian GNU/kFreeBSD.
+
+commit f1f1e899b708e0e2ebaba46444fad650648ccb93
+Author: Ondrej 'Feela' Filip <feela@atrey.karlin.mff.cuni.cz>
+Date:   Mon Nov 2 15:59:01 2009 +0100
+
+    Version 1.1.5
+
+commit b5332824ea4108d62cb559205391fd2c530348e4
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 28 20:33:08 2009 +0100
+
+    New version.
+
+commit e6ff7a08e4e7808e1175c3c3bc830d93c0454b19
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Oct 27 22:25:36 2009 +0100
+
+    Replaces local endianity testing macro with the common one.
+    
+    That makes it easier to integrate BIRD to crosscompiling
+    buildsystems.
+
+commit bff74c7aa3ce4d407cb18b48c9df7b670c3c7a3d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Oct 20 19:04:28 2009 +0200
+
+    Allows importing 'onlink' routes.
+
+commit 4cdd078453d585ac97a183ea1f3951d85f1b8784
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Oct 12 23:31:42 2009 +0200
+
+    Implements protocol-specific router id and updates documentation.
+
+commit 52b9b2a1786140c38af03de570b0cc96c835c1d3
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Oct 12 20:44:58 2009 +0200
+
+    Rename as_path_get_last/as_path_get_first to be consistent.
+
+commit ea89da381fc682155e7d08d6ad3d4ac8aa5fe115
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Oct 11 18:56:16 2009 +0200
+
+    Workaround for stupid callback scheduler.
+    
+    There is no reak callback scheduler and previous behavior causes
+    bad things during hard congestion (like BGP hold timeouts).
+    
+    Smart callback scheduler is still missing, but main loop was
+    changed such that it first processes all tx callbacks (which
+    are fast enough) (but max 4* per socket) + rx callbacks for CLI,
+    and in the second phase it processes one rx callback per
+    socket up to four sockets (as rx callback can be slow when
+    there are too many protocols, because route redistribution
+    is done synchronously inside rx callback). If there is event
+    callback ready, second phase is skipped in 90% of iterations
+    (to speed up CLI during congestion).
+
+commit 7ea5b00f42bd3d1fdafb0be349e3ebbcdf3ea466
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Oct 8 15:23:24 2009 +0100
+
+    First and last accessors to as_paths.
+
 commit 43c7a1ffa07dda2a9f37c046e1cd9a75242db2b7
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Wed Sep 30 18:48:38 2009 +0200
@@ -1793,7 +1870,6 @@ commit 60e04f041303fdafd0abf0dec003a9745345c68a
 Author: Ondrej Filip <feela@network.cz>
 Date:   Fri Feb 18 18:51:42 2005 +0000
 
-    
     Minor bugfix: Summary LSA for aggregated area was always propagated with
     metric = 1. Now it's metric of most distant component.
 
@@ -9662,7 +9738,6 @@ commit 163b2073465b1d2f90d23832456e79463fdec308
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Nov 30 10:35:26 1999 +0000
 
-    
     Inicialisation of Topology Graph (TG).
 
 commit ae97b946e99bef043613d210489a926fe4807ec1
@@ -10297,7 +10372,6 @@ commit 8c51f96acff1cfb05d1cf05f4355fce655c32599
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon Aug 9 13:03:28 1999 +0000
 
-    
     Some interface state machine changes. I found some problem in RFC,
     trying to conntact authors.
 
@@ -10449,14 +10523,12 @@ commit 39369d6fbe4b3f73c8110b14623f367c8ffded50
 Author: Ondrej Filip <feela@network.cz>
 Date:   Wed Jun 2 16:31:13 1999 +0000
 
-    
     Fixed stupid bug with hello vs inactim timers.
 
 commit bae0f7dbb111e2c8fbb8a94b59de6e241020ad66
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Jun 1 17:29:56 1999 +0000
 
-    
     Neigbor deleting done. (I have some problems with timers, so it does not
     send hello.)
 
@@ -10464,7 +10536,6 @@ commit cd70d93470498c0b68a084be5aeab5dd45a0df60
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Jun 1 16:35:18 1999 +0000
 
-    
     Detecting of new neighbor added. It starts inactivity timer.
 
 commit bd7f1081f24aa6ca4cdba004478742b730644a91
@@ -10544,7 +10615,6 @@ commit c72b09c8508d71b9a0a998c2dabe475d54b4d014
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 31 19:07:31 1999 +0000
 
-    
     IP socket priority (sock->tos) added. Constant taken from tcpdump of CISCO
     and gated.
 
@@ -10552,7 +10622,6 @@ commit 35ff423d54ebabffc5ab9dd757dfa2a1a70e9676
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 31 18:56:20 1999 +0000
 
-    
     Some RX_Hello checks added.
 
 commit bb027be1e232ca2207a03a8e001441965cc07801
@@ -10566,7 +10635,6 @@ commit 75b84c34e3434209517f2ebc8160f39d33e3735e
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 31 18:24:54 1999 +0000
 
-    
     Sending and receving of hello pkts works. No I will start building neighbor
     database.
 
@@ -10636,14 +10704,12 @@ commit 903a3f3928a5d7c223ff4c0087343cf214f8478d
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 24 21:49:22 1999 +0000
 
-    
     struct ospf_neigbor corrected.
 
 commit c76674f0e98d356ea235ea76fd55d71a3673b123
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 24 21:17:16 1999 +0000
 
-    
     struct ospf_neigbor added. Neigbor state machine implementation can start.
 
 commit 65112dd270dbfa598c1f8a5074bf7224b9e1469c
@@ -10656,14 +10722,12 @@ commit daeb60393d011f8ee1326e212b310983276b6ba1
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 24 17:37:45 1999 +0000
 
-    
     Small bug in ipv4_skip_header.
 
 commit b9f8590025fd5d6dd360f759c5a219d69b975123
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon May 24 17:29:05 1999 +0000
 
-    
     IP header test added.
 
 commit 4b0d57e53120e404e00f7d252119e45288ceeb71
@@ -10747,14 +10811,12 @@ commit 67ff91302f21f6a40201bcc8a01c9c76eaaf1ed1
 Author: Ondrej Filip <feela@network.cz>
 Date:   Fri May 14 08:46:06 1999 +0000
 
-    
     Netmask checking for hello packets added.
 
 commit 7426ee3d49fab13428f198c78c8b7f3da131382e
 Author: Ondrej Filip <feela@network.cz>
 Date:   Thu May 13 09:18:36 1999 +0000
 
-    
     Checksum control added.
 
 commit 296ecb56eb4d1951d23d74d502d2c48a42eb6eee
@@ -10773,8 +10835,6 @@ commit f7103dfcfe174d39c8aa10eb100550e3ec213981
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue May 11 09:50:02 1999 +0000
 
-    
-    
     Better logging output. Added 'struct proto *' info 'struct ospf iface'.
 
 commit 1a54d44a23de7b0bf0dfe62dd3d09d8167e5a597
@@ -10831,21 +10891,18 @@ commit 59e2188cb7020e43e25c9d5bdcd011f341ddfc1d
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 27 13:04:33 1999 +0000
 
-    
     Just changes of comments.
 
 commit 6376a961332552e2bc178d647f1e5cfa01a1ac32
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 27 12:56:52 1999 +0000
 
-    
     Hello timer implemented.
 
 commit 93bde8dce23ae10476263a84cc40bbe186263fdc
 Author: Ondrej Filip <feela@network.cz>
 Date:   Thu Apr 22 13:12:28 1999 +0000
 
-    
     Work on hello continues.
 
 commit 36bbfc704c7d2153537751e24413db9b9c97bc58
@@ -10865,14 +10922,12 @@ commit b11d8a4f59b3559779938b0a37914a7bc8c07a6b
 Author: Ondrej Filip <feela@network.cz>
 Date:   Wed Apr 14 15:13:44 1999 +0000
 
-    
     Redesigned struct ospf_iface & new struct ospf_sock.
 
 commit b31568a516142e905712bad498914fb6a82dc25b
 Author: Ondrej Filip <feela@network.cz>
 Date:   Wed Apr 14 12:47:18 1999 +0000
 
-    
     Small bug fix in memcpy.
 
 commit 4c5e5e3a1c438cb2e92535e3fabc458aa0d6deb3
@@ -10917,21 +10972,18 @@ commit 4c630a6dd7e02cbbe1cca2c626feb86801ee4d03
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 13 21:46:20 1999 +0000
 
-    
     Added wait timer for eligible BCAST & NBMA interface.
 
 commit 55e7732a5a5fe47752eafe6024ba473bd7959e45
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 13 19:27:44 1999 +0000
 
-    
     Change in ospf_iface. (My bad understanding of lists manipulation.)
 
 commit aec76c6e8e5702144522f0061bc102d26e10b97c
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 13 18:21:53 1999 +0000
 
-    
     IPv6 changes.
 
 commit 43fc099b98594fb3ac6a56a90fd00f42fc98f742
@@ -10946,21 +10998,18 @@ commit 24eaae9e5d0b154ec47d9d4e13649fb066814ef1
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 13 00:46:34 1999 +0000
 
-    
     Small change to stop using loopback.
 
 commit cb2e8c49706c14ea662df44cd3911c1f9db4b4a8
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Apr 13 00:24:05 1999 +0000
 
-    
     A small init change to avoid core dump.
 
 commit 5b1a92e6d4350bcecff4f78b9cfabfb98ca7ce2a
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon Apr 12 23:54:21 1999 +0000
 
-    
     Not all I mean serious. Almost everything will change.
     Changes: struct ospf_iface draft, various constants added...
 
@@ -11452,8 +11501,6 @@ commit c1f8dc9149d3868e5a0f4e4ad97759fb3b177bec
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Mar 9 22:27:43 1999 +0000
 
-    
-    
     Yes, joining the crew. Sorry for being late. Added dummy functions for OSPF.
 
 commit 2575593e0fa9fb84a4cc481928c32519b3fea2cd
