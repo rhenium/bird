@@ -1,3 +1,10 @@
+bird (1.1.5-2) UNRELEASED; urgency=low
+
+  * Update build dependency on libreadline-dev (and stay friendly with
+    backporters, ie. me)
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 05 Nov 2009 21:38:47 +0100
+
 bird (1.1.5-1) unstable; urgency=low
 
   * New Upstream Version
