@@ -1,3 +1,69 @@
+commit 1f8be1e46f666e79072cc5f800c2dba91788368b
+Author: Ondrej Filip <feela@trubka.network.cz>
+Date:   Thu Nov 19 23:15:58 2009 +0100
+
+    Added word 'IPv6' to underline, that this problem was not IPv4 related.
+
+commit 6a72a276f6a677a8adec9566867023d76ac7da7e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Nov 19 12:53:55 2009 +0100
+
+    New version.
+
+commit a4644ed6ab32c098b755bdac03498634b2794409
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Nov 19 11:44:17 2009 +0100
+
+    Implement option to exit after config file parsing.
+
+commit 3f9b7bfe9ff050430a5886b22a5ab11b5f253048
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Nov 18 20:32:36 2009 +0100
+
+    Implements option that controls IPv6 BGP next hops when lladdr is missing.
+
+commit 62aa96caa28180f76c8aff0c49dd21128e396153
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Nov 17 15:50:29 2009 +0100
+
+    Adds some documentation to the description option.
+
+commit e04555c04545278cfe3aeae85d707b1d78e5abeb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Nov 17 15:45:05 2009 +0100
+
+    Implement description field of protocol.
+
+commit d0e2d6d1e05455cf1ec4e71135edaa659fe96dac
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Nov 17 14:17:23 2009 +0100
+
+    Show both IPv6 next hop addresses in BGP.
+
+commit 3228c72cc030f409914134440a7e55bbcfc9ff6a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Nov 17 11:41:29 2009 +0100
+
+    Implements RFC 5004 - prefer older external routes.
+
+commit 2eece54a04d95f534b935ccac4c3959b25516bd5
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Nov 15 14:24:20 2009 +0100
+
+    Fixes bug related to reconfiguration with bgp_path first/last operators.
+
+commit 653b4015f137d9590147f8774ec686031696f81c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Nov 13 14:54:43 2009 +0100
+
+    After shutdown, BIRD should have exit code 0.
+
+commit d3f36e5978e85a926c497e2aa2cbdf319776ebb5
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Nov 13 14:43:29 2009 +0100
+
+    Fixes BIRD socket unlink.
+
 commit b7c0e93ebd40cdc4f6e89067a3e5f7293263c7f9
 Merge: 7965e17... f1f1e89...
 Author: Ondrej Zajicek <santiago@crfreenet.org>
