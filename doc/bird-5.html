@@ -160,7 +160,7 @@ IP address) whose prefix length is 20 to 24, <CODE>[ 1.2.3.4/32- ]</CODE> matche
 <CODE>1.2.3.4</CODE>. <CODE>1.2.0.0/16 ~ [ 1.0.0.0/8{15,17} ]</CODE> is true,
 but <CODE>1.0.0.0/16 ~ [ 1.0.0.0/8- ]</CODE> is false.
 <P>Cisco-style patterns like <CODE>10.0.0.0/8 ge 16 le 24</CODE> can be expressed
-in Bird as <CODE>10.0.0.0/8{16,24}</CODE>, <CODE>192.168.0.0/16 le 24</CODE> as 
+in BIRD as <CODE>10.0.0.0/8{16,24}</CODE>, <CODE>192.168.0.0/16 le 24</CODE> as 
 <CODE>192.168.0.0/16{16,24}</CODE> and <CODE>192.168.0.0/16 ge 24</CODE> as
 <CODE>192.168.0.0/16{24,32}</CODE>.
 <P>

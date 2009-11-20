@@ -110,11 +110,33 @@ neighbor which is connected at most <I>number</I> hops far and to which
 we should route via our direct neighbor with address <I>ip</I>.
 Default: switched off.
 <P>
-<DT><CODE>next hop self</CODE><DD><P>Avoid calculation of the Next Hop attribute
-and always advertise our own source address (see below) as a next hop.
-This needs to be used only
-occasionally to circumvent misconfigurations of other routers.
+<DT><CODE>next hop self</CODE><DD><P>Avoid calculation of the Next Hop
+attribute and always advertise our own source address (see
+below) as a next hop.  This needs to be used only occasionally
+to circumvent misconfigurations of other routers.
 Default: disabled.
+<P>
+<DT><CODE>missing lladdr self|drop|ignore</CODE><DD><P>Next Hop attribute
+in BGP-IPv6 sometimes contains just the global IPv6 address,
+but sometimes it has to contain both global and link-local
+IPv6 addresses. This option specifies what to do if BIRD have
+to send both addresses but does not know link-local address.
+This situation might happen when routes from other protocols
+are exported to BGP, or when improper updates are received
+from BGP peers.  
+<DT><CODE>self</CODE><DD><P>means that BIRD advertises its own
+local address instead. 
+<DT><CODE>drop</CODE><DD><P>means that BIRD skips that
+prefixes and logs error. 
+<DT><CODE>ignore</CODE><DD><P>means that BIRD ignores
+the problem and sends just the global address (and therefore
+forms improper BGP update). Default: 
+<DT><CODE>self</CODE><DD><P>, unless BIRD
+is configured as a route server (option 
+<DT><CODE>rs client</CODE><DD><P>), in
+that case default is 
+<DT><CODE>drop</CODE><DD><P>, because route servers usually
+does not forward packets ifselves.
 <P>
 <DT><CODE>source address <I>ip</I></CODE><DD><P>Define local address we should use
 for next hop calculation. Default: the address of the local end
@@ -143,7 +165,7 @@ id and this option is not allowed for them. Default: the same as router id.
 as a route server client. A route server is used as a
 replacement for full mesh EBGP routing in Internet exchange
 points in a similar way to route reflectors used in IBGP routing.
-Bird does not implement obsoleted RFC 1863, but uses ad-hoc implementation,
+BIRD does not implement obsoleted RFC 1863, but uses ad-hoc implementation,
 which behaves like plain EBGP but reduces modifications to advertised route
 attributes to be transparent (for example does not prepend its AS number to
 AS PATH attribute and keep MED attribute). Default: disabled.
@@ -207,6 +229,11 @@ increase exponentially. Default: 300 seconds.
 <P>
 <DT><CODE>path metric <I>switch</I></CODE><DD><P>Enable comparison of path lengths
 when deciding which BGP route is the best one. Default: on.
+<P>
+<DT><CODE>prefer older <I>switch</I></CODE><DD><P>Standard route selection algorithm
+breaks ties by comparing router IDs. This changes the behavior
+to prefer older routes (when both are external and from different
+peer). For details, see RFC 5004. Default: off.
 <P>
 <DT><CODE>default bgp_med <I>number</I></CODE><DD><P>Value of the Multiple Exit
 Discriminator to be used during route selection when the MED attribute
