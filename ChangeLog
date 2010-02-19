@@ -1,3 +1,66 @@
+commit dfd48621d1a54f2beb461fe3847fc4b2a535675e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Feb 17 21:53:07 2010 +0100
+
+    Replaces the algorithm for building balanced trees.
+    
+    Changes the time complexity of the algorithm from O(n^2) to O(n*log(n)).
+    This speeds up loading of huge DEC-IX config from 128 s to 15 s. It also
+    makes the code significantly simpler.
+
+commit 14f6aca48037a0653e6bcfa27a4da48e8f962198
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Feb 17 11:29:48 2010 +0100
+
+    Changes right recursion to left in the grammar of the case expression.
+
+commit dca75fd7c207f0bfc627cb6b74a484da3b27e05f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Feb 13 12:26:26 2010 +0100
+
+    Removes phantom protocol from the pipe design.
+    
+    It seems that by adding one pipe-specific exception to route
+    announcement code and by adding one argument to rt_notify() callback i
+    could completely eliminate the need for the phantom protocol instance
+    and therefore make the code more straightforward. It will also fix some
+    minor bugs (like ignoring debug flag changes from the command line).
+
+commit 9db74169be76f658df2207d1ec99eac48fa36f5f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Feb 13 10:44:46 2010 +0100
+
+    Fixes protocol statistics for pipes.
+
+commit c83876265eeae3591bfe90375503728e633cb807
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Feb 11 22:27:06 2010 +0100
+
+    Fixes a tricky bug in the pipe protocol.
+    
+    When uncofiguring the pipe and the peer table, the peer table was
+    unlocked when pipe protocol state changed to down/flushing and not to
+    down/hungry. This leads to the removal of the peer table before
+    the routes from the pipe were flushed.
+    
+    The fix leads to adding some pipe-specific hacks to the nest,
+    but this seems inevitable.
+
+commit a2ea1bac601ca79946e2a215dac9427c526cedab
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Feb 11 21:19:20 2010 +0100
+
+    Moves errno.h include.
+
+commit 2af25a971a28ccac05d2385669e8b103c0328f7d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Feb 11 11:12:58 2010 +0100
+
+    Fixes a crash caused by missing error hook on BGP listening socket.
+    
+    Error happened when too many BGP connections arrived in one moment
+    (ECONNABORTED).
+
 commit fa5a99c766dde2a4ac3d44596ff5396a0efd1cc8
 Author: Ondrej Filip <feela@majklik.network.cz>
 Date:   Wed Feb 10 23:09:23 2010 +0100
