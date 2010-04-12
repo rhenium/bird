@@ -11,7 +11,7 @@
 
 include /usr/share/quilt/quilt.make
 
-CFLAGS = -Wall -g
+CFLAGS = -Wall -g -Wstrict-prototypes -Wno-parentheses -Wno-pointer-sign -Wno-strict-aliasing
 ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
 CFLAGS += -O0
 else
