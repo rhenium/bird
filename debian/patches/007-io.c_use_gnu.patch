@@ -1,11 +1,11 @@
 --- a/sysdep/unix/io.c
 +++ b/sysdep/unix/io.c
-@@ -19,6 +19,8 @@
- #include <unistd.h>
- #include <errno.h>
+@@ -7,6 +7,8 @@
+  *	Can be freely distributed and used under the terms of the GNU GPL.
+  */
  
 +#define __USE_GNU 1
 +
- #include "nest/bird.h"
- #include "lib/lists.h"
- #include "lib/resource.h"
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <time.h>
