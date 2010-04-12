@@ -1,0 +1,13 @@
+--- a/sysdep/unix/io.c
++++ b/sysdep/unix/io.c
+@@ -670,6 +670,10 @@ get_sockaddr(struct sockaddr_in *sa, ip_
+ #define CMSG_RX_SPACE CMSG_SPACE(sizeof(struct in6_pktinfo))
+ #define CMSG_TX_SPACE CMSG_SPACE(sizeof(struct in6_pktinfo))
+ 
++#ifndef IPV6_RECVPKTINFO
++#define IPV6_RECVPKTINFO IPV6_PKTINFO
++#endif
++
+ static char *
+ sysio_register_cmsgs(sock *s)
+ {

@@ -1,0 +1,11 @@
+--- a/sysdep/unix/io.c
++++ b/sysdep/unix/io.c
+@@ -19,6 +19,8 @@
+ #include <unistd.h>
+ #include <errno.h>
+ 
++#define __USE_GNU 1
++
+ #include "nest/bird.h"
+ #include "lib/lists.h"
+ #include "lib/resource.h"

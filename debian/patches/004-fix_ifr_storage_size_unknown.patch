@@ -1,0 +1,17 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 004_fix-ifr-storage-size-unknown.patch by Ondřej Surý <ondrej@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: No description
+
+@DPATCH@
+--- a/sysdep/linux/sysio.h
++++ b/sysdep/linux/sysio.h
+@@ -6,6 +6,7 @@
+  *	Can be freely distributed and used under the terms of the GNU GPL.
+  */
+ 
++#include <linux/if.h>
+ #include <net/if.h>
+ 
+ #ifdef IPV6

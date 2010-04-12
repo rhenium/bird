@@ -9,6 +9,8 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
+include /usr/share/quilt/quilt.make
+
 CFLAGS = -Wall -g
 ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
 CFLAGS += -O0
@@ -30,7 +32,7 @@ COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc --mandir=\$${prefix}/share/man \
 	--infodir=\$${prefix}/share/info --localstatedir=/var \
 	--with-protocols=all --enable-client 
 
-build-ipv4/config.status: patch configure
+build-ipv4/config.status: $(QUILT_STAMPFN) configure
 	dh_testdir
 
 ifneq "$(wildcard /usr/share/misc/config.sub)" ""
@@ -46,7 +48,7 @@ endif
 	--disable-ipv6 \
 	CFLAGS="$(CFLAGS)" LDFLAGS="-Wl,-z,defs"
 
-build-ipv6/config.status: patch configure
+build-ipv6/config.status: $(QUILT_STAMPFN) configure
 	dh_testdir
 
 ifneq "$(wildcard /usr/share/misc/config.sub)" ""
@@ -77,8 +79,7 @@ build-stamp-ipv6: build-ipv6/config.status
 	DEB_BUILD_HARDENING=1 $(MAKE) -C build-ipv6
 	touch $@
 
-clean: clean1 unpatch
-clean1:
+clean: unpatch
 	dh_testdir
 	dh_testroot
 	rm -f build-stamp-ipv4 build-stamp-ipv6
@@ -119,16 +120,6 @@ binary-arch: install
 	dh_gencontrol
 	dh_md5sums
 	dh_builddeb
-
-patch: patch-stamp
-patch-stamp:
-	dpatch apply-all
-	dpatch cat-all >patch-stamp
-	touch patch-stamp
-
-unpatch:
-	dpatch deapply-all
-	rm -rf patch-stamp debian/patched
 
 binary: binary-indep binary-arch
 .PHONY: build clean binary-indep binary-arch binary install patch unpatch \

@@ -1,0 +1,5 @@
+001_netlink.patch
+004-fix_ifr_storage_size_unknown.patch
+006-birdc_include_more_headers.patch
+007-io.c_use_gnu.patch
+008-io.c_pktinfo.patch
