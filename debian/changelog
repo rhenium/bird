@@ -1,4 +1,4 @@
-bird (1.2.2-2) karmic; urgency=low
+bird (1.2.2-2) unstable; urgency=low
 
   * Convert dpatch to quilt
   * Add two new patches to fix ipv6 build in io.c
