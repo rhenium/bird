@@ -1,16 +1,11 @@
-bird (1.2.2-2) unstable; urgency=low
+bird (1.2.2-1) unstable; urgency=low
 
+  * Imported Upstream version 1.2.2
   * Convert dpatch to quilt
   * Add two new patches to fix ipv6 build in io.c
   * Remove useless patch to fix non-existant buffer overflow
 
- -- Ondřej Surý <ondrej@debian.org>  Mon, 12 Apr 2010 18:04:52 +0200
-
-bird (1.2.2-1) unstable; urgency=low
-
-  * Imported Upstream version 1.2.2
-
- -- Ondřej Surý <ondrej@debian.org>  Mon, 12 Apr 2010 18:04:37 +0200
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 12 Apr 2010 21:02:48 +0200
 
 bird (1.2.1-1) unstable; urgency=low
 
