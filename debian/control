@@ -3,11 +3,11 @@ Section: net
 Priority: extra
 Build-Depends: bison, debhelper (>= 7), flex, m4, libreadline-dev | libreadline6-dev | libreadline5-dev, hardening-wrapper, quilt (>= 0.40)
 Maintainer: Ondřej Surý <ondrej@debian.org>
-Standards-Version: 3.8.3
+Standards-Version: 3.8.4
 
 Package: bird
 Architecture: any
-Depends: ${shlibs:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Conflicts: zebra, routed
 Recommends: bird6
 Description: Internet Routing Daemon
@@ -22,7 +22,7 @@ Description: Internet Routing Daemon
 
 Package: bird6
 Architecture: any
-Depends: ${shlibs:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Conflicts: zebra, routed
 Recommends: bird
 Description: Internet Routing Daemon
