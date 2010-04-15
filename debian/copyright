@@ -3,11 +3,18 @@ Wed, 14 Jun 2000 17:53:15 +0200.
 
 It was downloaded from ftp://bird.network.cz/pub/bird/
 
-Upstream Authors and Copyright Holders:
- Martin Mares <mj@ucw.cz>
+Upstream Authors:
+ Martin Mareš <mj@ucw.cz>
  Pavel Machek <pavel@ucw.cz>
- Ondrej Filip <feela@network.cz>
- Ondrej Zajicek <santiago@crfreenet.org>
+ Ondřej Filip <feela@network.cz>
+ Ondřej Zajíček <santiago@crfreenet.org>
+
+Copyright:
+
+ (c) 1998-2008 Martin Mareš <mj@ucw.cz>
+ (c) 1998-2010 Ondřej Filip <feela@network.cz>
+ (c) 1998-2000 Pavel Machek <pavel@ucw.cz>
+ (c) 2009-2010 Ondřej Zajíček <santiago@crfreenet.org>
 
 License:
 
@@ -27,3 +34,15 @@ License:
 
 On Debian GNU/Linux systems, the complete text of the GNU General
 Public License can be found in `/usr/share/common-licenses/GPL'.
+
+
+./lib/md5.c is public domain written by Colin Plumb in 1993
+and it was adapted for BIRD by Martin Mareš.
+
+
+The (new) Debian packaging is:
+
+    Copyright (C) 2010 Ondřej Surý <ondrej@debian.org>
+
+and is licensed under the GPL version 3,
+see `/usr/share/common-licenses/GPL-3'.
