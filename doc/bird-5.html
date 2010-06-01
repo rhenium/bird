@@ -145,7 +145,8 @@ length from the pair. So <CODE>1.2.0.0/16.pxlen = 16</CODE> is true.
 <P>
 <DT><CODE>int|pair|quad|ip|prefix|enum set</CODE><DD><P>Filters recognize four types of sets. Sets are similar to strings: you can pass them around
 but you can't modify them. Literals of type <CODE>int set</CODE> look like <CODE>[ 1, 2, 5..7 ]</CODE>. As you can see, both simple values and ranges are permitted in
-sets.
+sets. For pair sets, expressions like <CODE>(123,*)</CODE> can be used to denote ranges (in
+that case <CODE>(123,0)..(123,65535)</CODE>).
 <P>Sets of prefixes are special: their literals does not allow ranges, but allows
 prefix patterns that are written as <CODE><I>ipaddress</I>/<I>pxlen</I>{<I>low</I>,<I>high</I>}</CODE>.
 Prefix <CODE><I>ip1</I>/<I>len1</I></CODE> matches prefix pattern <CODE><I>ip2</I>/<I>len2</I>{<I>l</I>,<I>h</I>}</CODE> iff 
@@ -202,8 +203,15 @@ can be modified. The type is used for community list (a set
 of pairs) and for cluster list (a set of quads). There exist
 no literals of this type. There are two special operators on
 clists:
-<P><CODE>add(<I>C</I>,<I>P</I>)</CODE> adds pair (or quad) <I>P</I> to clist <I>C</I> and returns the result.
-<P><CODE>delete(<I>C</I>,<I>P</I>)</CODE> deletes pair (or quad) <I>P</I> from clist <I>C</I> and returns the result.
+<P><CODE>add(<I>C</I>,<I>P</I>)</CODE> adds pair (or quad) <I>P</I> to clist
+<I>C</I> and returns the result.  If item <I>P</I> is already in
+clist <I>C</I>, it does nothing.
+<P><CODE>delete(<I>C</I>,<I>P</I>)</CODE> deletes pair (or quad)
+<I>P</I> from clist <I>C</I> and returns the result.  If clist
+<I>C</I> does not contain item <I>P</I>, it does nothing.
+<I>P</I> may also be a pair (or quad) set, in that case the
+operator deletes all items from clist <I>C</I> that are also
+members of set <I>P</I>.
 <P>Statement <CODE><I>C</I> = add(<I>C</I>, <I>P</I>);</CODE> can be shortened to
 <CODE><I>C</I>.add(<I>P</I>);</CODE> if <I>C</I> is appropriate route attribute
 (for example <CODE>bgp_community</CODE>). Similarly for <CODE>delete</CODE>.
@@ -218,7 +226,7 @@ clists:
 Special operators include <CODE>~</CODE> for "is element of a set" operation - it can be
 used on element and set of elements of the same type (returning true if element is contained in the given set), or
 on two strings (returning true if first string matches a shell-like pattern stored in second string) or on IP and prefix (returning true if IP is within the range defined by that prefix), or on
-prefix and prefix (returning true if first prefix is more specific than second one) or on bgppath and bgpmask (returning true if the path matches the mask) or on pair and clist (returning true if the pair (or quad) is element of the clist).
+prefix and prefix (returning true if first prefix is more specific than second one) or on bgppath and bgpmask (returning true if the path matches the mask) or on pair/quad and clist (returning true if the pair/quad is element of the clist) or on clist and pair/quad set (returning true if there is an element of the clist that is also a member of the pair/quad set).
 <P>
 <P>
 <H2><A NAME="ss5.4">5.4</A> <A HREF="bird.html#toc5.4">Control structures</A>

@@ -98,7 +98,9 @@ nl_request_dump(int cmd)
   req.nh.nlmsg_type = cmd;
   req.nh.nlmsg_len = sizeof(req);
   req.nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
-  req.g.rtgen_family = BIRD_PF;
+  /* Is it important which PF_* is used for link-level interface scan?
+     It seems that some information is available only when PF_INET is used. */
+  req.g.rtgen_family = (cmd == RTM_GETLINK) ? PF_INET : BIRD_PF;
   nl_send(&nl_scan, &req.nh);
 }
 
@@ -373,27 +375,37 @@ nl_parse_addr(struct nlmsghdr *h)
   memcpy(&ifa.ip, RTA_DATA(a[IFA_LOCAL] ? : a[IFA_ADDRESS]), sizeof(ifa.ip));
   ipa_ntoh(ifa.ip);
   ifa.pxlen = i->ifa_prefixlen;
-  if (i->ifa_prefixlen > BITS_PER_IP_ADDRESS ||
-      i->ifa_prefixlen == BITS_PER_IP_ADDRESS - 1)
+  if (i->ifa_prefixlen > BITS_PER_IP_ADDRESS)
     {
       log(L_ERR "KIF: Invalid prefix length for interface %s: %d", ifi->name, i->ifa_prefixlen);
       new = 0;
     }
   if (i->ifa_prefixlen == BITS_PER_IP_ADDRESS)
     {
-      ifa.flags |= IA_UNNUMBERED;
-      memcpy(&ifa.opposite, RTA_DATA(a[IFA_ADDRESS]), sizeof(ifa.opposite));
-      ipa_ntoh(ifa.opposite);
-      ifa.prefix = ifa.brd = ifa.opposite;
+      ip_addr addr;
+      memcpy(&addr, RTA_DATA(a[IFA_ADDRESS]), sizeof(addr));
+      ipa_ntoh(addr);
+      ifa.prefix = ifa.brd = addr;
+
+      /* It is either a peer address, or loopback/dummy address */
+      if (!ipa_equal(ifa.ip, addr))
+	{
+	  ifa.flags |= IA_UNNUMBERED;
+	  ifa.opposite = addr;
+	}
     }
   else
     {
       ip_addr netmask = ipa_mkmask(ifa.pxlen);
       ifa.prefix = ipa_and(ifa.ip, netmask);
       ifa.brd = ipa_or(ifa.ip, ipa_not(netmask));
+      if (i->ifa_prefixlen == BITS_PER_IP_ADDRESS - 1)
+	ifa.opposite = ipa_opposite_m1(ifa.ip);
+
 #ifndef IPV6
       if (i->ifa_prefixlen == BITS_PER_IP_ADDRESS - 2)
-	ifa.opposite = ipa_opposite(ifa.ip, i->ifa_prefixlen);
+	ifa.opposite = ipa_opposite_m2(ifa.ip);
+
       if ((ifi->flags & IF_BROADCAST) && a[IFA_BROADCAST])
 	{
 	  ip_addr xbrd;

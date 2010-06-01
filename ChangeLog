@@ -1,3 +1,231 @@
+commit 9ef239946b7298a679a9b155606257738bb52347
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon May 31 20:41:40 2010 +0200
+
+    NEWS and version update.
+
+commit a34b09349e809a6d8f696fb0897c0bfdc3b66159
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon May 31 11:35:29 2010 +0200
+
+    Disable BGP protocol when cannot open listening socket.
+
+commit 9b061f7ea5933f70c200bb3b3a7be5a2e472e805
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 28 11:16:39 2010 +0200
+
+    Minor fixes.
+
+commit 691057f03310e712428e19214ae48462d0f258e1
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed May 26 16:09:22 2010 +0200
+
+    Support loopback/dummy addresses.
+
+commit e0a62ad0f8be198bf8afb1f6900f138dfe12d4fb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed May 26 12:32:30 2010 +0200
+
+    Fixes a bug in duplicit configured stubnets.
+    
+    If there was the same configured stubnet on local and remote
+    router, the remote route always won regardless of its cost.
+
+commit 52572e94ec75728c114f47db37aaf220c1af29d6
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 23 12:34:09 2010 +0200
+
+    Check for OSPF seqnum wraparound and handle it.
+
+commit ba5c0057ed01fb006b7a6fb1bd8c21f0c9ae12be
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat May 22 22:47:24 2010 +0200
+
+    Extends pair set syntax, matching and deleting against clist.
+    
+    Expressions like (123,*) can be used in pair set literals, clists can be
+    matched against pair sets (community ~ pairset) and pair sets can be
+    used to specify items to delete from clists (community.delete(pairset)).
+
+commit 6d04ef8987f6f5483d353d393ef66dae4b887f30
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 21 16:40:09 2010 +0200
+
+    Comment update.
+
+commit 87a9abeac976180ade1c7619545e610d743994b5
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 21 15:17:49 2010 +0200
+
+    Fixes interface scan on Linux 2.4.x in IPv6 mode.
+
+commit 002b6423188abdd62c5a494069fd299b96863a79
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 21 11:51:39 2010 +0200
+
+    Fixes bug on Linux 2.4.x - kernel sync does not work until restart of kernel protocol.
+    
+    Which was, actually, a bug in timers - on older kernel, monotonic timer
+    is missing and the other implementation started with now == 0, which
+    collides with usage 0 as a special value in timer->expires field.
+
+commit c1cefd7bea79201c58c7c0fa8e192be3cc5ed771
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 16 11:03:59 2010 +0200
+
+    Do not remove old static route if it is in new config with different gw.
+
+commit 7ff5803becec14da870d3997d78e3963fa5ec6e6
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 16 10:27:20 2010 +0200
+
+    Do not originate summary or external LSA if it already here and not changed.
+
+commit 475977242ac5bb9ff8826c2dd8c9a1a180320de2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 14 16:54:39 2010 +0200
+
+    Handle EPIPE as a common connection close event.
+
+commit 0267f49fb2e44525aa2777bcb9900c4bb2db41e1
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 14 15:24:53 2010 +0200
+
+    Do not add community if it is already in clist.
+
+commit ee7408c2be2cd514ba6eefc5589e57a6056198dc
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 7 15:54:27 2010 +0200
+
+    Fixes a bug in LSA flooding.
+    
+    LSAs are sometimes prematurely removed from LS retransmission lists.
+
+commit 54818e9beb6bfcbcb5dcc2b175dca9d174012e6c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon May 3 00:10:48 2010 +0200
+
+    A minor bugfix in OSPF ext-LSA processing.
+
+commit 506fa1a73eab0c6426f68cd7784c6712898b88f3
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 2 22:41:40 2010 +0200
+
+    Merge several fixes suggested by Joakim Tjernlund.
+
+commit 6384c7d7aa85d1e593eca30cda48f6677b023cb0
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 2 19:58:34 2010 +0200
+
+    OSPF: most of summary LSA orig./flush logic rewritten.
+    
+    Fixes many bugs in the old code and makes it much cleaner.
+
+commit ba321706578de8402d50214a9e79a65835cdd821
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 28 00:39:57 2010 +0200
+
+    Better support for /31 networks.
+
+commit 48b0814ace2d05f9fef093d9f309bfa186a6f365
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 27 18:29:01 2010 +0200
+
+    A fix in OSPFv3 next_hop calculation.
+
+commit 96599c957baa9c82bde91d610ce4f519aead05e9
+Merge: ba13017... 9d1ee13...
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Tue Apr 27 11:28:44 2010 +0200
+
+    Merge branch 'master' of ssh://git.nic.cz/projects/bird/GIT/bird
+
+commit ba130172549ef2313f713e048083432f74e7d03d
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Tue Apr 27 11:27:54 2010 +0200
+
+    Avoid warning if not compiled with pipes.
+
+commit 9d1ee1388771a3caa6c23163571a80457adfab2c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Apr 26 19:08:57 2010 +0200
+
+    Neighbors on OSPF broadcast networks should be identified by IP address, not RID.
+    
+    Allows simple support for multiple interfaces to the same network.
+
+commit 4e5fb4b60c59db3248fd12db2bc6f0424d798122
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Apr 25 20:12:34 2010 +0200
+
+    Skip LSA host<->network endianity conversions on big endians.
+
+commit c1b51598d49ff737b926bd8ad2e308a5a15ce3a2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Apr 25 19:13:49 2010 +0200
+
+    Implements changes in checksum alg suggested by Joakim Tjernlund.
+
+commit 0ea8fb4abe5acad0b8f470bbdc5cc929b6a58ced
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Apr 24 15:18:21 2010 +0200
+
+    Fixes and enhancements in 'show ospf state' command.
+    
+    Now it shows a distance, option to change showing reachable/all network
+    nodes and better handling of AS-external LSAs in multiple areas. The
+    command 'show ospf topology' was changed to not show stubnets in both
+    OSPFv2 and OSPFv3 (previously it displayed stubnets in OSPFv2).
+
+commit 1d44ddf20f3ecef864d4bd20355251839fcd10ee
+Merge: 3b89a23... 6bc414d...
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 21 21:52:10 2010 +0200
+
+    Merge commit 'origin/master' into new
+
+commit 3b89a2327ba385abf2a8321a5a900faba3765612
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 21 21:50:38 2010 +0200
+
+    Fixes several problems in OSPF vlink implementation.
+
+commit 6bc414d619e1d8710990e89e5085d18e2d5c544c
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Mon Apr 19 16:10:20 2010 +0200
+
+    It seems that prefixes /31 and /127 are valid and used in this strange world.
+
+commit 607d991424006c083be63878b6a606e76679e1ce
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 14 15:35:08 2010 +0200
+
+    Fixes build on newer Linux systems.
+
+commit dcc6049444f5e12e0d0fcc4cfbb244c08b4c20b0
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 14 14:46:21 2010 +0200
+
+    Fixes IPv6 build on older systems.
+
+commit 6e8067609673afef9eb9e786f4e43a73a3b544f0
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Apr 11 12:22:47 2010 +0200
+
+    Fixes next hop calculation on NBMA and parallel PTP links.
+
+commit 7969ea3b41db05294c78a5e0ec0bd3c29ae8c549
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Apr 11 10:19:54 2010 +0200
+
+    Fixes a bug in OSPF on NBMA interfaces.
+    
+    A very tricky bug. OSPF on NBMA interfaces probably never really worked.
+    When a packet was sent to multiple destinations, the checksum was
+    calculated multiple times from a packet with already filled checksum
+    field (from previous calculation). Therefore, many packets were sent
+    with an invalid checksum.
+
 commit d759c1a6f834cd8a8a7c264d159b9ceb246aec2a
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Apr 9 17:42:39 2010 +0200

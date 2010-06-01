@@ -7,6 +7,10 @@
  *	Can be freely distributed and used under the terms of the GNU GPL.
  */
 
+/* Unfortunately, some glibc versions hide parts of RFC 3542 API
+   if _GNU_SOURCE is not defined. */
+#define _GNU_SOURCE 1
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -113,7 +117,8 @@ tracked_fopen(pool *p, char *name, char *mode)
 static list near_timers, far_timers;
 static bird_clock_t first_far_timer = TIME_INFINITY;
 
-bird_clock_t now, now_real;
+/* now must be different from 0, because 0 is a special value in timer->expires */
+bird_clock_t now = 1, now_real;
 
 static void
 update_times_plain(void)
@@ -668,6 +673,16 @@ get_sockaddr(struct sockaddr_in *sa, ip_addr *a, unsigned *port, int check)
 #define CMSG_RX_SPACE CMSG_SPACE(sizeof(struct in6_pktinfo))
 #define CMSG_TX_SPACE CMSG_SPACE(sizeof(struct in6_pktinfo))
 
+/*
+ * RFC 2292 uses IPV6_PKTINFO for both the socket option and the cmsg
+ * type, RFC 3542 changed the socket option to IPV6_RECVPKTINFO. If we
+ * don't have IPV6_RECVPKTINFO we suppose the OS implements the older
+ * RFC and we use IPV6_PKTINFO.
+ */
+#ifndef IPV6_RECVPKTINFO
+#define IPV6_RECVPKTINFO IPV6_PKTINFO
+#endif
+
 static char *
 sysio_register_cmsgs(sock *s)
 {
@@ -1202,7 +1217,8 @@ sk_maybe_write(sock *s)
 	      if (errno != EINTR && errno != EAGAIN)
 		{
 		  reset_tx_buffer(s);
-		  s->err_hook(s, errno);
+		  /* EPIPE is just a connection close notification during TX */
+		  s->err_hook(s, (errno != EPIPE) ? errno : 0);
 		  return -1;
 		}
 	      return 0;
