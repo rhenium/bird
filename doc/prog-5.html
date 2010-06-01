@@ -401,7 +401,7 @@ the database, for routing table calculaction and it call <B>area_disp()</B> of e
 ospf_area.
 <P>The function <B>area_disp()</B> is
 responsible for late originating of router LSA and network LSA
-and for cleanup after routing table calculation process in
+and for cleanup before routing table calculation process in
 the area.
 To every <I>ospf_iface</I>, we connect one or more
 <I>ospf_neighbor</I>'s -- a structure containing many timers and queues
@@ -554,9 +554,7 @@ In other case, new instance of network LSA is originated.
 </DL>
 <H3>Description</H3>
 <P>If I receive a message that new route is installed, I try to originate an
-external LSA. The LSA header of such LSA does not contain information about
-prefix length, so if I have to originate multiple LSAs for route with
-different prefixes I try to increment prefix id to find a "free" one.
+external LSA.
 <P>The function also sets flag ebit. If it's the first time, the new router lsa
 origination is necessary.
 
@@ -766,22 +764,6 @@ of the buffer.
 <P>Calculation of internal paths in an area is described in 16.1 of RFC 2328.
 It's based on Dijkstra's shortest path tree algorithms.
 This function is invoked from <B>ospf_disp()</B>.
-
-
-<HR><H3>Function</H3>
-<P><I>void</I>
-<B>ospf_ext_spf</B>
-(<I>struct proto_ospf *</I> <B>po</B>) --  calculate external paths
-<P>
-<H3>Arguments</H3>
-<P>
-<DL>
-<DT><I>struct proto_ospf *</I> <B>po</B><DD><P>protocol
-</DL>
-<H3>Description</H3>
-<P>After routing table for any area is calculated, calculation of external
-path is invoked. This process is described in 16.4 of RFC 2328.
-Inter- and Intra-area paths are always prefered over externals.
 
 <H2><A NAME="ss5.3">5.3</A> <A HREF="prog.html#toc5.3">Pipe</A>
 </H2>

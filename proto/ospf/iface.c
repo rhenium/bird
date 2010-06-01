@@ -236,11 +236,11 @@ ospf_iface_down(struct ospf_iface *ifa)
   struct proto *p = &po->proto;
   struct ospf_iface *iff;
 
-  OSPF_TRACE(D_EVENTS, "Removing interface %s", ifa->iface->name);
-
-  /* First of all kill all the related vlinks */
   if (ifa->type != OSPF_IT_VLINK)
   {
+    OSPF_TRACE(D_EVENTS, "Removing interface %s", ifa->iface->name);
+
+    /* First of all kill all the related vlinks */
     WALK_LIST(iff, po->iface_list)
     {
       if ((iff->type == OSPF_IT_VLINK) && (iff->vifa == ifa))
@@ -260,6 +260,7 @@ ospf_iface_down(struct ospf_iface *ifa)
     ifa->iface = NULL;
     ifa->addr = NULL;
     ifa->sk = NULL;
+    ifa->cost = 0;
     ifa->vip = IPA_NONE;
     return;
   }
@@ -360,7 +361,7 @@ ospf_iface_sm(struct ospf_iface *ifa, int event)
 u8
 ospf_iface_clasify(struct iface *ifa, struct ifa *addr)
 {
-  if (addr->flags & IA_UNNUMBERED)
+  if (ipa_nonzero(addr->opposite))
     return OSPF_IT_PTP;
 
   if ((ifa->flags & (IF_MULTIACCESS | IF_MULTICAST)) ==
@@ -445,33 +446,16 @@ ospf_iface_new(struct proto_ospf *po, struct iface *iface, struct ifa *addr,
 
 #ifdef OSPFv3
   ifa->instance_id = ip->instance_id;
-
-  /*
-  addr = NULL;
-  if (ifa->type != OSPF_IT_VLINK)
-    {
-      struct ifa *a;
-      WALK_LIST(a, iface->addrs)
-	if (a->scope == SCOPE_LINK)
-	  {
-	    addr = a;
-	    break;
-	  }
-
-      if (!addr)
-      {
-	log(L_ERR "%s: Missing link-local address on interface %s, declaring as stub", p->name,  iface->name);
-	ifa->ioprob = OSPF_I_LL;
-	ifa->stub = 1;
-      }
-    }
-  */
 #endif
 
   if (ip->type == OSPF_IT_UNDEF)
     ifa->type = ospf_iface_clasify(iface, addr);
   else
     ifa->type = ip->type;
+
+  /* a loopback/dummy address */
+  if ((addr->pxlen == MAX_PREFIX_LENGTH) && ipa_zero(addr->opposite))
+    ifa->stub = 1;
 
 #ifdef OSPFv2
   if ((ifa->type != OSPF_IT_PTP) && (ifa->type != OSPF_IT_VLINK) &&
@@ -824,5 +808,4 @@ ospf_iface_shutdown(struct ospf_iface *ifa)
 {
   init_list(&ifa->neigh_list);
   hello_timer_hook(ifa->hello_timer);
-  ospf_sk_close(ifa);
 }

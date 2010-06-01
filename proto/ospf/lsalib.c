@@ -45,20 +45,8 @@ ospf_age(struct proto_ospf *po)
   struct top_hash_entry *en, *nxt;
   int flush = can_flush_lsa(po);
 
-  if (po->cleanup) OSPF_TRACE(D_EVENTS, "Running ospf_age cleanup");
-
   WALK_SLIST_DELSAFE(en, nxt, po->lsal)
   {
-    if (po->cleanup)
-    {
-      en->color = OUTSPF;
-      en->dist = LSINFINITY;
-      en->nhi = NULL;
-      en->nh = IPA_NONE;
-      en->lb = IPA_NONE;
-      DBG("Infinitying Type: %u, Id: %R, Rt: %R\n", en->lsa.type,
-	  en->lsa.id, en->lsa.rt);
-    }
     if (en->lsa.age == LSA_MAXAGE)
     {
       if (flush)
@@ -88,9 +76,9 @@ ospf_age(struct proto_ospf *po)
 	en->lsa.age = LSA_MAXAGE;
     }
   }
-  po->cleanup = 0;
 }
 
+#ifndef CPU_BIG_ENDIAN
 void
 htonlsah(struct ospf_lsa_header *h, struct ospf_lsa_header *n)
 {
@@ -142,6 +130,7 @@ ntohlsab(void *n, void *h, u16 len)
   for (i = 0; i < (len / sizeof(u32)); i++)
     hid[i] = ntohl(nid[i]);
 }
+#endif /* little endian */
 
 /*
 void
@@ -188,7 +177,7 @@ lsasum_calculate(struct ospf_lsa_header *h, void *body)
 
   //  log(L_WARN "Checksum %R %R %d start (len %d)", h->id, h->rt, h->type, length);
   htonlsah(h, h);
-  htonlsab(body, body, length - sizeof(struct ospf_lsa_header));
+  htonlsab1(body, length - sizeof(struct ospf_lsa_header));
 
   /*
   char buf[1024];
@@ -202,7 +191,7 @@ lsasum_calculate(struct ospf_lsa_header *h, void *body)
   //  log(L_WARN "Checksum result %4x", h->checksum);
 
   ntohlsah(h, h);
-  ntohlsab(body, body, length - sizeof(struct ospf_lsa_header));
+  ntohlsab1(body, length - sizeof(struct ospf_lsa_header));
 }
 
 /*
@@ -251,7 +240,7 @@ lsasum_check(struct ospf_lsa_header *h, void *body)
     c1 %= 255;
   }
 
-  x = ((length - LSA_CHECKSUM_OFFSET) * c0 - c1) % 255;
+  x = (int)((length - LSA_CHECKSUM_OFFSET) * c0 - c1) % 255;
   if (x <= 0)
     x += 255;
   y = 510 - c0 - x;
