@@ -1,3 +1,54 @@
+commit 487e90fbdf9362ca0eafc80a606c7f75e4eef31f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Aug 3 14:04:39 2010 +0200
+
+    NEWS and version update.
+
+commit c756a1c54743b634f65d5e39955cf42514671ec7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jul 31 11:37:30 2010 +0200
+
+    Fixes bug in OSPF ext-LSA origination.
+
+commit 1a35a27b64ce2cbef0eb71d874fe41d9b240a2d8
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jul 22 15:09:35 2010 +0200
+
+    Fixes a buffer overflow in TX code of IPv6 BGP.
+
+commit 9472efaa571c44e67e24f1854bb91382977ad339
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jul 14 19:03:23 2010 +0200
+
+    Fixes the documentation.
+
+commit df09a5dbf2c6e9b971aa30f80969487f922d6ee0
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jul 12 21:39:10 2010 +0200
+
+    Fixes missing check in reconfiguration.
+
+commit 824de84d48eff6cbd0c550309fbd0bbf7740cb14
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jun 2 22:25:39 2010 +0200
+
+    Do not start with huge OSPF FIBs.
+    
+    Most OSPF instances don't need 64k FIB fields. This change halves
+    resident memory usage on small OSPF networks.
+
+commit acb60628f53ba1fc29d1a554683acdb03f961c6f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jun 2 22:20:40 2010 +0200
+
+    Implements command that shows memory usage.
+
+commit 4461b8979143bd13024663622c419646a1db0c85
+Author: Ondrej Filip <feela@majklik.network.cz>
+Date:   Wed Jun 2 12:11:20 2010 +0200
+
+    Minor bug that appears only in debug mode.
+
 commit 9ef239946b7298a679a9b155606257738bb52347
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon May 31 20:41:40 2010 +0200
