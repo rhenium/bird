@@ -46,7 +46,7 @@ endif
 	DEB_BUILD_HARDENING=1 $(CURDIR)/configure $(CROSS) \
 	$(COMMON_FLAGS) \
 	--disable-ipv6 \
-	CFLAGS="$(CFLAGS)" LDFLAGS="-Wl,-z,defs"
+	CFLAGS="$(CFLAGS)" LDFLAGS="-Wl,-z,defs -Wl,--as-needed"
 
 build-ipv6/config.status: $(QUILT_STAMPFN) configure
 	dh_testdir
@@ -64,7 +64,7 @@ endif
 	DEB_BUILD_HARDENING=1 $(CURDIR)/configure $(CROSS) \
 	$(COMMON_FLAGS) \
 	--enable-ipv6 \
-	CFLAGS="$(CFLAGS)" LDFLAGS="-Wl,-z,defs"
+	CFLAGS="$(CFLAGS)" LDFLAGS="-Wl,-z,defs -Wl,--as-needed"
 
 
 build: build-stamp-ipv4 build-stamp-ipv6
