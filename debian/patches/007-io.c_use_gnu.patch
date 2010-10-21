@@ -1,8 +1,8 @@
 --- a/sysdep/unix/io.c
 +++ b/sysdep/unix/io.c
-@@ -7,6 +7,8 @@
-  *	Can be freely distributed and used under the terms of the GNU GPL.
-  */
+@@ -11,6 +11,8 @@
+    if _GNU_SOURCE is not defined. */
+ #define _GNU_SOURCE 1
  
 +#define _GNU_SOURCE 1
 +

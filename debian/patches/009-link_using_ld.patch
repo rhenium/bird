@@ -1,13 +1,13 @@
-diff --git a/tools/Rules.in b/tools/Rules.in
-index 79a15fa..e4598e2 100644
 --- a/tools/Rules.in
 +++ b/tools/Rules.in
-@@ -66,7 +66,7 @@ else
+@@ -66,9 +66,7 @@ else
  subdir: all.o
  
  all.o: $(objs)
-+	$(LD) -r -o $@ $^
--	$(CC) -nostdlib  -Wl,-r -o $@ $^
+-#       $(LD) -r -o $@ $^
+-#	Changed to $(CC) because $(LD) has problems with crosscompiling
+-	$(CC) -nostdlib -r -o $@ $^
++        $(LD) -r -o $@ $^
  
  endif
  
