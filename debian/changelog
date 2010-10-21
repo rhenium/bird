@@ -2,8 +2,9 @@ bird (1.2.5-1) unstable; urgency=low
 
   * New upstream release
   * Bump standards version to 3.9.1
+  * Refresh patches to match upstream changes
 
- -- Ondřej Surý <ondrej@debian.org>  Thu, 21 Oct 2010 19:46:36 +0200
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 21 Oct 2010 19:50:38 +0200
 
 bird (1.2.4-1) unstable; urgency=low
 
