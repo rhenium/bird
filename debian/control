@@ -11,14 +11,12 @@ Depends: ${shlibs:Depends}, ${misc:Depends}
 Conflicts: zebra, routed
 Recommends: bird6
 Description: Internet Routing Daemon
- Bird is an internet routing daemons which manages TCP/IP based
- routing protocols with full support of all modern routing
- protocols. Bird is easy to use configuration interface and powerful
- route filtering language.
+ BIRD is a Internet routing daemon with full support for all the major
+ routing protocols.  It allows redistribution between protocols with
+ a powerful route filtering syntax and an easy-to-use configuration
+ interface.
  .
- It supports IPv4 versions OSPFv2, RIPv2 (No v1), BGP and
- redistribution between the protocols with a powerful configuration
- syntax.
+ This package supports IPv4 versions of OSPFv2, RIPv2 and BGP.
 
 Package: bird6
 Architecture: any
@@ -26,11 +24,9 @@ Depends: ${shlibs:Depends}, ${misc:Depends}
 Conflicts: zebra, routed
 Recommends: bird
 Description: Internet Routing Daemon
- Bird is an internet routing daemons which manages TCP/IP based
- routing protocols with full support of all modern routing
- protocols. Bird is easy to use configuration interface and powerful
- route filtering language.
+ BIRD is a Internet routing daemon with full support for all the major
+ routing protocols.  It allows redistribution between protocols with
+ a powerful route filtering syntax and an easy-to-use configuration
+ interface.
  .
- It supports IPv6 versions of OSPFv3, RIPv2 (No v1), BGP and
- redistribution between the protocols with a powerful configuration
- syntax.
+ This package supports IPv4 versions of OSPFv3, RIPng and BGP.
