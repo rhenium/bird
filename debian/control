@@ -4,6 +4,8 @@ Priority: extra
 Build-Depends: bison, debhelper (>= 7), flex, m4, libreadline-dev | libreadline6-dev | libreadline5-dev, hardening-wrapper, quilt (>= 0.40)
 Maintainer: Ondřej Surý <ondrej@debian.org>
 Standards-Version: 3.9.2
+Vcs-Browser: http://git.debian.org/?p=users/ondrej/bird.git
+Vcs-Git: git://git.debian.org/pkg-nlnetlabs/ldns.git
 
 Package: bird
 Architecture: any
