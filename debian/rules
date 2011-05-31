@@ -33,3 +33,6 @@ override_dh_auto_clean:
 override_dh_auto_install:
 	dh_auto_install -Bbuild-ipv4 --destdir=$(CURDIR)/debian/bird
 	dh_auto_install -Bbuild-ipv6 --destdir=$(CURDIR)/debian/bird6
+
+override_dh_strip:
+	dh_strip --dbg-package=bird-dbg
