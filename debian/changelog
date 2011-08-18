@@ -1,3 +1,10 @@
+bird (1.3.2-2) unstable; urgency=low
+
+  * Add default files for bird and bird6 packages
+    and source them from init.d scripts
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 18 Aug 2011 11:25:21 +0200
+
 bird (1.3.2-1) unstable; urgency=low
 
   * Imported Upstream version 1.3.2
