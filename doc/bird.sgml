@@ -259,6 +259,9 @@ protocol rip {
 <sect>Global options
 
 <p><descrip>
+	<tag>include "<m/filename/"</tag> 
+	This statement causes inclusion of a new file. The maximal depth is set to 5.
+
 	<tag>log "<m/filename/"|syslog [name <m/name/]|stderr all|{ <m/list of classes/ }</tag> 
 	Set logging of messages having the given class (either <cf/all/ or <cf/{
 	error, trace }/ etc.) into selected destination (a file specified as a filename string,
@@ -746,27 +749,48 @@ incompatible with each other (that is to prevent you from shooting in the foot).
 	  <cf/.ip/ which extracts the IP address from the pair, and <cf/.len/, which separates prefix
 	  length from the pair. So <cf>1.2.0.0/16.pxlen = 16</cf> is true.
 
-	<tag/int|pair|quad|ip|prefix|enum set/
+	<tag/ec/ This is a specialized type used to represent BGP
+	  extended community values. It is essentially a 64bit value,
+	  literals of this type are usually written as <cf>(<m/kind/,
+	  <m/key/, <m/value/)</cf>, where <cf/kind/ is a kind of
+	  extended community (e.g. <cf/rt/ / <cf/ro/ for a route
+	  target / route origin communities), the format and possible
+	  values of <cf/key/ and <cf/value/ are usually integers, but
+	  it depends on the used kind. Similarly to pairs, ECs can be
+	  constructed using expressions for <cf/key/ and
+	  <cf/value/ parts, (e.g. <cf/(ro, myas, 3*10)/, where
+	  <cf/myas/ is an integer variable).
+ 
+	<tag/int|pair|quad|ip|prefix|ec|enum set/
 	  Filters recognize four types of sets. Sets are similar to strings: you can pass them around
 	  but you can't modify them. Literals of type <cf>int set</cf> look like <cf>
 	  [ 1, 2, 5..7 ]</cf>. As you can see, both simple values and ranges are permitted in
 	  sets.
+
 	  For pair sets, expressions like <cf/(123,*)/ can be used to denote ranges (in
 	  that case <cf/(123,0)..(123,65535)/). You can also use <cf/(123,5..100)/ for range
 	  <cf/(123,5)..(123,100)/. You can also use <cf/*/ and <cf/a..b/ expressions
 	  in the first part of a pair, note that such expressions are translated to a set
 	  of intervals, which may be memory intensive. E.g. <cf/(*,4..20)/ is translated to
 	  <cf/(0,4..20), (1,4..20), (2,4..20), ... (65535, 4..20)/.
-	  You can also use expressions for both, pair sets and int sets. However it must
+
+	  EC sets use similar expressions like pair sets, e.g. <cf/(rt, 123, 10..20)/ 
+	  or <cf/(ro, 123, *)/. Expressions requiring the translation (like  <cf/(rt, *, 3)/)
+	  are not allowed (as they usually have 4B range for ASNs).
+
+	  You can also use expressions for int, pair and EC set values. However it must
 	  be possible to evaluate these expressions before daemon boots. So you can use
 	  only constants inside them. E.g.
 	<code>
 	 define one=1;
+	 define myas=64500;
 	 int set odds;
 	 pair set ps;
+	 ec set es;
 
-	 odds = [ one, (2+1), (6-one), (2*2*2-1), 9, 11 ];
+	 odds = [ one, 2+1, 6-one, 2*2*2-1, 9, 11 ];
 	 ps = [ (1,one+one), (3,4)..(4,8), (5,*), (6,3..6), (7..9,*) ];
+	 es = [ (rt, myas, 3*10), (rt, myas+one, 0..16*16*16-1), (ro, myas+2, *) ];
 	</code>
 
 	  Sets of prefixes are special: their literals does not allow ranges, but allows
@@ -835,7 +859,7 @@ incompatible with each other (that is to prevent you from shooting in the foot).
 	  Clist is similar to a set, except that unlike other sets, it
 	  can be modified. The type is used for community list (a set
 	  of pairs) and for cluster list (a set of quads). There exist
-	  no literals of this type. There are two special operators on
+	  no literals of this type. There are three special operators on
 	  clists:
 
           <cf>add(<m/C/,<m/P/)</cf> adds pair (or quad) <m/P/ to clist
@@ -858,6 +882,14 @@ incompatible with each other (that is to prevent you from shooting in the foot).
           <cf><m/C/.add(<m/P/);</cf> if <m/C/ is appropriate route
           attribute (for example <cf/bgp_community/). Similarly for
           <cf/delete/ and <cf/filter/.
+
+	<tag/eclist/
+	  Eclist is a data type used for BGP extended community lists.
+	  Eclists are very similar to clists, but they are sets of ECs
+	  instead of pairs. The same operations (like <cf/add/,
+	  <cf/delete/, or <cf/&tilde;/ membership operator) can be
+	  used to modify or test eclists, with ECs instead of pairs as
+	  arguments.
 </descrip>
 
 <sect>Operators
@@ -1013,12 +1045,16 @@ capability negotiation
 (RFC 3392<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc3392.txt">),
 MD5 password authentication
 (RFC 2385<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc2385.txt">),
+extended communities
+(RFC 4360<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc4360.txt">),
 route reflectors 
 (RFC 4456<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc4456.txt">),
 multiprotocol extensions
 (RFC 4760<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc4760.txt">),
-and 4B AS numbers 
-(RFC 4893<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc4893.txt">).
+4B AS numbers 
+(RFC 4893<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc4893.txt">),
+and 4B AS numbers in extended communities
+(RFC 5668<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc5668.txt">).
 
 
 For IPv6, it uses the standard multiprotocol extensions defined in
@@ -1087,9 +1123,11 @@ for each neighbor using the following configuration parameters:
 	subnets. Such IP address have to be reachable through system
 	routing table. For multihop BGP it is recommended to
 	explicitly configure <cf/source address/ to have it
-	stable. Optional <cf/number/ argument can be used to limit TTL
-	(the number of hops).
-	Default: switched off.
+	stable. Optional <cf/number/ argument can be used to specify
+	the number of hops (used for TTL). Note that the number of
+	networks (edges) in a path is counted, i.e. if two BGP
+	speakers are separated by one router, the number of hops is
+	2. Default: switched off.
 
 	<tag>source address <m/ip/</tag> Define local address we
 	should use for next hop calculation and as a source address
@@ -1135,6 +1173,18 @@ for each neighbor using the following configuration parameters:
 	<tag>igp table <m/name/</tag> Specifies a table that is used
 	as an IGP routing table. Default: the same as the table BGP is
 	connected to.
+	
+	<tag>ttl security <m/switch/</tag> Use GTSM (RFC 5082 - the
+	generalized TTL security mechanism). GTSM protects against
+	spoofed packets by ignoring received packets with a smaller
+	than expected TTL. To work properly, GTSM have to be enabled
+	on both sides of a BGP session. If both <cf/ttl security/ and
+	<cf/multihop/ options are enabled, <cf/multihop/ option should
+	specify proper hop value to compute expected TTL. Kernel
+	support required: Linux: 2.6.34+ (IPv4), 2.6.35+ (IPv6), BSD:
+	since long ago, IPv4 only. Note that full (ICMP protection,
+	for example) RFC 5082 support is provided by Linux
+	only. Default: disabled.
 	
 	<tag>password <m/string/</tag> Use this password for MD5 authentication
 	of BGP sessions. Default: no authentication. Password has to be set by
@@ -1330,6 +1380,12 @@ with `<tt/O/') are optional.
 	policy information like "don't export to USA peers". As each AS can define
 	its own routing policy, it also has a complete freedom about which community
 	attributes it defines and what will their semantics be.
+
+	<tag>eclist <cf/bgp_ext_community/ [O]</tag> List of extended community
+	values associated with the route. Extended communities have similar usage
+	as plain communities, but they have an extended range (to allow 4B ASNs)
+	and a nontrivial structure with a type field. Individual community values are
+	represented using an <cf/ec/ data type inside the filters.
 
 	<tag>quad <cf/bgp_originator_id/ [I, O]</tag> This attribute is created by the
 	route reflector when reflecting the route and contains the router ID of the
@@ -1602,10 +1658,23 @@ protocol ospf &lt;name&gt; {
 	tick &lt;num&gt;;
 	ecmp &lt;switch&gt; [limit &lt;num&gt;];
 	area &lt;id&gt; {
-		stub cost &lt;num&gt;;
+		stub;
+		nssa;
+		summary &lt;switch&gt;;
+		default nssa &lt;switch&gt;;
+		default cost &lt;num&gt;;
+		default cost2 &lt;num&gt;;
+		translator &lt;switch&gt;;
+		translator stability &lt;num&gt;;
+
                 networks {
 			&lt;prefix&gt;;
 			&lt;prefix&gt; hidden;
+		}
+                external {
+			&lt;prefix&gt;;
+			&lt;prefix&gt; hidden;
+			&lt;prefix&gt; tag &lt;num&gt;;
 		}
 		stubnet &lt;prefix&gt;;
 		stubnet &lt;prefix&gt; {
@@ -1683,14 +1752,67 @@ protocol ospf &lt;name&gt; {
 	 address, similarly to a router ID). The most important area is
 	 the backbone (ID 0) to which every other area must be connected.
 
-	<tag>stub cost <M>num</M></tag>
-	 No external (except default) routes are flooded into stub areas.
-         Setting this value marks area stub with defined cost of default route.
-	 Default value is no. (Area is not stub.)
+	<tag>stub</tag>
+	 This option configures the area to be a stub area. External
+	 routes are not flooded into stub areas. Also summary LSAs can be
+	 limited in stub areas (see option <cf/summary/).
+	 By default, the area is not a stub area.
+
+	<tag>nssa</tag>
+	 This option configures the area to be a NSSA (Not-So-Stubby
+	 Area). NSSA is a variant of a stub area which allows a
+	 limited way of external route propagation. Global external
+	 routes are not propagated into a NSSA, but an external route
+	 can be imported into NSSA as a (area-wide) NSSA-LSA (and
+	 possibly translated and/or aggregated on area boundary).
+	 By default, the area is not NSSA.
+
+	<tag>summary <M>switch</M></tag>
+	 This option controls propagation of summary LSAs into stub or
+	 NSSA areas. If enabled, summary LSAs are propagated as usual,
+	 otherwise just the default summary route (0.0.0.0/0) is
+	 propagated (this is sometimes called totally stubby area). If
+	 a stub area has more area boundary routers, propagating
+	 summary LSAs could lead to more efficient routing at the cost
+	 of larger link state database. Default value is no.
+
+	<tag>default nssa <M>switch</M></tag>
+ 	 When <cf/summary/ option is enabled, default summary route is
+	 no longer propagated to the NSSA. In that case, this option
+	 allows to originate default route as NSSA-LSA to the NSSA.
+	 Default value is no.
+
+	<tag>default cost <M>num</M></tag>
+	 This option controls the cost of a default route propagated to
+	 stub and NSSA areas. Default value is 1000.
+
+	<tag>default cost2 <M>num</M></tag>
+	 When a default route is originated as NSSA-LSA, its cost
+	 can use either type 1 or type 2 metric. This option allows
+	 to specify the cost of a default route in type 2 metric.
+	 By default, type 1 metric (option <cf/default cost/) is used.
+
+	<tag>translator <M>switch</M></tag>
+	 This option controls translation of NSSA-LSAs into external
+	 LSAs. By default, one translator per NSSA is automatically
+	 elected from area boundary routers. If enabled, this area
+	 boundary router would unconditionally translate all NSSA-LSAs
+	 regardless of translator election. Default value is no.
+
+	<tag>translator stability <M>num</M></tag>
+	 This option controls the translator stability interval (in
+	 seconds). When the new translator is elected, the old one
+	 keeps translating until the interval is over. Default value
+	 is 40.
 
 	<tag>networks { <m/set/ }</tag>
          Definition of area IP ranges. This is used in summary LSA origination.
 	 Hidden networks are not propagated into other areas.
+
+	<tag>external { <m/set/ }</tag>
+         Definition of external area IP ranges for NSSAs. This is used
+	 for NSSA-LSA translation. Hidden networks are not translated
+	 into external LSAs. Networks can have configured route tag.
 
 	<tag>stubnet <m/prefix/ { <m/options/ }</tag>
 	 Stub networks are networks that are not transit networks
