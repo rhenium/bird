@@ -59,6 +59,8 @@ protocol rip {
 
 <P>
 <DL>
+<DT><CODE>include "<I>filename</I>"</CODE><DD><P>This statement causes inclusion of a new file. The maximal depth is set to 5.
+<P>
 <DT><CODE>log "<I>filename</I>"|syslog [name <I>name</I>]|stderr all|{ <I>list of classes</I> }</CODE><DD><P>Set logging of messages having the given class (either <CODE>all</CODE> or <CODE>{
 error, trace }</CODE> etc.) into selected destination (a file specified as a filename string,
 syslog with optional name argument, or the stderr output). Classes are:

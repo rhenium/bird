@@ -52,15 +52,21 @@ capability negotiation
 MD5 password authentication
 (RFC 2385
 <A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc2385.txt">ftp://ftp.rfc-editor.org/in-notes/rfc2385.txt</A>),
+extended communities
+(RFC 4360
+<A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc4360.txt">ftp://ftp.rfc-editor.org/in-notes/rfc4360.txt</A>),
 route reflectors 
 (RFC 4456
 <A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc4456.txt">ftp://ftp.rfc-editor.org/in-notes/rfc4456.txt</A>),
 multiprotocol extensions
 (RFC 4760
 <A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc4760.txt">ftp://ftp.rfc-editor.org/in-notes/rfc4760.txt</A>),
-and 4B AS numbers 
+4B AS numbers 
 (RFC 4893
-<A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc4893.txt">ftp://ftp.rfc-editor.org/in-notes/rfc4893.txt</A>).
+<A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc4893.txt">ftp://ftp.rfc-editor.org/in-notes/rfc4893.txt</A>),
+and 4B AS numbers in extended communities
+(RFC 5668
+<A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc5668.txt">ftp://ftp.rfc-editor.org/in-notes/rfc5668.txt</A>).
 <P>
 <P>For IPv6, it uses the standard multiprotocol extensions defined in
 RFC 2283
@@ -131,9 +137,11 @@ neighbor IP address does not match with any local network
 subnets. Such IP address have to be reachable through system
 routing table. For multihop BGP it is recommended to
 explicitly configure <CODE>source address</CODE> to have it
-stable. Optional <CODE>number</CODE> argument can be used to limit TTL
-(the number of hops).
-Default: switched off.
+stable. Optional <CODE>number</CODE> argument can be used to specify
+the number of hops (used for TTL). Note that the number of
+networks (edges) in a path is counted, i.e. if two BGP
+speakers are separated by one router, the number of hops is
+2. Default: switched off.
 <P>
 <DT><CODE>source address <I>ip</I></CODE><DD><P>Define local address we
 should use for next hop calculation and as a source address
@@ -179,6 +187,18 @@ handle well nontrivial iBGP setups and multihop. Default:
 <DT><CODE>igp table <I>name</I></CODE><DD><P>Specifies a table that is used
 as an IGP routing table. Default: the same as the table BGP is
 connected to.
+<P>
+<DT><CODE>ttl security <I>switch</I></CODE><DD><P>Use GTSM (RFC 5082 - the
+generalized TTL security mechanism). GTSM protects against
+spoofed packets by ignoring received packets with a smaller
+than expected TTL. To work properly, GTSM have to be enabled
+on both sides of a BGP session. If both <CODE>ttl security</CODE> and
+<CODE>multihop</CODE> options are enabled, <CODE>multihop</CODE> option should
+specify proper hop value to compute expected TTL. Kernel
+support required: Linux: 2.6.34+ (IPv4), 2.6.35+ (IPv6), BSD:
+since long ago, IPv4 only. Note that full (ICMP protection,
+for example) RFC 5082 support is provided by Linux
+only. Default: disabled.
 <P>
 <DT><CODE>password <I>string</I></CODE><DD><P>Use this password for MD5 authentication
 of BGP sessions. Default: no authentication. Password has to be set by
@@ -372,6 +392,12 @@ of uses of the community mechanism, but generally they are used to carry
 policy information like "don't export to USA peers". As each AS can define
 its own routing policy, it also has a complete freedom about which community
 attributes it defines and what will their semantics be.
+<P>
+<DT><CODE>eclist <CODE>bgp_ext_community</CODE> [O]</CODE><DD><P>List of extended community
+values associated with the route. Extended communities have similar usage
+as plain communities, but they have an extended range (to allow 4B ASNs)
+and a nontrivial structure with a type field. Individual community values are
+represented using an <CODE>ec</CODE> data type inside the filters.
 <P>
 <DT><CODE>quad <CODE>bgp_originator_id</CODE> [I, O]</CODE><DD><P>This attribute is created by the
 route reflector when reflecting the route and contains the router ID of the
@@ -665,10 +691,23 @@ protocol ospf &lt;name&gt; {
         tick &lt;num&gt;;
         ecmp &lt;switch&gt; [limit &lt;num&gt;];
         area &lt;id&gt; {
-                stub cost &lt;num&gt;;
+                stub;
+                nssa;
+                summary &lt;switch&gt;;
+                default nssa &lt;switch&gt;;
+                default cost &lt;num&gt;;
+                default cost2 &lt;num&gt;;
+                translator &lt;switch&gt;;
+                translator stability &lt;num&gt;;
+
                 networks {
                         &lt;prefix&gt;;
                         &lt;prefix&gt; hidden;
+                }
+                external {
+                        &lt;prefix&gt;;
+                        &lt;prefix&gt; hidden;
+                        &lt;prefix&gt; tag &lt;num&gt;;
                 }
                 stubnet &lt;prefix&gt;;
                 stubnet &lt;prefix&gt; {
@@ -743,12 +782,57 @@ limit is 16.
 address, similarly to a router ID). The most important area is
 the backbone (ID 0) to which every other area must be connected.
 <P>
-<DT><CODE>stub cost <I>num</I></CODE><DD><P>No external (except default) routes are flooded into stub areas.
-Setting this value marks area stub with defined cost of default route.
-Default value is no. (Area is not stub.)
+<DT><CODE>stub</CODE><DD><P>This option configures the area to be a stub area. External
+routes are not flooded into stub areas. Also summary LSAs can be
+limited in stub areas (see option <CODE>summary</CODE>).
+By default, the area is not a stub area.
+<P>
+<DT><CODE>nssa</CODE><DD><P>This option configures the area to be a NSSA (Not-So-Stubby
+Area). NSSA is a variant of a stub area which allows a
+limited way of external route propagation. Global external
+routes are not propagated into a NSSA, but an external route
+can be imported into NSSA as a (area-wide) NSSA-LSA (and
+possibly translated and/or aggregated on area boundary).
+By default, the area is not NSSA.
+<P>
+<DT><CODE>summary <I>switch</I></CODE><DD><P>This option controls propagation of summary LSAs into stub or
+NSSA areas. If enabled, summary LSAs are propagated as usual,
+otherwise just the default summary route (0.0.0.0/0) is
+propagated (this is sometimes called totally stubby area). If
+a stub area has more area boundary routers, propagating
+summary LSAs could lead to more efficient routing at the cost
+of larger link state database. Default value is no.
+<P>
+<DT><CODE>default nssa <I>switch</I></CODE><DD><P>When <CODE>summary</CODE> option is enabled, default summary route is
+no longer propagated to the NSSA. In that case, this option
+allows to originate default route as NSSA-LSA to the NSSA.
+Default value is no.
+<P>
+<DT><CODE>default cost <I>num</I></CODE><DD><P>This option controls the cost of a default route propagated to
+stub and NSSA areas. Default value is 1000.
+<P>
+<DT><CODE>default cost2 <I>num</I></CODE><DD><P>When a default route is originated as NSSA-LSA, its cost
+can use either type 1 or type 2 metric. This option allows
+to specify the cost of a default route in type 2 metric.
+By default, type 1 metric (option <CODE>default cost</CODE>) is used.
+<P>
+<DT><CODE>translator <I>switch</I></CODE><DD><P>This option controls translation of NSSA-LSAs into external
+LSAs. By default, one translator per NSSA is automatically
+elected from area boundary routers. If enabled, this area
+boundary router would unconditionally translate all NSSA-LSAs
+regardless of translator election. Default value is no.
+<P>
+<DT><CODE>translator stability <I>num</I></CODE><DD><P>This option controls the translator stability interval (in
+seconds). When the new translator is elected, the old one
+keeps translating until the interval is over. Default value
+is 40.
 <P>
 <DT><CODE>networks { <I>set</I> }</CODE><DD><P>Definition of area IP ranges. This is used in summary LSA origination.
 Hidden networks are not propagated into other areas.
+<P>
+<DT><CODE>external { <I>set</I> }</CODE><DD><P>Definition of external area IP ranges for NSSAs. This is used
+for NSSA-LSA translation. Hidden networks are not translated
+into external LSAs. Networks can have configured route tag.
 <P>
 <DT><CODE>stubnet <I>prefix</I> { <I>options</I> }</CODE><DD><P>Stub networks are networks that are not transit networks
 between OSPF routers. They are also propagated through an

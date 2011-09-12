@@ -20,6 +20,7 @@ struct bgp_config {
   u32 local_as, remote_as;
   ip_addr remote_ip;
   int multihop;				/* Number of hops if multihop */
+  int ttl_security;			/* Enable TTL security [RFC5082] */
   ip_addr source_addr;			/* Source address to use */
   int next_hop_self;			/* Always set next hop to local IP address */
   int missing_lladdr;			/* What we will do when we don' know link-local addr, see MLL_* */
@@ -236,7 +237,7 @@ void bgp_log_error(struct bgp_proto *p, u8 class, char *msg, unsigned code, unsi
 #define BA_RCID_PATH		0x0d
 #define BA_MP_REACH_NLRI	0x0e	/* [RFC2283] */
 #define BA_MP_UNREACH_NLRI	0x0f
-#define BA_EXTENDED_COMM	0x10	/* draft-ramachandra-bgp-ext-communities */
+#define BA_EXT_COMMUNITY	0x10	/* [RFC4360] */
 #define BA_AS4_PATH             0x11    /* [RFC4893] */
 #define BA_AS4_AGGREGATOR       0x12
 
