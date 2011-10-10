@@ -1,3 +1,71 @@
+commit 00a124e3fc218aa39c634bbda244789f2ea0cd3d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Oct 10 02:33:11 2011 +0200
+
+    NEWS and version update.
+
+commit 9b7fdfc84a516ede415cd1941e5ff1d6312e83ff
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Oct 10 01:01:58 2011 +0200
+
+    Fixes for include.
+
+commit 1cb97af419ee5bff45049f4d3a85acadbb5b1cb9
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Oct 9 17:01:01 2011 +0200
+
+    Extend the error message.
+
+commit 9491f9f593c1195039cecd1bb2a502363b58c66d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Oct 6 23:01:23 2011 +0200
+
+    Use reserved address blocks for documentation (RFC 5737).
+
+commit 32f95476a8d60508ca9d24fe20b09899b72de9d7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Oct 6 22:48:49 2011 +0200
+
+    Signal problems with route installation to kernel tables.
+
+commit 35c875f0d1eb7c72e0b0ab8a90eb32cbcbfdac02
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Oct 1 09:57:49 2011 +0200
+
+    Fixes some error messages and the NSSA gw lookup.
+    
+    Thanks to Alexander V. Chernikov for the patch.
+
+commit 736fd7303cb05e910507edaa9310178a23dbcf1e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Sep 27 13:49:32 2011 +0200
+
+    Fixes a bug with multiple function arguments.
+
+commit bf6d91dc4edf3d08f0de41f71503159b1713fc9a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Sep 24 11:06:42 2011 +0200
+
+    Use undefined scope for undefined IPv6 addresses.
+
+commit 4116db182d8d80d26902a8b33f82664bb5770066
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Sep 24 02:21:52 2011 +0200
+
+    Implements static recursive routes.
+
+commit 4271f2b77ed3862a2356475dc18b0cf5c1086364
+Author: Ondrej Filip <feela@network.cz>
+Date:   Sun Sep 18 13:52:50 2011 +0200
+
+    Fixed problem during 'configure' with EC
+
+commit 55b58d8c1f51942c487cc268bd9e2ca214913377
+Author: Ondrej Filip <feela@network.cz>
+Date:   Mon Sep 12 12:13:53 2011 +0200
+
+    Removed some completed jobs.
+
 commit 1e69379e70da3486a601cab7a41ccf7a5825101d
 Author: Ondrej Filip <feela@network.cz>
 Date:   Sun Sep 11 21:43:24 2011 +0200
@@ -233,7 +301,7 @@ Date:   Tue May 10 02:42:17 2011 +0200
     linux capabilities CAP_NET_* are kept.
 
 commit 46bb7e0d176a4dc0a47bb406988f92fb29cceaf4
-Merge: b8cc390... b7c4898...
+Merge: b8cc390 b7c4898
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri May 6 22:09:44 2011 +0200
 
@@ -270,7 +338,7 @@ Date:   Sun May 1 17:16:05 2011 +0200
     There may be more IP address records with the same IP.
 
 commit 5964569c23829ec93fcf671a2582be01c8aebecf
-Merge: acc93ef... d600909...
+Merge: acc93ef d600909
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Apr 29 19:03:19 2011 +0200
 
@@ -319,7 +387,7 @@ Date:   Tue Apr 5 11:41:18 2011 +0200
     Minor fixes.
 
 commit bf27abd6d4a20448f5b4c80e9aa9258dc8670f62
-Merge: 4ef0950... a5b84ab...
+Merge: 4ef0950 a5b84ab
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Apr 1 13:56:42 2011 +0200
 
@@ -1009,7 +1077,7 @@ Date:   Tue Apr 27 18:29:01 2010 +0200
     A fix in OSPFv3 next_hop calculation.
 
 commit 96599c957baa9c82bde91d610ce4f519aead05e9
-Merge: ba13017... 9d1ee13...
+Merge: ba13017 9d1ee13
 Author: Ondrej Filip <feela@majklik.network.cz>
 Date:   Tue Apr 27 11:28:44 2010 +0200
 
@@ -1053,7 +1121,7 @@ Date:   Sat Apr 24 15:18:21 2010 +0200
     OSPFv2 and OSPFv3 (previously it displayed stubnets in OSPFv2).
 
 commit 1d44ddf20f3ecef864d4bd20355251839fcd10ee
-Merge: 3b89a23... 6bc414d...
+Merge: 3b89a23 6bc414d
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Wed Apr 21 21:52:10 2010 +0200
 
@@ -1220,7 +1288,7 @@ Date:   Mon Mar 29 19:29:03 2010 +0200
      - Documentation updates.
 
 commit eb0f129fcedcecbee85403095abad8f59b82683c
-Merge: b1c030b... 48cff37...
+Merge: b1c030b 48cff37
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Mar 26 18:53:31 2010 +0100
 
@@ -1296,7 +1364,7 @@ Date:   Wed Mar 17 12:19:22 2010 +0100
     - Fixes socket name path check and other error handling in CLI init.
 
 commit 4e3bfd9006ba3033a814a392f9bf4bbca060c8a9
-Merge: e8da1bd... cda2dfb...
+Merge: e8da1bd cda2dfb
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Mar 15 00:39:45 2010 +0100
 
@@ -1315,7 +1383,7 @@ Date:   Sun Mar 14 16:36:59 2010 +0100
     Temporary OSPF commit - sockets.
 
 commit 54305181f6ee3af57dd3d15d53ea2e851b36ed23
-Merge: e7b76b9... afa9f66...
+Merge: e7b76b9 afa9f66
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu Mar 11 18:55:59 2010 +0100
 
@@ -1384,7 +1452,7 @@ Date:   Sun Feb 21 14:34:53 2010 +0100
     Fix configure to enable warnings and fix most of them.
 
 commit 9e43ccf07b96597ef098955a07383d826938cd2d
-Merge: e285bd2... 89534cd...
+Merge: e285bd2 89534cd
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Feb 21 10:15:49 2010 +0100
 
@@ -1506,7 +1574,7 @@ Date:   Wed Feb 10 16:18:17 2010 +0100
     NEWS and version update.
 
 commit fae9be7782a161bdf93c83884d62941a34cbe518
-Merge: 7d19666... 0efd646...
+Merge: 7d19666 0efd646
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Wed Feb 10 14:59:26 2010 +0100
 
@@ -1584,7 +1652,7 @@ Date:   Tue Feb 2 00:03:46 2010 +0100
     Because we don't want to have a limit on a function/filter length.
 
 commit 1a7a4e59a22f903a0be791f229e86ab881593851
-Merge: 4167702... 1960d20...
+Merge: 4167702 1960d20
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu Jan 28 16:00:16 2010 +0100
 
@@ -1626,7 +1694,7 @@ Date:   Wed Jan 13 14:53:33 2010 +0100
     Comment update.
 
 commit 974363c172e026b00be5f78ec585dda1e402b6f6
-Merge: 99f5fc1... 844e0f6...
+Merge: 99f5fc1 844e0f6
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Jan 8 22:20:09 2010 +0100
 
@@ -1639,7 +1707,7 @@ Date:   Fri Jan 8 22:19:41 2010 +0100
     A partial vlink fix.
 
 commit 844e0f65dbab98f71f2a5631277a720613d4d7a5
-Merge: 3242ab4... fc33143...
+Merge: 3242ab4 fc33143
 Author: Ondrej Filip <feela@majklik.network.cz>
 Date:   Fri Jan 8 21:19:03 2010 +0100
 
@@ -1742,7 +1810,7 @@ Date:   Tue Dec 22 10:49:39 2009 +0100
     Show command cleanups.
 
 commit 0ad19261bf551ef49a1565e21e384ec749ec16d4
-Merge: c4ae538... 67b24e7...
+Merge: c4ae538 67b24e7
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Dec 22 01:34:01 2009 +0100
 
@@ -1769,14 +1837,14 @@ Date:   Mon Dec 21 11:50:42 2009 +0100
     Change default LOCAL_PREF attribute to 100 (suggested value by RFC 4277).
 
 commit ba9a122142a3d42137c129fabaef097702d44801
-Merge: 0225ea4... c4199e3...
+Merge: 0225ea4 c4199e3
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Dec 20 22:57:44 2009 +0100
 
     Merge branch 'ospf3' into new
 
 commit c4199e30313c88c0911060a5b5f3cc181ceedb37
-Merge: f2d7da7... ea7ada3...
+Merge: f2d7da7 ea7ada3
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Dec 20 22:56:09 2009 +0100
 
@@ -1809,7 +1877,7 @@ Date:   Sat Dec 19 18:45:46 2009 +0100
     NEWS and version update.
 
 commit 0225ea4eddb44bd9dd4f112e512325cbf80134d3
-Merge: 43c1cec... f2d7da7...
+Merge: 43c1cec f2d7da7
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Dec 15 00:32:13 2009 +0100
 
@@ -1840,7 +1908,7 @@ Date:   Mon Dec 14 21:17:15 2009 +0100
     Implements route reload for OSPF.
 
 commit 63542845dfb6d2277f93f77ad9ca3ad8bbaddd09
-Merge: 34a877c... 8a7fb88...
+Merge: 34a877c 8a7fb88
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Dec 14 20:37:32 2009 +0100
 
@@ -1970,7 +2038,7 @@ Date:   Thu Nov 26 20:47:59 2009 +0100
     Implements BGP route refresh.
 
 commit 5e6f568115511e2bcf43c60dfdcbd7a35cb04b93
-Merge: 069bfcb... 1f8be1e...
+Merge: 069bfcb 1f8be1e
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Nov 24 17:19:23 2009 +0100
 
@@ -2071,14 +2139,14 @@ Date:   Mon Nov 9 23:22:53 2009 +0100
     Use IPv6 checksums in OSPFv3.
 
 commit 3f22fa9e74c8643d3e4f7e3a7b4f2aa992ad09f5
-Merge: a6bc04d... b7c0e93...
+Merge: a6bc04d b7c0e93
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Nov 9 22:54:39 2009 +0100
 
     Merge branch 'dev' into ospf3
 
 commit b7c0e93ebd40cdc4f6e89067a3e5f7293263c7f9
-Merge: 7965e17... f1f1e89...
+Merge: 7965e17 f1f1e89
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Nov 2 16:27:17 2009 +0100
 
@@ -2343,7 +2411,7 @@ Date:   Sun Aug 23 23:03:31 2009 +0200
     Version 1.1.2
 
 commit 2ef58837dcb7b78edc193bc9ef1da316bba86998
-Merge: 86975e5... 5516a66...
+Merge: 86975e5 5516a66
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Aug 21 09:46:49 2009 +0200
 
@@ -2456,7 +2524,7 @@ Date:   Mon Aug 10 12:04:25 2009 +0200
     Fixes typo in Makefile
 
 commit b92c8e30191dd757c76239076eda82d0065f2348
-Merge: 54d70d3... 71a9574...
+Merge: 54d70d3 71a9574
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Aug 10 10:16:00 2009 +0200
 
@@ -2519,7 +2587,7 @@ Date:   Thu Jul 9 15:42:39 2009 +0200
     Fixed bug related to reconfiguration of BGP with MD5 passwords.
 
 commit dd7b4a13848f5a92b403a563e8e27a3cbdfc937f
-Merge: d1abbea... bffd4c0...
+Merge: d1abbea bffd4c0
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Jul 6 23:10:33 2009 +0200
 
@@ -2588,7 +2656,7 @@ Date:   Fri Jun 26 13:33:41 2009 +0200
     nobody noticed it already.
 
 commit 5004d02cb9df1f3ee231632a8e89929f4eb4f088
-Merge: 1876e18... 99355da...
+Merge: 1876e18 99355da
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Jun 26 01:06:12 2009 +0200
 
@@ -2831,7 +2899,7 @@ Date:   Fri May 29 13:32:24 2009 +0200
     Add 'primary' configuration option.
 
 commit 7c3d06b087946cbea4affa4a814e72b7a3556833
-Merge: f571473... 4c2507d...
+Merge: f571473 4c2507d
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu May 28 13:58:51 2009 +0200
 
@@ -2917,7 +2985,7 @@ Date:   Fri May 22 00:26:30 2009 +0200
     Better checks for M4 in configure.
 
 commit 6c84554b671fce473fe333ab3d8b548a0768882b
-Merge: f434d19... 4d176e1...
+Merge: f434d19 4d176e1
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu May 21 09:26:59 2009 +0200
 
@@ -3686,7 +3754,7 @@ Date:   Tue Oct 28 16:10:42 2008 +0100
     Fixes some sloppiness of commit a3b70dc499b64f41aa776b5b4afee5c7bfb8dfa6.
 
 commit a98fbf0f12b5e83e25afa0f585ca6a4d4ac5f6bf
-Merge: a3b70dc... 1567ede...
+Merge: a3b70dc 1567ede
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Oct 27 00:20:22 2008 +0100
 
