@@ -415,22 +415,22 @@ cluster ID when reflecting the route.
 <PRE>
 protocol bgp {
         local as 65000;                      # Use a private AS number
-        neighbor 62.168.0.130 as 5588;       # Our neighbor ...
+        neighbor 198.51.100.130 as 64496;    # Our neighbor ...
         multihop;                            # ... which is connected indirectly
         export filter {                      # We use non-trivial export rules
                 if source = RTS_STATIC then { # Export only static routes
                         # Assign our community
-                        bgp_community.add((65000,5678));
+                        bgp_community.add((65000,64501));
                         # Artificially increase path length
                         # by advertising local AS number twice
-                        if bgp_path ~ [= 65000 =] then    
-                                bgp_path.prepend(65000);  
+                        if bgp_path ~ [= 65000 =] then
+                                bgp_path.prepend(65000);
                         accept;
                 }
                 reject;
         };
         import all;
-        source address 62.168.0.1;      # Use a non-standard source address
+        source address 198.51.100.14;   # Use a non-standard source address
 }
 </PRE>
 <HR>
@@ -1414,11 +1414,13 @@ telling to return packets as undeliverable if they are in your IP block,
 you don't have any specific destination for them and you don't want to send
 them out through the default route to prevent routing loops).
 <P>
-<P>There are three types of static routes: `classical' routes telling to
-forward packets to a neighboring router, device routes specifying forwarding
-to hosts on a directly connected network and special routes (sink, blackhole
-etc.) which specify a special action to be done instead of forwarding the
-packet.
+<P>There are five types of static routes: `classical' routes telling
+to forward packets to a neighboring router, multipath routes
+specifying several (possibly weighted) neighboring routers, device
+routes specifying forwarding to hosts on a directly connected network,
+recursive routes computing their nexthops by doing route table lookups
+for a given IP and special routes (sink, blackhole etc.) which specify
+a special action to be done instead of forwarding the packet.
 <P>
 <P>When the particular destination is not available (the interface is down or
 the next hop of the route is not a neighbor at the moment), Static just
@@ -1435,16 +1437,21 @@ a neighboring router.
 with their weights.
 <DT><CODE>route <I>prefix</I> via <I>"interface"</I></CODE><DD><P>Static device
 route through an interface to hosts on a directly connected network.
+<DT><CODE>route <I>prefix</I> recursive <I>ip</I></CODE><DD><P>Static recursive route,
+its nexthop depends on a route table lookup for given IP address.
 <DT><CODE>route <I>prefix</I> drop|reject|prohibit</CODE><DD><P>Special routes
 specifying to drop the packet, return it as unreachable or return
 it as administratively prohibited.
 <P>
-<DT><CODE>check link <I>switch</I></CODE><DD><P>The only option of the static protocol. If set, hardware link
-states of network interfaces are taken into consideration.
-When link disappears (e.g. ethernet cable is unplugged),
-static routes directing to that interface are removed. It is
-possible that some hardware drivers or platforms do not
-implement this feature. Default: off.
+<DT><CODE>check link <I>switch</I></CODE><DD><P>If set, hardware link states of network interfaces are taken
+into consideration.  When link disappears (e.g. ethernet cable
+is unplugged), static routes directing to that interface are
+removed. It is possible that some hardware drivers or
+platforms do not implement this feature. Default: off.
+<P>
+<DT><CODE>igp table <I>name</I></CODE><DD><P>Specifies a table that is used
+for route table lookups of recursive routes. Default: the
+same table as the protocol is connected to.
 </DL>
 <P>
 <P>Static routes have no specific attributes.
@@ -1456,12 +1463,12 @@ implement this feature. Default: off.
 <PRE>
 protocol static {
         table testable;                  # Connect to a non-default routing table
-        route 0.0.0.0/0 via 62.168.0.13; # Default route
+        route 0.0.0.0/0 via 198.51.100.130; # Default route
         route 10.0.0.0/8 multipath       # Multipath route
-                via 62.168.0.14 weight 2
-                via 62.168.1.10
-                via 62.168.1.11;
-        route 62.168.0.0/25 reject;      # Sink route
+                via 198.51.100.10 weight 2
+                via 198.51.100.20
+                via 192.0.2.1;
+        route 203.0.113.0/24 reject;     # Sink route
         route 10.2.0.0/24 via "arc0";    # Secondary network
 }
 </PRE>
