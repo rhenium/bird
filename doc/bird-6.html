@@ -319,6 +319,21 @@ disabled, MED attributes are compared only if routes are
 received from the same AS (which is the standard behavior).
 Default: off.
 <P>
+<DT><CODE>deterministic med <I>switch</I></CODE><DD><P>BGP route selection
+algorithm is often viewed as a comparison between individual
+routes (e.g. if a new route appears and is better than the
+current best one, it is chosen as the new best one). But the
+proper route selection, as specified by RFC 4271, cannot be
+fully implemented in that way. The problem is mainly in
+handling the MED attribute. BIRD, by default, uses an
+simplification based on individual route comparison, which in
+some cases may lead to temporally dependent behavior (i.e. the
+selection is dependent on the order in which routes appeared).
+This option enables a different (and slower) algorithm
+implementing proper RFC 4271 route selection, which is
+deterministic. Alternative way how to get deterministic
+behavior is to use <CODE>med metric</CODE> option. Default: off.
+<P>
 <DT><CODE>igp metric <I>switch</I></CODE><DD><P>Enable comparison of internal
 distances to boundary routers during best route selection. Default: on.
 <P>

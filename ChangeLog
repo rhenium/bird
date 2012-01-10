@@ -1,3 +1,143 @@
+commit 2c5ca47ad4d18cae162c2ddf85af2dedb89f00a5
+Author: Ondrej Filip <feela@network.cz>
+Date:   Tue Jan 10 13:44:06 2012 +0100
+
+    New version 1.3.5
+
+commit 4b3a8ff8c6e34f0486b82a10706f1ee0b688048e
+Author: root <root@localhost.(none)>
+Date:   Mon Jan 9 16:57:45 2012 +0100
+
+    Extend buffer for netlink messages.
+
+commit 2c67a564b368bee94f387ba988e8a2e9a76a04ce
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jan 9 03:32:34 2012 +0100
+
+    NEWS and version update.
+
+commit 8cf8f820fe66af1755e360ea1c5179483766131d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jan 9 03:20:52 2012 +0100
+
+    Show interface for link-local gw in static protocol.
+
+commit d7f469c15c1fd8315061f85b87a19946c3ea4700
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jan 9 02:40:57 2012 +0100
+
+    Some minor fixes.
+
+commit 3f58437405f8e37e9c14d83274a6b82ffd9583f8
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Jan 8 16:28:33 2012 +0100
+
+    Fix for IPv6 addresses on non-multiaccess ifaces on BSD.
+    
+    Thanks Matthias Schiffer for the patch.
+
+commit 53ffbff39f054e1302fb296327b9bb1b4f88226c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Jan 8 15:28:27 2012 +0100
+
+    Implements support for link-local addresses in BGP.
+    
+    Thanks Matthias Schiffer for the original patch.
+
+commit eb1451a3a0c45a4cc62dd0f1f3c3157ec38e2f8e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Jan 8 15:27:04 2012 +0100
+
+    Better support for link-local addresses in IO code.
+
+commit a03ede64936d0aee1a760a19dc6194b2fdc9c692
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jan 3 00:42:25 2012 +0100
+
+    Fixes a tricky bug in route filtering.
+    
+    Route attributes was used after rta was freed during copy-on-write in
+    filter code. This causes some random crashes, esp. with multipath
+    routes.
+
+commit 69a8259c5e438f949bd58b1a2f8e1d12a49f9216
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Jan 1 12:02:20 2012 +0100
+
+    Allows sticky link-local neighbors.
+    
+    Allows using NEF_STICKY neighbors with link-local addresses. This is
+    used for static route nexthops, they can be specified like fe80::1%eth0
+    .
+
+commit c32c3f88f0c8788118ed3701c11a5aea2aaf9356
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Dec 22 13:44:43 2011 +0100
+
+    Fixes parsing larger numbers on 64bit platforms.
+
+commit be4cd99a3688cef19f66e1c8b8e0506ffc1e13fc
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Dec 22 13:20:29 2011 +0100
+
+    Implements deterministic MED handling.
+    
+    Thanks to Alexander V. Chernikov for many suggestions.
+
+commit cf7f0645316f5df0984467cf7001f5466254eaf3
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Dec 12 00:24:15 2011 +0100
+
+    Fixes problem with sticky neighbors and iface address changes.
+    
+    Thanks Matthias Schiffer for the bugreport and the original patch.
+
+commit 2779d50a24dc1b7c6b4cf83a17af817c02462855
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Nov 17 21:12:23 2011 +0100
+
+    Fixes RAdv proto w.r.t. templates.
+    
+    Thanks Alexander V. Chernikov for this.
+
+commit 60fd666b796dfa8ba12b44338754ca73b76da2e8
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Nov 10 09:22:20 2011 +0100
+
+    Fixes missing header.
+
+commit a7f23f581f5e3efe92ec97dfca7d01c66f31ab04
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Nov 7 00:31:23 2011 +0100
+
+    Implements protocol templates.
+    
+    Based on the patch from Alexander V. Chernikov.
+    Extended to support almost all protocols.
+    Uses 'protocol bgp NAME from TEMPLATE { ... }' syntax.
+
+commit 74add5df17c386bd109ebea7b1dac04d1651ae51
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Oct 27 13:21:24 2011 +0200
+
+    Fixes seqnum generation.
+    
+    Thanks Mohammad Amin Shoaie for notification.
+
+commit 78e33c29bbbc6f4dd308cd8ef589ce543c3d8d6e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 26 20:06:36 2011 +0200
+
+    Some minor fixes in parser.
+
+commit 14a8f396e1d8fc5787041eace8ab026fe5a0896c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 26 13:55:24 2011 +0200
+
+    Fixes sockets for IPv4 RIP.
+    
+    Thanks Roman Hoog Antink for a suggestion.
+
 commit 00a124e3fc218aa39c634bbda244789f2ea0cd3d
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Oct 10 02:33:11 2011 +0200

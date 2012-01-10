@@ -296,10 +296,21 @@ protocol rip {
 	<tag>function <m/name/ (<m/parameters/) <m/local variables/ { <m/commands/ }</tag> Define a function. You can learn more
 	about functions in the following chapter.
  
-	<tag>protocol rip|ospf|bgp|... <m/[name]/ { <m>protocol options</m> }</tag> Define a protocol
-	instance called <cf><m/name/</cf> (or with a name like "rip5" generated automatically if you don't specify any <cf><m/name/</cf>). You can learn more
-	about configuring protocols in their own chapters. You can run more than one instance of
-	most protocols (like RIP or BGP). By default, no instances are configured.
+	<tag>protocol rip|ospf|bgp|... [<m/name/ [from <m/name2/]] { <m>protocol options</m> }</tag>
+	Define a protocol instance called <cf><m/name/</cf> (or with a name like "rip5" generated
+	automatically if you don't specify any <cf><m/name/</cf>). You can learn more about
+	configuring protocols in their own chapters. When <cf>from <m/name2/</cf> expression is
+	used, initial protocol options are taken from protocol or template <cf><m/name2/</cf>
+	You can run more than one instance of most protocols (like RIP or BGP). By default, no
+	instances are configured.
+
+	<tag>template rip|bgp|... [<m/name/ [from <m/name2/]] { <m>protocol options</m> }</tag>
+	Define a protocol template instance called <cf><m/name/</cf> (or with a name like "bgp1"
+	generated automatically if you don't specify any <cf><m/name/</cf>). Protocol templates can
+	be used to group common options when many similarly configured protocol instances are to be
+	defined. Protocol instances (and other templates) can use templates by using <cf/from/
+	expression and the name of the template. At the moment templates (and <cf/from/ expression)
+	are not implemented for OSPF protocol.
 
 	<tag>define <m/constant/ = (<m/expression/)|<m/number/|<m/IP address/</tag>
 	Define a constant. You can use it later in every place you could use a simple integer or an IP address.
@@ -1304,6 +1315,21 @@ for each neighbor using the following configuration parameters:
 	disabled, MED attributes are compared only if routes are
 	received from the same AS (which is the standard behavior).
 	Default: off.
+
+	<tag>deterministic med <m/switch/</tag> BGP route selection
+	algorithm is often viewed as a comparison between individual
+	routes (e.g. if a new route appears and is better than the
+	current best one, it is chosen as the new best one). But the
+	proper route selection, as specified by RFC 4271, cannot be
+	fully implemented in that way. The problem is mainly in
+	handling the MED attribute. BIRD, by default, uses an
+	simplification based on individual route comparison, which in
+	some cases may lead to temporally dependent behavior (i.e. the
+	selection is dependent on the order in which routes appeared).
+	This option enables a different (and slower) algorithm
+	implementing proper RFC 4271 route selection, which is
+	deterministic. Alternative way how to get deterministic
+	behavior is to use <cf/med metric/ option. Default: off.
 
 	<tag>igp metric <m/switch/</tag> Enable comparison of internal
  	distances to boundary routers during best route selection. Default: on.

@@ -30,6 +30,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <unistd.h>
 
 #define PARSER 1
 
@@ -128,10 +129,10 @@ include   ^{WHITE}*include{WHITE}*\".*\"{WHITE}*;
 
 0x{XIGIT}+ {
   char *e;
-  long int l;
+  unsigned long int l;
   errno = 0;
   l = strtoul(yytext+2, &e, 16);
-  if (e && *e || errno == ERANGE || (long int)(int) l != l)
+  if (e && *e || errno == ERANGE || (unsigned long int)(unsigned int) l != l)
     cf_error("Number out of range");
   cf_lval.i = l;
   return NUM;
@@ -139,10 +140,10 @@ include   ^{WHITE}*include{WHITE}*\".*\"{WHITE}*;
 
 {DIGIT}+ {
   char *e;
-  long int l;
+  unsigned long int l;
   errno = 0;
   l = strtoul(yytext, &e, 10);
-  if (e && *e || errno == ERANGE || (long int)(int) l != l)
+  if (e && *e || errno == ERANGE || (unsigned long int)(unsigned int) l != l)
     cf_error("Number out of range");
   cf_lval.i = l;
   return NUM;
@@ -533,6 +534,8 @@ cf_symbol_class_name(struct symbol *sym)
       return "routing table";
     case SYM_IPA:
       return "network address";
+    case SYM_TEMPLATE:
+      return "protocol template";
     default:
       return "unknown type";
     }
