@@ -25,14 +25,14 @@ CF_KEYWORDS(BGP, LOCAL, NEIGHBOR, AS, HOLD, TIME, CONNECT, RETRY,
 	CLUSTER, ID, AS4, ADVERTISE, IPV4, CAPABILITIES, LIMIT, PASSIVE,
 	PREFER, OLDER, MISSING, LLADDR, DROP, IGNORE, ROUTE, REFRESH,
 	INTERPRET, COMMUNITIES, BGP_ORIGINATOR_ID, BGP_CLUSTER_LIST, IGP,
-	TABLE, GATEWAY, DIRECT, RECURSIVE, MED, TTL, SECURITY)
+	TABLE, GATEWAY, DIRECT, RECURSIVE, MED, TTL, SECURITY, DETERMINISTIC)
 
 CF_GRAMMAR
 
-CF_ADDTO(proto, bgp_proto '}' { bgp_check(BGP_CFG); } )
+CF_ADDTO(proto, bgp_proto '}' { bgp_check_config(BGP_CFG); } )
 
 bgp_proto_start: proto_start BGP {
-     this_proto = proto_config_new(&proto_bgp, sizeof(struct bgp_config));
+     this_proto = proto_config_new(&proto_bgp, sizeof(struct bgp_config), $1);
      this_proto->preference = DEF_PREF_BGP;
      BGP_CFG->hold_time = 240;
      BGP_CFG->connect_retry_time = 120;
@@ -57,11 +57,15 @@ bgp_proto:
  | bgp_proto proto_item ';'
  | bgp_proto LOCAL AS expr ';' { BGP_CFG->local_as = $4; }
  | bgp_proto LOCAL ipa AS expr ';' { BGP_CFG->source_addr = $3; BGP_CFG->local_as = $5; }
- | bgp_proto NEIGHBOR ipa AS expr ';' {
-     if (ipa_nonzero(BGP_CFG->remote_ip)) cf_error("Only one neighbor per BGP instance is allowed");
+ | bgp_proto NEIGHBOR ipa ipa_scope AS expr ';' {
+     if (ipa_nonzero(BGP_CFG->remote_ip))
+       cf_error("Only one neighbor per BGP instance is allowed");
+     if (!ipa_has_link_scope($3) != !$4)
+       cf_error("Link-local address and interface scope must be used together");
 
      BGP_CFG->remote_ip = $3;
-     BGP_CFG->remote_as = $5;
+     BGP_CFG->iface = $4;
+     BGP_CFG->remote_as = $6;
    }
  | bgp_proto RR CLUSTER ID idval ';' { BGP_CFG->rr_cluster_id = $5; }
  | bgp_proto RR CLIENT ';' { BGP_CFG->rr_client = 1; }
@@ -82,6 +86,7 @@ bgp_proto:
  | bgp_proto MED METRIC bool ';' { BGP_CFG->med_metric = $4; }
  | bgp_proto IGP METRIC bool ';' { BGP_CFG->igp_metric = $4; }
  | bgp_proto PREFER OLDER bool ';' { BGP_CFG->prefer_older = $4; }
+ | bgp_proto DETERMINISTIC MED bool ';' { BGP_CFG->deterministic_med = $4; }
  | bgp_proto DEFAULT BGP_MED expr ';' { BGP_CFG->default_med = $4; }
  | bgp_proto DEFAULT BGP_LOCAL_PREF expr ';' { BGP_CFG->default_local_pref = $4; }
  | bgp_proto SOURCE ADDRESS ipa ';' { BGP_CFG->source_addr = $4; }

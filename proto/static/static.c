@@ -138,12 +138,10 @@ static_decide(struct static_config *cf, struct static_route *r)
   /* r->dest != RTD_MULTIPATH, but may be RTD_NONE (part of multipath route)
      the route also have to be valid (r->neigh != NULL) */
 
-  struct iface *ifa = r->neigh->iface;
-
-  if (!ifa)
+  if (r->neigh->scope < 0)
     return 0;
 
-  if (cf->check_link && !(ifa->flags & IF_LINK_UP))
+  if (cf->check_link && !(r->neigh->iface->flags & IF_LINK_UP))
     return 0;
 
   return 1;
@@ -158,7 +156,7 @@ static_add(struct proto *p, struct static_config *cf, struct static_route *r)
     {
     case RTD_ROUTER:
       {
-	struct neighbor *n = neigh_find(p, &r->via, NEF_STICKY);
+	struct neighbor *n = neigh_find2(p, &r->via, r->via_if, NEF_STICKY);
 	if (n)
 	  {
 	    r->chain = n->data;
@@ -187,7 +185,7 @@ static_add(struct proto *p, struct static_config *cf, struct static_route *r)
 
 	for (r2 = r->mp_next; r2; r2 = r2->mp_next)
 	  {
-	    struct neighbor *n = neigh_find(p, &r2->via, NEF_STICKY);
+	    struct neighbor *n = neigh_find2(p, &r2->via, r2->via_if, NEF_STICKY);
 	    if (n)
 	      {
 		r2->chain = n->data;
@@ -385,7 +383,7 @@ static_same_dest(struct static_route *x, struct static_route *y)
   switch (x->dest)
     {
     case RTD_ROUTER:
-      return ipa_equal(x->via, y->via);
+      return ipa_equal(x->via, y->via) && (x->via_if == y->via_if);
 
     case RTD_DEVICE:
       return !strcmp(x->if_name, y->if_name);
@@ -394,7 +392,7 @@ static_same_dest(struct static_route *x, struct static_route *y)
       for (x = x->mp_next, y = y->mp_next;
 	   x && y;
 	   x = x->mp_next, y = y->mp_next)
-	if (!ipa_equal(x->via, y->via))
+	if (!ipa_equal(x->via, y->via) || (x->via_if != y->via_if))
 	  return 0;
       return !x && !y;
 
@@ -470,6 +468,58 @@ static_reconfigure(struct proto *p, struct proto_config *new)
   return 1;
 }
 
+static void
+static_copy_routes(list *dlst, list *slst)
+{
+  struct static_route *dr, *sr;
+
+  init_list(dlst);
+  WALK_LIST(sr, *slst)
+    {
+      /* copy one route */
+      dr = cfg_alloc(sizeof(struct static_route));
+      memcpy(dr, sr, sizeof(struct static_route));
+
+      /* This fn is supposed to be called on fresh src routes, which have 'live'
+	 fields (like .chain, .neigh or .installed) zero, so no need to zero them */
+
+      /* We need to copy multipath chain, because there are backptrs in 'if_name' */
+      if (dr->dest == RTD_MULTIPATH)
+	{
+	  struct static_route *md, *ms, **mp_last;
+
+	  mp_last = &(dr->mp_next);
+	  for (ms = sr->mp_next; ms; ms = ms->mp_next)
+	    {
+	      md = cfg_alloc(sizeof(struct static_route));
+	      memcpy(md, ms, sizeof(struct static_route));
+	      md->if_name = (void *) dr; /* really */
+
+	      *mp_last = md;
+	      mp_last = &(md->mp_next);
+	    }
+	  *mp_last = NULL;
+	}
+
+      add_tail(dlst, (node *) dr);
+    }
+}
+
+static void
+static_copy_config(struct proto_config *dest, struct proto_config *src)
+{
+  struct static_config *d = (struct static_config *) dest;
+  struct static_config *s = (struct static_config *) src;
+
+  /* Shallow copy of everything */
+  proto_copy_rest(dest, src, sizeof(struct static_config));
+
+  /* Copy route lists */
+  static_copy_routes(&d->iface_routes, &s->iface_routes);
+  static_copy_routes(&d->other_routes, &s->other_routes);
+}
+
+
 struct protocol proto_static = {
   name:		"Static",
   template:	"static%d",
@@ -479,6 +529,7 @@ struct protocol proto_static = {
   shutdown:	static_shutdown,
   cleanup:	static_cleanup,
   reconfigure:	static_reconfigure,
+  copy_config:	static_copy_config
 };
 
 static void
@@ -488,7 +539,7 @@ static_show_rt(struct static_route *r)
 
   switch (r->dest)
     {
-    case RTD_ROUTER:	bsprintf(via, "via %I", r->via); break;
+    case RTD_ROUTER:	bsprintf(via, "via %I%J", r->via, r->via_if); break;
     case RTD_DEVICE:	bsprintf(via, "dev %s", r->if_name); break;
     case RTD_BLACKHOLE:	bsprintf(via, "blackhole"); break;
     case RTD_UNREACHABLE: bsprintf(via, "unreachable"); break;
@@ -502,7 +553,7 @@ static_show_rt(struct static_route *r)
   struct static_route *r2;
   if (r->dest == RTD_MULTIPATH)
     for (r2 = r->mp_next; r2; r2 = r2->mp_next)
-      cli_msg(-1009, "\tvia %I weight %d%s", r2->via, r2->masklen + 1, /* really */
+      cli_msg(-1009, "\tvia %I%J weight %d%s", r2->via, r2->via_if, r2->masklen + 1, /* really */
 	      r2->installed ? "" : " (dormant)");
 }
 

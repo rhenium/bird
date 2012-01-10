@@ -706,17 +706,16 @@ new_iface(struct proto *p, struct iface *new, unsigned long flags, struct iface_
   if (new) {
     if (new->addr->flags & IA_PEER)
       log( L_WARN "%s: rip is not defined over unnumbered links", p->name );
+    rif->sock->saddr = IPA_NONE;
     if (rif->multicast) {
 #ifndef IPV6
       rif->sock->daddr = ipa_from_u32(0xe0000009);
-      rif->sock->saddr = ipa_from_u32(0xe0000009);
 #else
       rif->sock->daddr = ipa_build(0xff020000, 0, 0, 9);
-      rif->sock->saddr = new->addr->ip;
+      rif->sock->saddr = new->addr->ip; /* Does not really work on Linux */
 #endif
     } else {
       rif->sock->daddr = new->addr->brd;
-      rif->sock->saddr = new->addr->brd;
     }
   }
 
@@ -1016,6 +1015,19 @@ rip_reconfigure(struct proto *p, struct proto_config *c)
                  sizeof(struct rip_proto_config) - generic);
 }
 
+static void
+rip_copy_config(struct proto_config *dest, struct proto_config *src)
+{
+  /* Shallow copy of everything */
+  proto_copy_rest(dest, src, sizeof(struct rip_proto_config));
+
+  /* We clean up iface_list, ifaces are non-sharable */
+  init_list(&((struct rip_proto_config *) dest)->iface_list);
+
+  /* Copy of passwords is OK, it just will be replaced in dest when used */
+}
+
+
 struct protocol proto_rip = {
   name: "RIP",
   template: "rip%d",
@@ -1027,4 +1039,5 @@ struct protocol proto_rip = {
   dump: rip_dump,
   start: rip_start,
   reconfigure: rip_reconfigure,
+  copy_config: rip_copy_config
 };

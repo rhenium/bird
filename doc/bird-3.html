@@ -90,10 +90,19 @@ in the following chapter.
 <DT><CODE>function <I>name</I> (<I>parameters</I>) <I>local variables</I> { <I>commands</I> }</CODE><DD><P>Define a function. You can learn more
 about functions in the following chapter.
 <P>
-<DT><CODE>protocol rip|ospf|bgp|... <I>[name]</I> { <I>protocol options</I> }</CODE><DD><P>Define a protocol
-instance called <CODE><I>name</I></CODE> (or with a name like "rip5" generated automatically if you don't specify any <CODE><I>name</I></CODE>). You can learn more
-about configuring protocols in their own chapters. You can run more than one instance of
-most protocols (like RIP or BGP). By default, no instances are configured.
+<DT><CODE>protocol rip|ospf|bgp|... [<I>name</I> [from <I>name2</I>]] { <I>protocol options</I> }</CODE><DD><P>Define a protocol instance called <CODE><I>name</I></CODE> (or with a name like "rip5" generated
+automatically if you don't specify any <CODE><I>name</I></CODE>). You can learn more about
+configuring protocols in their own chapters. When <CODE>from <I>name2</I></CODE> expression is
+used, initial protocol options are taken from protocol or template <CODE><I>name2</I></CODE>
+You can run more than one instance of most protocols (like RIP or BGP). By default, no
+instances are configured.
+<P>
+<DT><CODE>template rip|bgp|... [<I>name</I> [from <I>name2</I>]] { <I>protocol options</I> }</CODE><DD><P>Define a protocol template instance called <CODE><I>name</I></CODE> (or with a name like "bgp1"
+generated automatically if you don't specify any <CODE><I>name</I></CODE>). Protocol templates can
+be used to group common options when many similarly configured protocol instances are to be
+defined. Protocol instances (and other templates) can use templates by using <CODE>from</CODE>
+expression and the name of the template. At the moment templates (and <CODE>from</CODE> expression)
+are not implemented for OSPF protocol.
 <P>
 <DT><CODE>define <I>constant</I> = (<I>expression</I>)|<I>number</I>|<I>IP address</I></CODE><DD><P>Define a constant. You can use it later in every place you could use a simple integer or an IP address.
 Besides, there are some predefined numeric constants based on /etc/iproute2/rt_* files.
