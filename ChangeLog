@@ -1,3 +1,15 @@
+commit 544f2e1b36fb9473132f77d9c0f6e97d1495bb24
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Jan 20 18:16:35 2012 +0100
+
+    NEWS and version update.
+
+commit 3ce17142791b2e1a7f0b8e512b5b74224600056c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Jan 20 16:20:03 2012 +0100
+
+    Fixes a new bug in BGP route ordering.
+
 commit 2c5ca47ad4d18cae162c2ddf85af2dedb89f00a5
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Jan 10 13:44:06 2012 +0100
