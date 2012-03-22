@@ -1,3 +1,14 @@
+bird (1.3.7-1) unstable; urgency=low
+
+  * Imported Upstream version 1.3.7
+   + Route Origin Authorization basics.
+   + RIPng working again.
+   + Extended clist operations in filters.
+   + Fixes several bugs in BSD iface handling.
+   + Several minor bugfixes and enhancements.
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 22 Mar 2012 15:11:39 +0100
+
 bird (1.3.6-1) unstable; urgency=low
 
   * Imported Upstream version 1.3.6
