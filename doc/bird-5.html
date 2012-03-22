@@ -242,17 +242,20 @@ no literals of this type. There are three special operators on
 clists:
 <P><CODE>add(<I>C</I>,<I>P</I>)</CODE> adds pair (or quad) <I>P</I> to clist
 <I>C</I> and returns the result.  If item <I>P</I> is already in
-clist <I>C</I>, it does nothing.
+clist <I>C</I>, it does nothing. <I>P</I> may also be a clist,
+in that case all its members are added; i.e., it works as clist union.
 <P><CODE>delete(<I>C</I>,<I>P</I>)</CODE> deletes pair (or quad)
 <I>P</I> from clist <I>C</I> and returns the result.  If clist
 <I>C</I> does not contain item <I>P</I>, it does nothing.
 <I>P</I> may also be a pair (or quad) set, in that case the
 operator deletes all items from clist <I>C</I> that are also
-members of set <I>P</I>.
+members of set <I>P</I>. Moreover, <I>P</I> may also be a clist,
+which works analogously; i.e., it works as clist difference.
 <P><CODE>filter(<I>C</I>,<I>P</I>)</CODE> deletes all items from clist
 <I>C</I> that are not members of pair (or quad) set <I>P</I>.
 I.e., <CODE>filter</CODE> do the same as <CODE>delete</CODE> with inverted
-set <I>P</I>.
+set <I>P</I>. <I>P</I> may also be a clist, which works analogously;
+i.e., it works as clist intersection.
 <P>Statement <CODE><I>C</I> = add(<I>C</I>, <I>P</I>);</CODE> can be shortened to
 <CODE><I>C</I>.add(<I>P</I>);</CODE> if <I>C</I> is appropriate route
 attribute (for example <CODE>bgp_community</CODE>). Similarly for
@@ -274,7 +277,18 @@ arguments.
 Special operators include <CODE>~</CODE> for "is element of a set" operation - it can be
 used on element and set of elements of the same type (returning true if element is contained in the given set), or
 on two strings (returning true if first string matches a shell-like pattern stored in second string) or on IP and prefix (returning true if IP is within the range defined by that prefix), or on
-prefix and prefix (returning true if first prefix is more specific than second one) or on bgppath and bgpmask (returning true if the path matches the mask) or on pair/quad and clist (returning true if the pair/quad is element of the clist) or on clist and pair/quad set (returning true if there is an element of the clist that is also a member of the pair/quad set).
+prefix and prefix (returning true if first prefix is more specific than second one) or on bgppath and bgpmask (returning true if the path matches the mask) or on number and bgppath (returning true if the number is in the path) or on pair/quad and clist (returning true if the pair/quad is element of the clist) or on clist and pair/quad set (returning true if there is an element of the clist that is also a member of the pair/quad set).
+<P>
+<P>There is one operator related to ROA infrastructure -
+<CODE>roa_check()</CODE>. It examines a ROA table and does RFC 6483 route
+origin validation for a given network prefix. The basic usage
+is <CODE>roa_check(<I>table</I>)</CODE>, which checks current route (which
+should be from BGP to have AS_PATH argument) in the specified ROA
+table and returns ROA_UNKNOWN if there is no relevant ROA, ROA_VALID
+if there is a matching ROA, or ROA_INVALID if there are some relevant
+ROAs but none of them match. There is also an extended variant
+<CODE>roa_check(<I>table</I>, <I>prefix</I>, <I>asn</I>)</CODE>, which allows to
+specify a prefix and an ASN as arguments.
 <P>
 <P>
 <H2><A NAME="ss5.4">5.4</A> <A HREF="bird.html#toc5.4">Control structures</A>

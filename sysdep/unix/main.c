@@ -170,7 +170,10 @@ cf_open(char *filename)
   int ret;
 
   if (*filename != '/') {
-    snprintf(full_name, sizeof(full_name), "%s/%s", dirname(config_name), filename);
+    char dir[BIRD_FNAME_MAX];
+    strncpy(dir, config_name, sizeof(dir));
+    dir[sizeof(dir)-1] = 0;
+    snprintf(full_name, sizeof(full_name), "%s/%s", dirname(dir), filename);
     full_name[sizeof(full_name)-1] = 0;
     cur = full_name;
   }
@@ -643,6 +646,7 @@ main(int argc, char **argv)
   io_init();
   rt_init();
   if_init();
+  roa_init();
 
   uid_t use_uid = get_uid(use_user);
   gid_t use_gid = get_gid(use_group);
