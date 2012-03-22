@@ -177,7 +177,7 @@ struct ospf_area_config
 struct ospf_iface
 {
   node n;
-  struct iface *iface;		/* Nest's iface */
+  struct iface *iface;		/* Nest's iface, non-NULL (unless type OSPF_IT_VLINK) */
   struct ifa *addr;		/* IP prefix associated with that OSPF iface */
   struct ospf_area *oa;
   struct ospf_iface_patt *cf;
@@ -846,7 +846,19 @@ void ospf_sh_neigh(struct proto *p, char *iff);
 void ospf_sh(struct proto *p);
 void ospf_sh_iface(struct proto *p, char *iff);
 void ospf_sh_state(struct proto *p, int verbose, int reachable);
-void ospf_sh_lsadb(struct proto *p);
+
+#define SH_ROUTER_SELF 0xffffffff
+
+struct lsadb_show_data {
+  struct symbol *name;	/* Protocol to request data from */
+  u16 type;		/* LSA Type, 0 -> all */
+  u16 scope;		/* Scope, 0 -> all, hack to handle link scope as 1 */
+  u32 area;		/* Specified for area scope */
+  u32 lsid;		/* LSA ID, 0 -> all */
+  u32 router;		/* Advertising router, 0 -> all */
+};
+
+void ospf_sh_lsadb(struct lsadb_show_data *ld);
 
 
 #define EA_OSPF_METRIC1	EA_CODE(EAP_OSPF, 0)

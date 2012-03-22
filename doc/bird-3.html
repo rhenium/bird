@@ -145,6 +145,20 @@ and might change in the future.
 routing table is created implicitly, other routing tables have
 to be added by this command.
 <P>
+<DT><CODE>roa table [ { roa table options ... } ] <I>name</I></CODE><DD><P>Create a new ROA (Route Origin Authorization) table. ROA
+tables can be used to validate route origination of BGP
+routes. A ROA table contains ROA entries, each consist of a
+network prefix, a max prefix length and an AS number. A ROA
+entry specifies prefixes which could be originated by that AS
+number. ROA tables could be filled with data from RPKI (RFC
+6480) or from public databases like Whois. ROA tables are 
+examined by <CODE>roa_check()</CODE> operator in filters.
+<P>Currently, there is just one option,
+<CODE>roa <I>prefix</I> max <I>num</I> as <I>num</I></CODE>, which
+can be used to populate the ROA table with static ROA
+entries. The option may be used multiple times. Other entries
+can be added dynamically by <CODE>add roa</CODE> command.
+<P>
 <DT><CODE>eval <I>expr</I></CODE><DD><P>Evaluates given filter expression. It
 is used by us for testing of filters.
 </DL>

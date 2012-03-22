@@ -1,3 +1,185 @@
+commit 16fc65acc536d3788efe4c0554a2f52699fedc7f
+Author: Ondrej Filip <feela@network.cz>
+Date:   Thu Mar 22 14:52:40 2012 +0100
+
+    Minor correction
+
+commit 89647357af0d8507652f257f1e8f5679fe9a7078
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Mar 22 12:29:02 2012 +0100
+
+    NEWS and version update.
+
+commit c47d037ecb5b9c835700b152eed7589409a2e42f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Mar 22 11:46:38 2012 +0100
+
+    Some minor changes to CLI.
+
+commit df27911880bffb88c1eae90e36c755a3ed3d77ad
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Mar 19 13:00:00 2012 +0100
+
+    Fixes problem with dirname().
+    
+    Thanks Henrique de Moraes Holschuh for the original patch.
+
+commit af582c4811175d9a27ed5d08a4f6d5eaa69ecec7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Mar 18 17:32:30 2012 +0100
+
+    Route Origin Authorization basics.
+    
+     - ROA tables, which are used as a basic part for RPKI.
+     - Commands for examining and modifying ROA tables.
+     - Filter operators based on ROA tables consistent with RFC 6483.
+
+commit fd087589f80a435a42cedb87b917c71363b11860
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Mar 16 13:01:12 2012 +0100
+
+    Fixes broken vlinks in OSPF.
+
+commit 0f808c066f3b5b190de951db042a34a1eb957a16
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Mar 16 12:47:12 2012 +0100
+
+    Adds filtering to 'show symbols' command.
+    
+    Thanks Alexander V. Chernikov for the original patch.
+
+commit 20ab192beca749166e19118e987b53b5e131d0cf
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Mar 16 12:12:26 2012 +0100
+
+    Adds filtering to 'show ospf lsadb' command.
+    
+    Thanks Alexander V. Chernikov for the original patch.
+
+commit 0888a737b045b48106edbd28ba3cd62fcc8c191e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Mar 15 20:42:29 2012 +0100
+
+    Extends set operations in filters.
+    
+    Allows add/filter/delete clist on clist (set algebra on clists).
+    
+    Allows number ~ bgppath match.
+
+commit 9f1500f50a0196f912eeb97e77ccf6873e186c29
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Mar 15 13:45:55 2012 +0100
+
+    Adds warning for mismatch MTU in OSPF packets.
+    
+    Thanks Alexander V. Chernikov for the original patch.
+
+commit 2f9955b5d508698b04ff41e5e38097acdac416b9
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Mar 15 13:12:00 2012 +0100
+
+    Fixes TTL for multicast OSPF packets.
+    
+    Thanks Alexander V. Chernikov for the suggestion.
+
+commit 8796a8a56edbcd420de724a58947c7aedadf04de
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Mar 15 12:50:49 2012 +0100
+
+    Fixes name for unnamed filters.
+    
+    Thanks to Alexander V. Chernikov for the suggestion.
+
+commit 7d837aa014a78bce2b329cc9f56e8dc799d456e8
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Mar 15 12:43:47 2012 +0100
+
+    Fixes documentation - default pipe mode.
+    
+    Thanks to Benjamin Cama for the bugreport.
+
+commit e2bf812f3dc84981eac045b617261987c25b5e90
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Mar 15 12:38:08 2012 +0100
+
+    Fixes RIPng compatibility.
+    
+    Also probably breaks compatibility with older BIRDs, but RIPng not
+    really worked here.
+    
+    Thanks to Goesta Smekal for the original patch.
+
+commit f761503760fba2d4124cc3352f5260c31fac526d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Mar 15 12:23:49 2012 +0100
+
+    Fixes RIPng socket and neighbor handling.
+    
+    RIPng did not really work because of link-local addresses.
+    
+    Thanks to Roman Hoog Antink for some notes.
+
+commit 117e3c4bbfd4b7f1b2cae6ef9e5cb603fe33307a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Mar 15 12:18:26 2012 +0100
+
+    Fixes a bug in pair set intervals.
+    
+    Pair intervals in form (a,b)..(c,d) were mishanded.
+    
+    Thanks to Alexander Shikoff for the bugreport.
+
+commit 46c1a583a5c1ea81e8d8f372bd7f614506a63938
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Feb 3 11:50:51 2012 +0100
+
+    Fixes a bug causing crash during soft reconfiguration of export to kernel proto.
+
+commit 39c028e9e9e3acf840051f4271fadd4939fde2af
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jan 24 11:31:00 2012 +0100
+
+    Assign default protocol preference via proto_config_new().
+    
+    The patch from Alexander V. Chernikov.
+
+commit 09686693d35bd71187847c95c0967d4125215b97
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jan 23 03:15:12 2012 +0100
+
+    Implements handling of BSD iface arrival/departure notifications.
+    
+    Thanks to Alexander V. Chernikov for original patch.
+
+commit 732a0a257d180a95a02587203555b8552b6128ac
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jan 23 01:26:40 2012 +0100
+
+    Fixes problems with creating/removing/renaming ifaces on BSD.
+
+commit 5c78e0e386d4c770b646cab4a8adc3c87987f50f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Jan 22 11:03:30 2012 +0100
+
+    Some more verbose warnings.
+
+commit bc092571171d00de8b429fec8ba70c39240d7e91
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jan 21 22:56:16 2012 +0100
+
+    Fixes another minor bug in iface scan.
+    
+    Iface flags are not updated in some cases.
+
+commit b573755df426156c22d2a4c65e3f502284820166
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jan 21 22:41:31 2012 +0100
+
+    Fixes a bug in BSD iface scan.
+    
+    if_update() should be called always, because periodic iface scan code
+    removes all not-updated ifaces.
+
 commit 544f2e1b36fb9473132f77d9c0f6e97d1495bb24
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Jan 20 18:16:35 2012 +0100

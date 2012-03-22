@@ -104,6 +104,13 @@ kif_force_scan(void)
     }
 }
 
+void
+kif_request_scan(void)
+{
+  if (kif_proto && kif_scan_timer->expires > now)
+    tm_start(kif_scan_timer, 1);
+}
+
 static struct proto *
 kif_init(struct proto_config *c)
 {
@@ -236,6 +243,7 @@ kif_copy_config(struct proto_config *dest, struct proto_config *src)
 struct protocol proto_unix_iface = {
   name:		"Device",
   template:	"device%d",
+  preference:	DEF_PREF_DIRECT,
   preconfig:	kif_preconfig,
   init:		kif_init,
   start:	kif_start,
@@ -600,10 +608,9 @@ krt_got_route(struct krt_proto *p, rte *e)
       return;
     }
 
-  if (net->n.flags & KRF_INSTALLED)
+  old = net->routes;
+  if ((net->n.flags & KRF_INSTALLED) && old)
     {
-      old = net->routes;
-      ASSERT(old);
       if (krt_uptodate(e, old))
 	verdict = KRF_SEEN;
       else
@@ -961,6 +968,7 @@ struct protocol proto_unix_kernel = {
   name:		"Kernel",
   template:	"kernel%d",
   attr_class:	EAP_KRT,
+  preference:	DEF_PREF_INHERITED,
   preconfig:	krt_preconfig,
   postconfig:	krt_postconfig,
   init:		krt_init,

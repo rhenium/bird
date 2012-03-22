@@ -120,8 +120,10 @@ CF_KEYWORDS(NONE, SIMPLE, AUTHENTICATION, STRICT, CRYPTOGRAPHIC)
 CF_KEYWORDS(ELIGIBLE, POLL, NETWORKS, HIDDEN, VIRTUAL, CHECK, LINK)
 CF_KEYWORDS(RX, BUFFER, LARGE, NORMAL, STUBNET, HIDDEN, SUMMARY, TAG, EXTERNAL)
 CF_KEYWORDS(WAIT, DELAY, LSADB, ECMP, LIMIT, WEIGHT, NSSA, TRANSLATOR, STABILITY)
+CF_KEYWORDS(GLOBAL, LSID, ROUTER, SELF)
 
 %type <t> opttext
+%type <ld> lsadb_args
 
 CF_GRAMMAR
 
@@ -129,7 +131,6 @@ CF_ADDTO(proto, ospf_proto '}' { ospf_proto_finish(); } )
 
 ospf_proto_start: proto_start OSPF {
      this_proto = proto_config_new(&proto_ospf, sizeof(struct ospf_config), $1);
-     this_proto->preference = DEF_PREF_OSPF;
      init_list(&OSPF_CFG->area_list);
      init_list(&OSPF_CFG->vlink_list);
      OSPF_CFG->rfc1583 = DEFAULT_RFC1583;
@@ -218,7 +219,7 @@ ospf_stubnet_item:
 
 ospf_vlink:
    ospf_vlink_start '{' ospf_vlink_opts '}' { ospf_iface_finish(); }
- | ospf_vlink_start
+ | ospf_vlink_start { ospf_iface_finish(); }
  ;
 
 ospf_vlink_opts:
@@ -387,7 +388,8 @@ CF_ADDTO(dynamic_attr, OSPF_METRIC2 { $$ = f_new_dynamic_attr(EAF_TYPE_INT | EAF
 CF_ADDTO(dynamic_attr, OSPF_TAG { $$ = f_new_dynamic_attr(EAF_TYPE_INT | EAF_TEMP, T_INT, EA_OSPF_TAG); })
 CF_ADDTO(dynamic_attr, OSPF_ROUTER_ID { $$ = f_new_dynamic_attr(EAF_TYPE_ROUTER_ID | EAF_TEMP, T_QUAD, EA_OSPF_ROUTER_ID); })
 
-CF_CLI(SHOW OSPF, optsym, [<name>], [[Show information about OSPF protocol]])
+CF_CLI_HELP(SHOW OSPF, ..., [[Show information about OSPF protocol]]);
+CF_CLI(SHOW OSPF, optsym, [<name>], [[Show information about OSPF protocol XXX]])
 { ospf_sh(proto_get_named($3, &proto_ospf)); };
 
 CF_CLI(SHOW OSPF NEIGHBORS, optsym opttext, [<name>] [\"<interface>\"], [[Show information about OSPF neighbors]])
@@ -412,8 +414,23 @@ CF_CLI(SHOW OSPF STATE, optsym opttext, [<name>], [[Show information about reach
 CF_CLI(SHOW OSPF STATE ALL, optsym opttext, [<name>], [[Show information about all OSPF network state]])
 { ospf_sh_state(proto_get_named($5, &proto_ospf), 1, 0); };
 
-CF_CLI(SHOW OSPF LSADB, optsym opttext, [<name>], [[Show content of OSPF LSA database]])
-{ ospf_sh_lsadb(proto_get_named($4, &proto_ospf)); };
+CF_CLI_HELP(SHOW OSPF LSADB, ..., [[Show content of OSPF LSA database]]);
+CF_CLI(SHOW OSPF LSADB, lsadb_args, [global | area <id> | link] [type <num>] [lsid <id>] [self | router <id>] [<proto>], [[Show content of OSPF LSA database]])
+{ ospf_sh_lsadb($4); };
+
+lsadb_args:
+   /* empty */ {
+     $$ = cfg_allocz(sizeof(struct lsadb_show_data));
+   }
+ | lsadb_args GLOBAL { $$ = $1; $$->scope = LSA_SCOPE_AS; }
+ | lsadb_args AREA idval { $$ = $1; $$->scope = LSA_SCOPE_AREA; $$->area = $3 }
+ | lsadb_args LINK { $$ = $1; $$->scope = 1; /* hack, 0 is no filter */ }
+ | lsadb_args TYPE NUM { $$ = $1; $$->type = $3; }
+ | lsadb_args LSID idval { $$ = $1; $$->lsid = $3; }
+ | lsadb_args SELF { $$ = $1; $$->router = SH_ROUTER_SELF; }
+ | lsadb_args ROUTER idval { $$ = $1; $$->router = $3; }
+ | lsadb_args SYM { $$ = $1; $$->name = $2; }
+ ;
 
 CF_CODE
 

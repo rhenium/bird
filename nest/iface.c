@@ -253,6 +253,24 @@ if_change_flags(struct iface *i, unsigned flags)
 }
 
 /**
+ * if_delete - remove interface 
+ * @old: interface 
+ *
+ * This function is called by the low-level platform dependent code
+ * whenever it notices an interface disappears. It is just a shorthand
+ * for if_update().
+ */
+
+void
+if_delete(struct iface *old)
+{
+  struct iface f = {};
+  strncpy(f.name, old->name, sizeof(f.name)-1);
+  f.flags = IF_SHUTDOWN;
+  if_update(&f);
+}
+
+/**
  * if_update - update interface status
  * @new: new interface status
  *
@@ -288,13 +306,14 @@ if_update(struct iface *new)
 	    new->addr = i->addr;
 	    memcpy(&new->addrs, &i->addrs, sizeof(i->addrs));
 	    memcpy(i, new, sizeof(*i));
+	    i->flags &= ~IF_UP; /* IF_TMP_DOWN will be added later */
 	    goto newif;
 	  }
-	else if (c)
-	  {
-	    if_copy(i, new);
-	    if_notify_change(c, i);
-	  }
+
+	if_copy(i, new);
+	if (c)
+	  if_notify_change(c, i);
+
 	i->flags |= IF_UPDATED;
 	return i;
       }
@@ -400,7 +419,7 @@ if_find_by_index(unsigned idx)
   struct iface *i;
 
   WALK_LIST(i, iface_list)
-    if (i->index == idx)
+    if (i->index == idx && !(i->flags & IF_SHUTDOWN))
       return i;
   return NULL;
 }

@@ -1634,6 +1634,22 @@ interfaces to the debug output.
 
 
 <HR><H3>Function</H3>
+<P><I>void</I>
+<B>if_delete</B>
+(<I>struct iface *</I> <B>old</B>) --     remove interface 
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct iface *</I> <B>old</B><DD><P>interface 
+</DL>
+<H3>Description</H3>
+<P>This function is called by the low-level platform dependent code
+whenever it notices an interface disappears. It is just a shorthand
+for <B>if_update()</B>.
+
+
+<HR><H3>Function</H3>
 <P><I>struct iface *</I>
 <B>if_update</B>
 (<I>struct iface *</I> <B>new</B>) --     update interface status
