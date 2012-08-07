@@ -1,3 +1,17 @@
+bird (1.3.8-1) unstable; urgency=low
+
+  * Imported Upstream version 1.3.8
+    o Generalized import and export route limits.
+    o RDNSS and DNSSL support for RAdv.
+    o Include in config file support wildcards.
+    o History deduplication in BIRD client.
+    o New route attributes krt_source, krt_metric.
+    o Different instance ID support for OSPFv3.
+    o Real broadcast mode for OSPFv2.
+    o Several minor bugfixes.
+
+ -- Ondřej Surý <ondrej@debian.org>  Tue, 07 Aug 2012 13:16:15 +0200
+
 bird (1.3.7-1) unstable; urgency=low
 
   * Imported Upstream version 1.3.7
