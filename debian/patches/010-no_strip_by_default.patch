@@ -3,12 +3,12 @@
 @@ -57,9 +57,9 @@ tags:
  
  install: all
- 	$(INSTALL) -d $(DESTDIR)/$(sbindir) $(DESTDIR)/$(sysconfdir) $(DESTDIR)/$(localstatedir)/run
--	$(INSTALL_PROGRAM) -s $(exedir)/bird $(DESTDIR)/$(sbindir)/bird@SUFFIX6@
-+	$(INSTALL_PROGRAM) $(exedir)/bird $(DESTDIR)/$(sbindir)/bird@SUFFIX6@
+ 	$(INSTALL) -d $(DESTDIR)/$(sbindir) $(DESTDIR)/$(sysconfdir) $(DESTDIR)/@runtimedir@
+-	$(INSTALL_PROGRAM) -s $(exedir)/bird $(DESTDIR)/$(sbindir)/bird@SUFFIX@
++	$(INSTALL_PROGRAM) $(exedir)/bird $(DESTDIR)/$(sbindir)/bird@SUFFIX@
  	if test -n "@CLIENT@" ; then								\
--		$(INSTALL_PROGRAM) -s $(exedir)/birdc $(DESTDIR)/$(sbindir)/birdc@SUFFIX6@ ;				\
-+		$(INSTALL_PROGRAM) $(exedir)/birdc $(DESTDIR)/$(sbindir)/birdc@SUFFIX6@ ;				\
+-		$(INSTALL_PROGRAM) -s $(exedir)/birdc $(DESTDIR)/$(sbindir)/birdc@SUFFIX@ ;	\
++		$(INSTALL_PROGRAM) $(exedir)/birdc $(DESTDIR)/$(sbindir)/birdc@SUFFIX@ ;	\
  	fi
- 	if ! test -f $(DESTDIR)/$(sysconfdir)/bird@SUFFIX6@.conf ; then						\
- 		$(INSTALL_DATA) $(srcdir)/doc/bird.conf.example $(DESTDIR)/$(sysconfdir)/bird@SUFFIX6@.conf ;	\
+ 	if ! test -f $(DESTDIR)/@CONFIG_FILE@ ; then						\
+ 		$(INSTALL_DATA) $(srcdir)/doc/bird.conf.example $(DESTDIR)/@CONFIG_FILE@ ;	\
