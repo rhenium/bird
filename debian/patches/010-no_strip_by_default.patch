@@ -1,11 +1,13 @@
 --- a/tools/Makefile.in
 +++ b/tools/Makefile.in
-@@ -57,9 +57,9 @@ tags:
+@@ -69,10 +69,10 @@ tags:
  
  install: all
  	$(INSTALL) -d $(DESTDIR)/$(sbindir) $(DESTDIR)/$(sysconfdir) $(DESTDIR)/@runtimedir@
 -	$(INSTALL_PROGRAM) -s $(exedir)/bird $(DESTDIR)/$(sbindir)/bird@SUFFIX@
+-	$(INSTALL_PROGRAM) -s $(exedir)/birdcl $(DESTDIR)/$(sbindir)/birdcl@SUFFIX@
 +	$(INSTALL_PROGRAM) $(exedir)/bird $(DESTDIR)/$(sbindir)/bird@SUFFIX@
++	$(INSTALL_PROGRAM) $(exedir)/birdcl $(DESTDIR)/$(sbindir)/birdcl@SUFFIX@
  	if test -n "@CLIENT@" ; then								\
 -		$(INSTALL_PROGRAM) -s $(exedir)/birdc $(DESTDIR)/$(sbindir)/birdc@SUFFIX@ ;	\
 +		$(INSTALL_PROGRAM) $(exedir)/birdc $(DESTDIR)/$(sbindir)/birdc@SUFFIX@ ;	\
