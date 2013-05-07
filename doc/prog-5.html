@@ -874,6 +874,12 @@ and removed according to iface events from BIRD core handled by
 <B>radv_iface_notify()</B>, which processes asynchronous events (specified
 by RA_EV_* codes), and <B>radv_timer()</B>, which triggers sending RAs and
 computes the next timeout.
+<P>The RAdv protocol could receive routes (through
+<B>radv_import_control()</B> and <B>radv_rt_notify()</B>), but only the
+configured trigger route is tracked (in <I>active</I> var).  When a radv
+protocol is reconfigured, the connected routing table is examined
+(in <B>radv_check_active()</B>) to have proper <I>active</I> value in case of
+the specified trigger prefix was changed.
 <P>Supported standards:
 - RFC 4861 - main RA standard
 - RFC 6106 - DNS extensions (RDDNS, DNSSL)

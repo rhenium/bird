@@ -154,6 +154,11 @@ next hop.  This needs to be used only occasionally to
 circumvent misconfigurations of other routers.  Default:
 disabled.
 <P>
+<DT><CODE>next hop keep</CODE><DD><P>Forward the received Next Hop
+attribute even in situations where the local address should be
+used instead, like when the route is sent to an interface with
+a different subnet. Default: disabled.
+<P>
 <DT><CODE>missing lladdr self|drop|ignore</CODE><DD><P>Next Hop attribute
 in BGP-IPv6 sometimes contains just the global IPv6 address,
 but sometimes it has to contain both global and link-local
@@ -780,6 +785,7 @@ protocol ospf &lt;name&gt; {
                                 nonbroadcast|nbma|pointomultipoint|ptmp];
                         strict nonbroadcast &lt;switch&gt;;
                         real broadcast &lt;switch&gt;;
+                        ptp netmask &lt;switch&gt;;
                         check link &lt;switch&gt;;
                         ecmp weight &lt;num&gt;;
                         authentication [none|simple|cryptographic];
@@ -991,6 +997,17 @@ does not work reliably. This is a non-standard option and
 probably is not interoperable with other OSPF
 implementations. Default value is no.
 <P>
+<DT><CODE>ptp netmask <I>switch</I></CODE><DD><P>In <CODE>type ptp</CODE> network configurations, OSPFv2
+implementations should ignore received netmask field in hello
+packets and should send hello packets with zero netmask field
+on unnumbered PtP links. But some OSPFv2 implementations
+perform netmask checking even for PtP links. This option
+specifies whether real netmask will be used in hello packets
+on <CODE>type ptp</CODE> interfaces. You should ignore this option
+unless you meet some compatibility problems related to this
+issue. Default value is no for unnumbered PtP links, yes
+otherwise.
+<P>
 <DT><CODE>check link <I>switch</I></CODE><DD><P>If set, a hardware link state (reported by OS) is taken into
 consideration. When a link disappears (e.g. an ethernet cable is
 unplugged), neighbors are immediately considered unreachable
@@ -1019,7 +1036,10 @@ See
 <P>
 <DT><CODE>neighbors { <I>set</I> } </CODE><DD><P>A set of neighbors to which Hello messages on NBMA or PtMP
 networks are to be sent. For NBMA networks, some of them
-could be marked as eligible.
+could be marked as eligible. In OSPFv3, link-local addresses
+should be used, using global ones is possible, but it is
+nonstandard and might be problematic. And definitely,
+link-local and global addresses should not be mixed.
 <P>
 </DL>
 <P>
@@ -1291,6 +1311,25 @@ above, multiple definitions are cumulative, they can be used
 also as interface-specific options and there is a short
 variant <CODE>dnssl <I>domain</I></CODE> that just specifies one DNS
 search domain.
+<P>
+<A NAME="dsc-trigger"></A>  
+<DT><CODE>trigger <I>prefix</I></CODE><DD><P>RAdv protocol could be configured to change its behavior based
+on availability of routes. When this option is used, the
+protocol waits in suppressed state until a <I>trigger route</I>
+(for the specified network) is exported to the protocol, the
+protocol also returnsd to suppressed state if the
+<I>trigger route</I> disappears. Note that route export depends
+on specified export filter, as usual. This option could be
+used, e.g., for handling failover in multihoming scenarios.
+<P>During suppressed state, router advertisements are generated,
+but with some fields zeroed. Exact behavior depends on which
+fields are zeroed, this can be configured by
+<CODE>sensitive</CODE> option for appropriate fields. By default, just
+<CODE>default lifetime</CODE> (also called <CODE>router lifetime</CODE>) is
+zeroed, which means hosts cannot use the router as a default
+router. <CODE>preferred lifetime</CODE> and <CODE>valid lifetime</CODE> could
+also be configured as <CODE>sensitive</CODE> for a prefix, which would
+cause autoconfigured IPs to be deprecated or even removed.
 </DL>
 <P>
 <P>Interface specific options:
@@ -1328,10 +1367,12 @@ messages. 0 means unspecified. Default 0.
 <DT><CODE>current hop limit <I>expr</I></CODE><DD><P>This option specifies which value of Hop Limit should be used
 by hosts. Valid values are 0-255, 0 means unspecified. Default: 64
 <P>
-<DT><CODE>default lifetime <I>expr</I></CODE><DD><P>This option specifies the time (in seconds) how long (after
+<DT><CODE>default lifetime <I>expr</I> [sensitive <I>switch</I>]</CODE><DD><P>This option specifies the time (in seconds) how long (after
 the receipt of RA) hosts may use the router as a default
-router. 0 means do not use as a default router. Default: 3 *
-<CODE>max ra interval</CODE>.
+router. 0 means do not use as a default router. For
+<CODE>sensitive</CODE> option, see 
+<A HREF="#dsc-trigger">trigger</A>.
+Default: 3 * <CODE>max ra interval</CODE>, <CODE>sensitive</CODE> yes.
 <P>
 <DT><CODE>rdnss local <I>switch</I></CODE><DD><P>Use only local (interface-specific) RDNSS definitions for this
 interface. Otherwise, both global and local definitions are
@@ -1346,22 +1387,31 @@ if no local definitons are specified. Default: no.
 <P>Prefix specific options:
 <P>
 <DL>
+<DT><CODE>skip <I>switch</I></CODE><DD><P>This option allows to specify that given prefix should not be
+advertised. This is useful for making exceptions from a
+default policy of advertising all prefixes. Note that for
+withdrawing an already advertised prefix it is more useful to
+advertise it with zero valid lifetime. Default: no
+<P>
 <DT><CODE>onlink <I>switch</I></CODE><DD><P>This option specifies whether hosts may use the advertised
 prefix for onlink determination. Default: yes
 <P>
 <DT><CODE>autonomous <I>switch</I></CODE><DD><P>This option specifies whether hosts may use the advertised
 prefix for stateless autoconfiguration. Default: yes
 <P>
-<DT><CODE>valid lifetime <I>expr</I></CODE><DD><P>This option specifies the time (in seconds) how long (after
+<DT><CODE>valid lifetime <I>expr</I> [sensitive <I>switch</I>]</CODE><DD><P>This option specifies the time (in seconds) how long (after
 the receipt of RA) the prefix information is valid, i.e.,
 autoconfigured IP addresses can be assigned and hosts with
 that IP addresses are considered directly reachable. 0 means
-the prefix is no longer valid. Default: 86400 (1 day)
+the prefix is no longer valid. For <CODE>sensitive</CODE> option, see
+<A HREF="#dsc-trigger">trigger</A>. Default: 86400 (1 day), <CODE>sensitive</CODE> no.
 <P>
-<DT><CODE>preferred lifetime <I>expr</I></CODE><DD><P>This option specifies the time (in seconds) how long (after
+<DT><CODE>preferred lifetime <I>expr</I> [sensitive <I>switch</I>]</CODE><DD><P>This option specifies the time (in seconds) how long (after
 the receipt of RA) IP addresses generated from the prefix
-using stateless autoconfiguration remain preferred. Default:
-14400 (4 hours)
+using stateless autoconfiguration remain preferred. For
+<CODE>sensitive</CODE> option, see 
+<A HREF="#dsc-trigger">trigger</A>.
+Default: 14400 (4 hours), <CODE>sensitive</CODE> no.
 </DL>
 <P>
 <P>
@@ -1501,7 +1551,7 @@ even slower.
 <P>
 <DT><CODE>period <I>number</I></CODE><DD><P>specifies the number of seconds between periodic updates. Default is 30 seconds. A lower
 number will mean faster convergence but bigger network
-load. Do not use values lower than 10.
+load. Do not use values lower than 12.
 <P>
 <DT><CODE>timeout time <I>number</I></CODE><DD><P>specifies how old route has to be to be considered unreachable. Default is 4*<CODE>period</CODE>.
 <P>
@@ -1531,7 +1581,7 @@ in case of external routes). When importing a non-RIP route, the tag defaults to
 protocol rip MyRIP_test {
         debug all;
         port 1520;
-        period 10;
+        period 12;
         garbage time 60;
         interface "eth0" { metric 3; mode multicast; };
         interface "eth*" { metric 2; mode broadcast; };
