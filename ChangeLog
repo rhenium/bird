@@ -1,3 +1,270 @@
+commit a2017200c71293d0a28a39d1f250ba38d57f6289
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Apr 29 22:33:50 2013 +0200
+
+    NEWS and version update.
+
+commit 572c6440432e3138ea622cfb5a4ef7580d77ef4a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Apr 29 22:08:05 2013 +0200
+
+    Fixes a crash when mrtdump is enabled and interface goes away.
+    
+    Thanks to Peter Christensen for the bugfix.
+
+commit 32622d0ea366406f3afa14bb9edb4855d6979786
+Merge: efd6d12 a5e9f3d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 23 02:54:13 2013 +0200
+
+    Merge branch 'birdcl'
+
+commit a5e9f3d26f887deb451a3ea086e52266c117aa0a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 23 02:42:35 2013 +0200
+
+    Restructures birdc and birdcl to merge duplicated code.
+    
+    The BIRD client code is restructured that most of the code (including
+    main function) is shared in client.c, while birdc.c and birdcl.c contain
+    just I/O-specific callbacks. This removes all duplicated code from
+    variant-specific files.
+
+commit d2c392d44839baaefa48f4a38060be648d3415fb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Apr 19 13:59:08 2013 +0200
+
+    Removes unnecessary client subdirectories and updates buildsystem.
+    
+    Renames some files:
+    birdc/client.c -> birdc.c
+    birdcl/client.c -> birdcl.c
+    client_common.c -> common.c
+
+commit efd6d12b975441c7e1875a59dd9e0f3db7e958cb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 17 15:09:50 2013 +0200
+
+    Adds two new default GCC options.
+    
+    Adds two new default GCC options related to optimizations
+    (-fno-strict-aliasing and -fno-strict-overflow). This
+    should fix some hyperaggressive GCC optimizations.
+    
+    Also updates autoconf option detection.
+
+commit 8df02847e8af29863c325b7297e3a2b2ed5f961c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 17 13:06:40 2013 +0200
+
+    Fixes a compatibility issue in OSPFv2 PtP links.
+    
+    BIRD used zero netmask in hello packets on all PtP links, not just on
+    unnumbered ones. This patch fixes it and adds option 'ptp netmask'
+    for overriding the default behavior.
+    
+    Thanks to Alexander V. Chernikov for the original patch.
+
+commit cd3b02d198093abbbe671f647e4deb2470eb9cf1
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 16 17:53:22 2013 +0200
+
+    Allows IP of loopback to be used in automatic router ID selection.
+    
+    Thanks to Alexander V. Chernikov for the patch.
+
+commit 8bd9b930c320f09d3b3792b5f991cf702e9d55be
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 16 17:40:44 2013 +0200
+
+    Fixes a bug in IPv6 BGP next hop processing.
+    
+    BGP next hop attributes with empty link-local IPv6 addresses were not
+    handled properly.
+    
+    Thanks to Sergey Popovich for the bugfix.
+
+commit 48bc232f08141d26691237c3d79db587ce16932b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 16 17:27:34 2013 +0200
+
+    Implements 'next hop keep' option for BGP.
+    
+    This option allows to keep the received next hop even in cases when
+    the route is sent to an interface with a different subnet.
+
+commit 9ff5257357d9975654279db17bbc8525583ba1cc
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 16 16:22:31 2013 +0200
+
+    Better handling of global addresses as configured NBMA neighbors in OSPFv3.
+    
+    Configured NBMA neighbors in OSPFv3 should be link-local addresses, old
+    behavior was to silently ignore global ones. The patch allows BIRD to
+    accept global ones, but adds a warning and a documentation notice.
+    
+    Thanks to Wilco Baan Hofman for the bugreport.
+
+commit 568d9c9faeab70951d8e9bfea521e1b38a9a3d1c
+Author: Tomas Hlavacek <tmshlvck@gmail.com>
+Date:   Sat Apr 6 22:07:32 2013 +0200
+
+    Fix birdcl async message handling
+    
+    Fix handling of async messafe in the bird light client. The async message
+    may occure at the any moment so we need the client to liste for the
+    message from server when it waits for user input.
+
+commit ce1348537455e5482a283f7a4cae734d13dcf34e
+Author: Tomas Hlavacek <tmshlvck@gmail.com>
+Date:   Tue Mar 19 18:02:40 2013 +0100
+
+    Fix birdcl questionmark handling
+    
+    Fix handling of questionmark handling in the bird light client. The
+    questionmark should display help when it is the last non-blank character on
+    command line. Otherwise the questionmark does not have any special meaning
+    and it could be a part of a pattern.
+
+commit 8322ecde124188a9408b54afead4666bb954e5a5
+Author: Tomas Hlavacek <tmshlvck@gmail.com>
+Date:   Sun Feb 24 23:47:22 2013 +0100
+
+    Add lightweight client - birdcl
+    
+    Restructure client/ subdir. Add two different flavors of client.
+    The full featured birdc client code is in client/birdc/.
+    The new light client birtcl is in client/birdcl/.
+    Common sources of both clients are directly in client/.
+    
+    Rework on-line auto-completion in client/command.c to conditionally turn off
+    ncurses-specific code.
+    
+    Add lightweight client without libreadline and ncurses dependencies - birdcl.
+    The birdcl lacks support of history, on-line auto-completion and there
+    are different implementations of "more" functionality and help on '?' press.
+    New client operates in canonical terminal mode (apart from "more" display)
+    and therefore all commands have to be executed by a return key including help
+    commands (called by '?' character in the end of the line).
+    Apart from these limitations the interaction style should be the same as
+    for the full client - birdc.
+    Build of birdcl is always on (independent on --enable-client parameter).
+
+commit e454916149d4efe66732fdd0388181813cab6ed0
+Author: Tomas Hlavacek <tmshlvck@gmail.com>
+Date:   Wed Jan 23 17:14:53 2013 +0100
+
+    Pull out independent routines from client_full.c
+    
+    Pull out routines for interacting with the server and interpreting
+    internal commands which are not dependent on libreadline and
+    ncurses libraries.
+    
+    This is a preparation step for a new lightweight birdc client.
+
+commit 5c2c4ea8b1e924fce433094e744c0467da55aaab
+Author: Tomas Hlavacek <tmshlvck@gmail.com>
+Date:   Wed Jan 23 15:51:04 2013 +0100
+
+    Rename client/client.c to client_full.c
+    
+    Rename client/client.c to client-full.c and change the Makefile accordingly.
+    This is a preparation step for introducing a new lightweight client which
+    should reuse as much code as possible from the old one but it should not depend
+    on external libraries.
+    
+    Signed-off-by: Tomas Hlavacek <tmshlvck@gmail.com>
+
+commit a9fc659b840e13323aa43e92eb8f39ceb19b5ed6
+Author: Ondrej Filip <feela@network.cz>
+Date:   Tue Feb 26 14:29:53 2013 +0100
+
+    Small typos fixed.
+
+commit de41dcd13d6f9d4785c80e6234ac38f2a15f5429
+Author: Ondrej Filip <feela@network.cz>
+Date:   Tue Feb 26 14:13:11 2013 +0100
+
+    Redundant lines removed.
+
+commit e667622a35722ec007137e678f4f70841562e57f
+Author: Ondrej Filip <feela@network.cz>
+Date:   Mon Feb 25 10:39:46 2013 +0100
+
+    Default rounting table for 'show route export/preexport/protocol' is the one related to a respective protocol.
+
+commit a9c38203bdcad92f7ac0a8a912241d2acb483f2c
+Author: Ondrej Filip <feela@network.cz>
+Date:   Sun Feb 24 00:43:08 2013 +0100
+
+    Allow 1 sec RIP update.
+
+commit 04ddefb357b2b8759be16633f7bb1df49b0405ea
+Author: Ondrej Filip <feela@network.cz>
+Date:   Fri Feb 22 07:15:27 2013 +0100
+
+    Use BIRD's ASSERT instead of assert.h
+
+commit 2bf59bf4d3e4fcaff489d3445134e5e2e2af9cf6
+Author: Ondrej Filip <feela@network.cz>
+Date:   Thu Feb 21 00:44:59 2013 +0100
+
+    Hotfix to solve an issue with delaying timers reported by Aleksey Chudov.
+
+commit 9d969be5f2d867704e82bd7d6c8049623d50708f
+Author: Ondrej Filip <feela@network.cz>
+Date:   Thu Feb 14 23:35:51 2013 +0100
+
+    I still believe that 0 == NULL, however this patch will make Santiago happy. :-)
+
+commit 4c2abee74e64f64fba61aad6e2b66e3895820003
+Author: Ondrej Filip <feela@network.cz>
+Date:   Tue Feb 12 13:15:01 2013 +0100
+
+    Allow submitting BIRD commands from UNIX shell even in restricted mode.
+
+commit 8c4da7e01ded3f06cbf873e67c5ae1cf70cf280b
+Author: Ondrej Filip <feela@network.cz>
+Date:   Sun Feb 10 19:17:38 2013 +0100
+
+    Symbol names enclosed by apostrophes can contain DOTs.
+
+commit 0bc3542ab6e0a96342e35ead8ff1c52f980facc2
+Author: Ondrej Filip <feela@network.cz>
+Date:   Sun Feb 10 19:06:56 2013 +0100
+
+    Route limits can be disabled - this makes sense for protocol templates
+
+commit 155134f3960bc06a18c8c7d9a97181b786d77a3a
+Author: Ondrej Filip <feela@network.cz>
+Date:   Sun Feb 10 19:04:08 2013 +0100
+
+    A few semicolons added to decrease a number of warnings.
+
+commit c6a2fe64bed8dc67af0e868052b055aa0f45cdf2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Feb 9 00:53:04 2013 +0100
+
+    Fixes handling of iface routes in static proto during reconfiguration.
+    
+    During reconfiguration, iface routes were installed even when iface was down.
+
+commit 36da2857bc911924a250a234f38cf58c3b21f1bc
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Feb 8 23:58:27 2013 +0100
+
+    Implements router advertisements activated by received routes.
+    
+    The RAdv protocol could be configured to change its behavior based on
+    availability of routes, e.g., do not announce router lifetime when a
+    default route is not available.
+
+commit d214ae4fdc1e323f89efb8a80c068fef4a45758f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jan 12 21:26:42 2013 +0100
+
+    Fix missing documentation for one option.
+
 commit 13d4dd138d5dc6c884ded280f9244fac707c4f32
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Jan 11 14:53:20 2013 +0100

@@ -3850,32 +3850,123 @@ if test -z "$GCC" ; then
 	as_fn_error $? "This program requires the GNU C Compiler." "$LINENO" 5
 fi
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking what CFLAGS should we use" >&5
-$as_echo_n "checking what CFLAGS should we use... " >&6; }
 if test "$bird_cflags_default" = yes ; then
-	if test "${bird_cv_c_option_no_pointer_sign+set}" = set; then :
+
+  bird_tmp_cflags="$CFLAGS"
+
+  CFLAGS="-Wall -Wno-pointer-sign"
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether CC supports -Wno-pointer-sign" >&5
+$as_echo_n "checking whether CC supports -Wno-pointer-sign... " >&6; }
+if test "${bird_cv_c_option_wno_pointer_sign+set}" = set; then :
   $as_echo_n "(cached) " >&6
 else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
 
-cat >conftest.c <<EOF
-int main(void)
-{ return 0; }
-EOF
-if $CC -Wall -Wno-pointer-sign conftest.c >&5 2>&1 ; then
-	bird_cv_c_option_no_pointer_sign=yes
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  bird_cv_c_option_wno_pointer_sign=yes
 else
-	bird_cv_c_option_no_pointer_sign=no
+  bird_cv_c_option_wno_pointer_sign=no
 fi
-rm -rf conftest* a.out
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $bird_cv_c_option_wno_pointer_sign" >&5
+$as_echo "$bird_cv_c_option_wno_pointer_sign" >&6; }
 
+  CFLAGS="$bird_tmp_cflags"
+
+
+  bird_tmp_cflags="$CFLAGS"
+
+  CFLAGS=" -fno-strict-aliasing"
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether CC supports -fno-strict-aliasing" >&5
+$as_echo_n "checking whether CC supports -fno-strict-aliasing... " >&6; }
+if test "${bird_cv_c_option_fno_strict_aliasing+set}" = set; then :
+  $as_echo_n "(cached) " >&6
+else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  bird_cv_c_option_fno_strict_aliasing=yes
+else
+  bird_cv_c_option_fno_strict_aliasing=no
 fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $bird_cv_c_option_fno_strict_aliasing" >&5
+$as_echo "$bird_cv_c_option_fno_strict_aliasing" >&6; }
+
+  CFLAGS="$bird_tmp_cflags"
+
+
+  bird_tmp_cflags="$CFLAGS"
+
+  CFLAGS=" -fno-strict-overflow"
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether CC supports -fno-strict-overflow" >&5
+$as_echo_n "checking whether CC supports -fno-strict-overflow... " >&6; }
+if test "${bird_cv_c_option_fno_strict_overflow+set}" = set; then :
+  $as_echo_n "(cached) " >&6
+else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  bird_cv_c_option_fno_strict_overflow=yes
+else
+  bird_cv_c_option_fno_strict_overflow=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $bird_cv_c_option_fno_strict_overflow" >&5
+$as_echo "$bird_cv_c_option_fno_strict_overflow" >&6; }
+
+  CFLAGS="$bird_tmp_cflags"
 
 
 	CFLAGS="$CFLAGS -Wall -Wstrict-prototypes -Wno-parentheses"
-	if test "$bird_cv_c_option_no_pointer_sign" = yes ; then
-		CFLAGS="$CFLAGS -Wno-pointer-sign"
-	fi
+
+  if test "$bird_cv_c_option_wno_pointer_sign" = yes ; then
+    CFLAGS="$CFLAGS -Wno-pointer-sign"
+  fi
+
+
+  if test "$bird_cv_c_option_fno_strict_aliasing" = yes ; then
+    CFLAGS="$CFLAGS -fno-strict-aliasing"
+  fi
+
+
+  if test "$bird_cv_c_option_fno_strict_overflow" = yes ; then
+    CFLAGS="$CFLAGS -fno-strict-overflow"
+  fi
+
 fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking CFLAGS" >&5
+$as_echo_n "checking CFLAGS... " >&6; }
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $CFLAGS" >&5
 $as_echo "$CFLAGS" >&6; }
 
@@ -5405,7 +5496,7 @@ fi
 CLIENT=
 CLIENT_LIBS=
 if test "$enable_client" = yes ; then
-	CLIENT=client
+	CLIENT=birdc
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for add_history in -lhistory" >&5
 $as_echo_n "checking for add_history in -lhistory... " >&6; }
 if test "${ac_cv_lib_history_add_history+set}" = set; then :

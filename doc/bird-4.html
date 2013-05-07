@@ -28,6 +28,13 @@ codes along with the messages. You do not necessarily need to use
 birdc to talk to BIRD, your own applications could do that, too
 -- the format of communication between BIRD and birdc is stable
 (see the programmer's documentation).
+<P>
+<P>There is also lightweight variant of BIRD client called
+birdcl, which does not support command line editing and history
+and has minimal dependencies. This is useful for running BIRD in
+resource constrained environments, where Readline library (required
+for regular BIRD client) is not available.
+<P>
 <P>Many commands have the <I>name</I> of the protocol instance as an argument.
 This argument can be omitted if there exists only a single instance.
 <P>
@@ -63,7 +70,8 @@ link-state database.  It is just a stripped-down version of
 <P>
 <DT><CODE>show symbols [table|filter|function|protocol|template|roa|<I>symbol</I>]</CODE><DD><P>Show the list of symbols defined in the configuration (names of protocols, routing tables etc.).
 <P>
-<DT><CODE>show route [[for] <I>prefix</I>|<I>IP</I>] [table <I>sym</I>] [filter <I>f</I>|where <I>c</I>] [(export|preexport) <I>p</I>] [protocol <I>p</I>] [<I>options</I>]</CODE><DD><P>Show contents of a routing table (by default of the main one),
+<DT><CODE>show route [[for] <I>prefix</I>|<I>IP</I>] [table <I>sym</I>] [filter <I>f</I>|where <I>c</I>] [(export|preexport) <I>p</I>] [protocol <I>p</I>] [<I>options</I>]</CODE><DD><P>Show contents of a routing table (by default of the main one or
+the table attached to a respective protocol),
 that is routes, their metrics and (in case the <CODE>all</CODE> switch is given)
 all their attributes.
 <P>
@@ -83,8 +91,8 @@ export filter of the protocol is skipped.
 <P>You can also select just routes added by a specific protocol.
 <CODE>protocol <I>p</I></CODE>.
 <P>
-<P>If BIRD is configured to keep filtered routes (see import keep filtered/
-option), you can show them instead of routes by using filtered/ switch.
+<P>If BIRD is configured to keep filtered routes (see <CODE>import keep filtered</CODE>
+option), you can show them instead of routes by using <CODE>filtered</CODE> switch.
 <P>
 <P>The <CODE>stats</CODE> switch requests showing of route statistics (the
 number of networks, number of routes before and after filtering). If

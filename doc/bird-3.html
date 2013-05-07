@@ -237,16 +237,16 @@ propagated to other protocols. But it is possible to show them
 using <CODE>show route filtered</CODE>. Note that this option does not
 work for the pipe protocol. Default: off.
 <P>
-<DT><CODE>import limit <I>number</I> [action warn | block | restart | disable]</CODE><DD><P>Specify an import route limit (a maximum number of routes
+<DT><CODE>import limit [<I>number</I> | off ] [action warn | block | restart | disable]</CODE><DD><P>Specify an import route limit (a maximum number of routes
 imported from the protocol) and optionally the action to be
 taken when the limit is hit. Warn action just prints warning
 log message. Block action discards new routes coming from the
 protocol. Restart and disable actions shut the protocol down
 like appropriate commands. Disable is the default action if an
 action is not explicitly specified. Note that limits are reset
-during protocol reconfigure, reload or restart. Default: <CODE>none</CODE>.
+during protocol reconfigure, reload or restart. Default: <CODE>off</CODE>.
 <P>
-<DT><CODE>receive limit <I>number</I> [action warn | block | restart | disable]</CODE><DD><P>Specify an receive route limit (a maximum number of routes
+<DT><CODE>receive limit [<I>number</I> | off ] [action warn | block | restart | disable]</CODE><DD><P>Specify an receive route limit (a maximum number of routes
 received from the protocol and remembered). It works almost
 identically to <CODE>import limit</CODE> option, the only
 difference is that if <CODE>import keep filtered</CODE> option is
@@ -255,9 +255,9 @@ blocked routes are forgotten, as the main purpose of the
 receive limit is to protect routing tables from
 overflow. Import limit, on the contrary, counts accepted
 routes only and routes blocked by the limit are handled like
-filtered routes. Default: <CODE>none</CODE>.
+filtered routes. Default: <CODE>off</CODE>.
 <P>
-<DT><CODE>export limit <I>number</I> [action warn | block | restart | disable]</CODE><DD><P>Specify an export route limit, works similarly to
+<DT><CODE>export limit [ <I>number</I> | off ] [action warn | block | restart | disable]</CODE><DD><P>Specify an export route limit, works similarly to
 the <CODE>import limit</CODE> option, but for the routes exported
 to the protocol. This option is experimental, there are some
 problems in details of its behavior -- the number of exported
@@ -265,7 +265,7 @@ routes can temporarily exceed the limit without triggering it
 during protocol reload, exported routes counter ignores route
 blocking and block action also blocks route updates of already
 accepted routes -- and these details will probably change in
-the future. Default: <CODE>none</CODE>.
+the future. Default: <CODE>off</CODE>.
 <P>
 <DT><CODE>description "<I>text</I>"</CODE><DD><P>This is an optional
 description of the protocol. It is displayed as a part of the
