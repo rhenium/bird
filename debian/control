@@ -13,26 +13,26 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Conflicts: zebra, routed
 Recommends: bird6
-Description: Internet Routing Daemon
- BIRD is a Internet routing daemon with full support for all the major
- routing protocols.  It allows redistribution between protocols with
- a powerful route filtering syntax and an easy-to-use configuration
+Description: Internet Routing Daemon for IPv4
+ BIRD is an Internet routing daemon with full support for all the major
+ routing protocols. It allows redistribution between protocols with a
+ powerful route filtering syntax and an easy-to-use configuration
  interface.
  .
- This package supports IPv4 versions of OSPFv2, RIPv2 and BGP.
+ This package supports IPv4 versions of OSPFv2, RIPv2, and BGP.
 
 Package: bird6
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Conflicts: zebra, routed
 Recommends: bird
-Description: Internet Routing Daemon
- BIRD is a Internet routing daemon with full support for all the major
- routing protocols.  It allows redistribution between protocols with
- a powerful route filtering syntax and an easy-to-use configuration
+Description: Internet Routing Daemon for IPv6
+ BIRD is an Internet routing daemon with full support for all the major
+ routing protocols. It allows redistribution between protocols with a
+ powerful route filtering syntax and an easy-to-use configuration
  interface.
  .
- This package supports IPv4 versions of OSPFv3, RIPng and BGP.
+ This package supports IPv6 versions of OSPFv3, RIPng, and BGP.
 
 Package: bird-dbg
 Architecture: any
@@ -40,11 +40,10 @@ Depends: ${misc:Depends}, bird (= ${binary:Version}) | bird6 (= ${binary:Version
 Recommends: gdb
 Section: debug
 Priority: extra
-Description: Debug symbols for BIRD
- BIRD is a Internet routing daemon with full support for all the major
- routing protocols.  It allows redistribution between protocols with
- a powerful route filtering syntax and an easy-to-use configuration
+Description: Internet Routing Daemon - debug symbols
+ BIRD is an Internet routing daemon with full support for all the major
+ routing protocols. It allows redistribution between protocols with a
+ powerful route filtering syntax and an easy-to-use configuration
  interface.
  .
- This package provides the debug symbols for BIRD needed for properly
- debugging errors in BIRD with gdb.
+ This package provides the symbols needed for debugging BIRD with gdb.
