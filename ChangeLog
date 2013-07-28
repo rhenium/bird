@@ -1,3 +1,182 @@
+commit 50b71c1b96f99ac40e733295daeb03927777b206
+Author: Ondrej Filip <feela@network.cz>
+Date:   Sun Jul 28 18:50:40 2013 +0200
+
+    Fixed small error in documantation (thanks engels@openit.de).
+
+commit 643228bc1cfb6a8f5169ee8ebfe1b75c81cc8543
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jul 27 00:47:58 2013 +0200
+
+    NEWS and version update.
+
+commit f4830d8cb801c9124361bcc0c9e33f8f6005c08d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jul 27 00:38:29 2013 +0200
+
+    Documentation update.
+
+commit 4ee39ff2ff78f86ce1ec79a77e22120984452549
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Jul 26 11:06:08 2013 +0200
+
+    Fixes initial random values for function arguments.
+    
+    Thanks to Javor Kliachev for the bugreport.
+
+commit 1103b32e830fbf98d9b3e32c0425b9a589773bf8
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jul 25 22:33:57 2013 +0200
+
+    Allows to define constants of all filter types.
+
+commit ac5745134847c044b21c311e5ab11d92d05bacc1
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jul 25 13:55:24 2013 +0200
+
+    Implements RFC 6608 Subcodes for BGP FSM Error.
+
+commit 508d936078aecc8fbbb9ca1218104599c4a3cb4a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jul 25 13:15:32 2013 +0200
+
+    Implements eval command and minor CLI cleanups.
+    
+    Implemented eval command can be used to evaluate expressions.
+    
+    The patch also documents echo command and allows to use log classes
+    instead of integer as a mask for echo.
+
+commit a0b176e3b2b50d3a30574afa927e0ee8ef65be68
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jul 24 14:20:46 2013 +0200
+
+    Fixes header file name.
+    
+    Thanks to Fritz Grimpen for the patch.
+
+commit e1afee279993363ffb4a7005554d0774eb09b764
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jul 24 14:19:37 2013 +0200
+
+    Fixes socket error hook for radv protocol.
+
+commit 9135c1f0ca6322bff9648895b5394b97761b4bcb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jul 24 14:11:12 2013 +0200
+
+    Fixes bug in protocol flushing and rtable pruning.
+    
+    When route was propagated to another rtable through a pipe and then the
+    pipe was reconfigured softly in such a way that any subsequent route
+    updates are filtered, then the source protocol shutdown didn't clean up
+    the route in the second rtable which caused stale routes and potential
+    crashes.
+
+commit 48b15ef10fede35113af71bd0dbb0b27a5fcb8f5
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jul 13 01:39:41 2013 +0200
+
+    Fixes stuck connection during BGP session shutdown.
+    
+    If TX buffers were full during BGP session shutdown
+    then a protocol waited indefinitely to be able to
+    send notification packet to close the session.
+
+commit 354496ace87341428e6005fbc073fbe57b4e6c0e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jul 11 13:50:44 2013 +0200
+
+    Some fixes for TTL security.
+
+commit cc31b75a8fd7949533c12db2c3e9d67eeaf46d10
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jul 9 23:27:10 2013 +0200
+
+    Implements 'bgppath ~ int set' filter op.
+
+commit c01a94663cc18f53fd741c5d44387eead9ca88af
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Jul 7 12:11:42 2013 +0200
+
+    Implements multiple routing table support for FreeBSD and OpenBSD.
+    
+    Inspired by the patch from Alexander V. Chernikov.
+
+commit c6964c305b425b98aaf0492806a28b578d799d83
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jun 29 22:55:41 2013 +0200
+
+    Makes krt.c much more readable.
+
+commit 6ac4f87a2d661c739e55a63577e7bccf696c7abd
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jun 26 14:35:39 2013 +0200
+
+    Documentation for TTL security.
+
+commit 70e212f913b6ce9d343d6c401b4f1712986a5f8c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jun 25 15:33:00 2013 +0200
+
+    Implements TTL security for OSPF and RIP.
+    
+    Interfaces for OSPF and RIP could be configured to use (and request)
+    TTL 255 for traffic to direct neighbors.
+    
+    Thanks to Simon Dickhoven for the original patch for RIPng.
+
+commit ef4a50be10c6dd0abffd957132cd146029c3d79d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jun 24 16:37:30 2013 +0200
+
+    Better packet priority and traffic class handling.
+    
+    Implements support for IPv6 traffic class, sets higher priority for OSPF
+    and RIP outgoing packets by default and allows to configure ToS/DS/TClass
+    IP header field and the local priority of outgoing packets.
+
+commit fad04c750ca6906fb095f1b45958dec0ac8e210c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 13 11:27:14 2013 +0200
+
+    Fixes problems with kernel routes multiple routing tables.
+    
+    Temporary dummy routes created by a kernel protocol during routing table
+    scan get mixed with real routes propagated from another kernel protocol
+    through a pipe.
+
+commit f623ab9875cad2d129f708e95021d3a252930000
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jun 11 12:12:11 2013 +0200
+
+    Implements OSPF stub router option (RFC 3137).
+    
+    Also fixes OSPFv3 routing table calculcation w.r.t.
+    errata 2078 to RFC 5340.
+
+commit 924868543c2010f3ef2cfcb7ba6bac5988ab3264
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue May 28 10:48:14 2013 +0200
+
+    Fixes crash with vlinks.
+
+commit 9810d055628877232f811d684567e203381e10dc
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue May 28 10:44:44 2013 +0200
+
+    Fixes problems with routing table scans on some platforms.
+    
+    Negative bit shifts are definitely undefined oprations.
+
+commit 9c99d753fd672bd9839715ee325ef01cca993dbf
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu May 9 11:11:06 2013 +0200
+
+    Fixes a problem with BGP neighbors, link-local addresses and locking.
+    
+    Thanks to Fritz Grimpen for the bugfix.
+
 commit a2017200c71293d0a28a39d1f250ba38d57f6289
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Apr 29 22:33:50 2013 +0200

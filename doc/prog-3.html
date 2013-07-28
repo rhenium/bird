@@ -239,10 +239,10 @@ is generated using the <CODE>flex</CODE> tool accompanied by a couple of
 functions maintaining the hash tables containing information about
 symbols and keywords.
 <P>Each symbol is represented by a <I>symbol</I> structure containing name
-of the symbol, its lexical scope, symbol class (<I>SYM_PROTO</I> for a name of a protocol,
-<I>SYM_NUMBER</I> for a numeric constant etc.) and class dependent data.
-When an unknown symbol is encountered, it's automatically added to the
-symbol table with class <I>SYM_VOID</I>.
+of the symbol, its lexical scope, symbol class (<I>SYM_PROTO</I> for a
+name of a protocol, <I>SYM_CONSTANT</I> for a constant etc.) and class
+dependent data.  When an unknown symbol is encountered, it's
+automatically added to the symbol table with class <I>SYM_VOID</I>.
 <P>The keyword tables are generated from the grammar templates
 using the <CODE>gen_keywords.m4</CODE> script.
 <P>

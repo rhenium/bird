@@ -61,7 +61,8 @@ protocol rip {
 <DL>
 <DT><CODE>include "<I>filename</I>"</CODE><DD><P>This statement causes inclusion of a new file. The maximal depth is set to 5.
 <P>
-<DT><CODE>log "<I>filename</I>"|syslog [name <I>name</I>]|stderr all|{ <I>list of classes</I> }</CODE><DD><P>Set logging of messages having the given class (either <CODE>all</CODE> or <CODE>{
+<DT><CODE>
+<A NAME="dsc-log"></A> log "<I>filename</I>"|syslog [name <I>name</I>]|stderr all|{ <I>list of classes</I> }</CODE><DD><P>Set logging of messages having the given class (either <CODE>all</CODE> or <CODE>{
 error, trace }</CODE> etc.) into selected destination (a file specified as a filename string,
 syslog with optional name argument, or the stderr output). Classes are:
 <CODE>info</CODE>, <CODE>warning</CODE>, <CODE>error</CODE> and <CODE>fatal</CODE> for messages about local problems,
@@ -104,7 +105,7 @@ defined. Protocol instances (and other templates) can use templates by using <CO
 expression and the name of the template. At the moment templates (and <CODE>from</CODE> expression)
 are not implemented for OSPF protocol.
 <P>
-<DT><CODE>define <I>constant</I> = (<I>expression</I>)|<I>number</I>|<I>IP address</I></CODE><DD><P>Define a constant. You can use it later in every place you could use a simple integer or an IP address.
+<DT><CODE>define <I>constant</I> = <I>expression</I></CODE><DD><P>Define a constant. You can use it later in every place you could use a value of the same type.
 Besides, there are some predefined numeric constants based on /etc/iproute2/rt_* files.
 A list of defined constants can be seen (together with other symbols) using 'show symbols' command.
 <P>
@@ -230,7 +231,7 @@ the protocol to the routing table. <CODE>all</CODE> is shorthand for
 works in the direction from the routing table to the protocol.
 Default: <CODE>none</CODE>.
 <P>
-<DT><CODE>import keep filtered <I>bool</I></CODE><DD><P>Usually, if an import filter rejects a route, the route is
+<DT><CODE>import keep filtered <I>switch</I></CODE><DD><P>Usually, if an import filter rejects a route, the route is
 forgotten. When this option is active, these routes are
 kept in the routing table, but they are hidden and not
 propagated to other protocols. But it is possible to show them
@@ -311,6 +312,21 @@ interfaces that have address from 192.168.0.0/16, but not
 from 192.168.1.0/24.
 <P><CODE>interface "eth*" 192.168.1.0/24;</CODE> - start the protocol on all
 ethernet interfaces that have address from 192.168.1.0/24.
+<P>
+<DT><CODE>
+<A NAME="dsc-prio"></A> tx class|dscp <I>num</I></CODE><DD><P>This option specifies the value of ToS/DS/Class field in IP
+headers of the outgoing protocol packets. This may affect how the
+protocol packets are processed by the network relative to the
+other network traffic. With <CODE>class</CODE> keyword, the value
+(0-255) is used for the whole ToS/Class octet (but two bits
+reserved for ECN are ignored). With <CODE>dscp</CODE> keyword, the
+value (0-63) is used just for the DS field in the
+octet. Default value is 0xc0 (DSCP 0x30 - CS6).
+<P>
+<DT><CODE>tx priority <I>num</I></CODE><DD><P>This option specifies the local packet priority. This may
+affect how the protocol packets are processed in the local TX
+queues. This option is Linux specific. Default value is 7
+(highest priority, privileged traffic).
 <P>
 <DT><CODE>
 <A NAME="dsc-pass"></A> password "<I>password</I>" [ { id <I>num</I>; generate from <I>time</I>; generate to <I>time</I>; accept from <I>time</I>; accept to <I>time</I>; } ]</CODE><DD><P>Specifies a password that can be used by the protocol. Password option can

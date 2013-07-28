@@ -41,8 +41,6 @@ This argument can be omitted if there exists only a single instance.
 <P>Here is a brief list of supported functions:
 <P>
 <DL>
-<DT><CODE>dump resources|sockets|interfaces|neighbors|attributes|routes|protocols</CODE><DD><P>Dump contents of internal data structures to the debugging output.
-<P>
 <DT><CODE>show status</CODE><DD><P>Show router status, that is BIRD version, uptime and time from last reconfiguration.
 <P>
 <DT><CODE>show protocols [all]</CODE><DD><P>Show list of protocol instances along with tables they are connected to and protocol status, possibly giving verbose information, if <CODE>all</CODE> is specified.
@@ -172,6 +170,15 @@ ignored in that case).
 <DT><CODE>down</CODE><DD><P>Shut BIRD down.
 <P>
 <DT><CODE>debug <I>protocol</I>|<I>pattern</I>|all all|off|{ states | routes | filters | events | packets }</CODE><DD><P>Control protocol debugging.
+<P>
+<DT><CODE>dump resources|sockets|interfaces|neighbors|attributes|routes|protocols</CODE><DD><P>Dump contents of internal data structures to the debugging output.
+<P>
+<DT><CODE>echo all|off|{ <I>list of log classes</I> } [ <I>buffer-size</I> ]</CODE><DD><P>Control echoing of log messages to the command-line output.
+See 
+<A HREF="bird-3.html#dsc-log">log option</A> for a list of log classes.
+<P>
+<DT><CODE>eval <I>expr</I></CODE><DD><P>Evaluate given expression.
+<P>
 </DL>
 <P>
 <HR>

@@ -282,7 +282,7 @@ protocol rip {
 	<tag>include "<m/filename/"</tag> 
 	This statement causes inclusion of a new file. The maximal depth is set to 5.
 
-	<tag>log "<m/filename/"|syslog [name <m/name/]|stderr all|{ <m/list of classes/ }</tag> 
+	<tag><label id="dsc-log">log "<m/filename/"|syslog [name <m/name/]|stderr all|{ <m/list of classes/ }</tag> 
 	Set logging of messages having the given class (either <cf/all/ or <cf/{
 	error, trace }/ etc.) into selected destination (a file specified as a filename string,
 	syslog with optional name argument, or the stderr output). Classes are:
@@ -332,8 +332,8 @@ protocol rip {
 	expression and the name of the template. At the moment templates (and <cf/from/ expression)
 	are not implemented for OSPF protocol.
 
-	<tag>define <m/constant/ = (<m/expression/)|<m/number/|<m/IP address/</tag>
-	Define a constant. You can use it later in every place you could use a simple integer or an IP address.
+	<tag>define <m/constant/ = <m/expression/</tag>
+	Define a constant. You can use it later in every place you could use a value of the same type.
 	Besides, there are some predefined numeric constants based on /etc/iproute2/rt_* files.
 	A list of defined constants can be seen (together with other symbols) using 'show symbols' command.
 
@@ -470,7 +470,7 @@ to zero to disable it. An empty <cf><m/switch/</cf> is equivalent to <cf/on/
 	works in the direction from the routing table to the protocol.
 	Default: <cf/none/.
 
-	<tag>import keep filtered <m/bool/</tag>
+	<tag>import keep filtered <m/switch/</tag>
 	Usually, if an import filter rejects a route, the route is
 	forgotten. When this option is active, these routes are
 	kept in the routing table, but they are hidden and not
@@ -567,6 +567,22 @@ to zero to disable it. An empty <cf><m/switch/</cf> is equivalent to <cf/on/
 	<cf>interface "eth*" 192.168.1.0/24;</cf> - start the protocol on all
 	ethernet interfaces that have address from 192.168.1.0/24.
 
+	<tag><label id="dsc-prio">tx class|dscp <m/num/</tag>
+        This option specifies the value of ToS/DS/Class field in IP
+        headers of the outgoing protocol packets. This may affect how the
+        protocol packets are processed by the network relative to the
+        other network traffic. With <cf/class/ keyword, the value
+        (0-255) is used for the whole ToS/Class octet (but two bits
+        reserved for ECN are ignored). With <cf/dscp/ keyword, the
+        value (0-63) is used just for the DS field in the
+        octet. Default value is 0xc0 (DSCP 0x30 - CS6).
+
+	<tag>tx priority <m/num/</tag>
+        This option specifies the local packet priority. This may
+        affect how the protocol packets are processed in the local TX
+        queues. This option is Linux specific. Default value is 7
+        (highest priority, privileged traffic).
+
 	<tag><label id="dsc-pass">password "<m/password/" [ { id <m/num/; generate from <m/time/; generate to <m/time/; accept from <m/time/; accept to <m/time/; } ]</tag>
 	Specifies a password that can be used by the protocol. Password option can
 	be used more times to specify more passwords. If more passwords are
@@ -635,9 +651,6 @@ This argument can be omitted if there exists only a single instance.
 <p>Here is a brief list of supported functions:
 
 <descrip>
-	<tag>dump resources|sockets|interfaces|neighbors|attributes|routes|protocols</tag>
-	Dump contents of internal data structures to the debugging output.
-
 	<tag>show status</tag>
 	Show router status, that is BIRD version, uptime and time from last reconfiguration.
 
@@ -796,6 +809,17 @@ This argument can be omitted if there exists only a single instance.
 
 	<tag>debug <m/protocol/|<m/pattern/|all all|off|{ states | routes | filters | events | packets }</tag>
 	Control protocol debugging.
+
+	<tag>dump resources|sockets|interfaces|neighbors|attributes|routes|protocols</tag>
+	Dump contents of internal data structures to the debugging output.
+
+	<tag>echo all|off|{ <m/list of log classes/ } [ <m/buffer-size/ ]</tag>
+	Control echoing of log messages to the command-line output.
+	See <ref id="dsc-log" name="log option"> for a list of log classes.
+
+	<tag>eval <m/expr/</tag>
+	Evaluate given expression.
+
 </descrip>
 
 <chapt>Filters
@@ -1074,7 +1098,7 @@ incompatible with each other (that is to prevent you from shooting in the foot).
 Special operators include <cf/&tilde;/ for "is element of a set" operation - it can be
 used on element and set of elements of the same type (returning true if element is contained in the given set), or
 on two strings (returning true if first string matches a shell-like pattern stored in second string) or on IP and prefix (returning true if IP is within the range defined by that prefix), or on
-prefix and prefix (returning true if first prefix is more specific than second one) or on bgppath and bgpmask (returning true if the path matches the mask) or on number and bgppath (returning true if the number is in the path) or on pair/quad and clist (returning true if the pair/quad is element of the clist) or on clist and pair/quad set (returning true if there is an element of the clist that is also a member of the pair/quad set).
+prefix and prefix (returning true if first prefix is more specific than second one) or on bgppath and bgpmask (returning true if the path matches the mask) or on number and bgppath (returning true if the number is in the path) or on bgppath and int (number) set (returning true if any ASN from the path is in the set) or on pair/quad and clist (returning true if the pair/quad is element of the clist) or on clist and pair/quad set (returning true if there is an element of the clist that is also a member of the pair/quad set).
 
 <p>There is one operator related to ROA infrastructure -
 <cf/roa_check()/. It examines a ROA table and does RFC 6483 route
@@ -1904,6 +1928,7 @@ on nonbroadcast networks.
 <code>
 protocol ospf &lt;name&gt; {
 	rfc1583compat &lt;switch&gt;;
+	stub router &lt;switch&gt;;
 	tick &lt;num&gt;;
 	ecmp &lt;switch&gt; [limit &lt;num&gt;];
 	area &lt;id&gt; {
@@ -1949,6 +1974,9 @@ protocol ospf &lt;name&gt; {
 			ptp netmask &lt;switch&gt;;
 			check link &lt;switch&gt;;
 			ecmp weight &lt;num&gt;;
+			ttl security [&lt;switch&gt;; | tx only]
+			tx class|dscp &lt;num&gt;;
+			tx priority &lt;num&gt;;
 			authentication [none|simple|cryptographic];
 			password "&lt;text&gt;";
 			password "&lt;text&gt;" {
@@ -1982,6 +2010,15 @@ protocol ospf &lt;name&gt; {
 	 calculation with RFC 1583<htmlurl
 	 url="ftp://ftp.rfc-editor.org/in-notes/rfc1583.txt">. Default
 	 value is no.
+
+	<tag>stub router <M>switch</M></tag>
+	 This option configures the router to be a stub router, i.e.,
+	 a router that participates in the OSPF topology but does not
+	 allow transit traffic. In OSPFv2, this is implemented by
+	 advertising maximum metric for outgoing links, as suggested
+	 by RFC 3137<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc3137.txt">.
+	 In OSPFv3, the stub router behavior is announced by clearing
+	 the R-bit in the router LSA. Default value is no.
 
 	<tag>tick <M>num</M></tag>
 	 The routing table calculation and clean-up of areas' databases
@@ -2210,6 +2247,25 @@ protocol ospf &lt;name&gt; {
 	 prefix) is propagated. It is possible that some hardware
 	 drivers or platforms do not implement this feature. Default value is no.
 
+	<tag>ttl security [<m/switch/ | tx only]</tag>
+	 TTL security is a feature that protects routing protocols
+	 from remote spoofed packets by using TTL 255 instead of TTL 1
+	 for protocol packets destined to neighbors. Because TTL is
+	 decremented when packets are forwarded, it is non-trivial to
+	 spoof packets with TTL 255 from remote locations. Note that
+	 this option would interfere with OSPF virtual links.
+
+	 If this option is enabled, the router will send OSPF packets
+	 with TTL 255 and drop received packets with TTL less than
+	 255. If this option si set to <cf/tx only/, TTL 255 is used
+	 for sent packets, but is not checked for received
+	 packets. Default value is no.
+
+	<tag>tx class|dscp|priority <m/num/</tag>
+         These options specify the ToS/DiffServ/Traffic class/Priority
+         of the outgoing OSPF packets. See <ref id="dsc-prio" name="tx
+         class"> common option for detailed description.
+
 	<tag>ecmp weight <M>num</M></tag>
 	 When ECMP (multipath) routes are allowed, this value specifies
 	 a relative weight used for nexthops going through the iface.
@@ -2371,7 +2427,7 @@ another one.
 	<tag>peer table <m/table/</tag> Defines secondary routing table to connect to. The
 	primary one is selected by the <cf/table/ keyword.
 
-	<tag>mode opaque|transparent</tag> Specifies the mode for the pipe to work in. Default is opaque.
+	<tag>mode opaque|transparent</tag> Specifies the mode for the pipe to work in. Default is transparent.
 </descrip>
 
 <sect1>Attributes
@@ -2738,13 +2794,46 @@ makes it pretty much obsolete. (It is still usable on very small networks.)
 	  neighbors, that is not configurable. Default: never.
 </descrip>
 
-<p>There are two options that can be specified per-interface. First is <cf>metric</cf>, with
-default one.  Second is <cf>mode multicast|broadcast|quiet|nolisten|version1</cf>, it selects mode for
-rip to work in. If nothing is specified, rip runs in multicast mode. <cf>version1</cf> is
-currently equivalent to <cf>broadcast</cf>, and it makes RIP talk to a broadcast address even
-through multicast mode is possible. <cf>quiet</cf> option means that RIP will not transmit
-any periodic messages to this interface and <cf>nolisten</cf> means that RIP will send to this
-interface but not listen to it.
+<p>There are some options that can be specified per-interface:
+
+<descrip>
+	<tag>metric <m/num/</tag>
+	  This option specifies the metric of the interface. Valid
+
+	<tag>mode multicast|broadcast|quiet|nolisten|version1</tag>
+	  This option selects the mode for RIP to work in. If nothing is
+	  specified, RIP runs in multicast mode. <cf/version1/ is
+	  currently equivalent to <cf/broadcast/, and it makes RIP talk
+	  to a broadcast address even through multicast mode is
+	  possible. <cf/quiet/ option means that RIP will not transmit
+	  any periodic messages to this interface and <cf/nolisten/
+	  means that RIP will send to this interface butnot listen to it.
+
+	<tag>ttl security [<m/switch/ | tx only]</tag>
+	 TTL security is a feature that protects routing protocols
+	 from remote spoofed packets by using TTL 255 instead of TTL 1
+	 for protocol packets destined to neighbors. Because TTL is
+	 decremented when packets are forwarded, it is non-trivial to
+	 spoof packets with TTL 255 from remote locations.
+
+	 If this option is enabled, the router will send RIP packets
+	 with TTL 255 and drop received packets with TTL less than
+	 255. If this option si set to <cf/tx only/, TTL 255 is used
+	 for sent packets, but is not checked for received
+	 packets. Such setting does not offer protection, but offers
+	 compatibility with neighbors regardless of whether they use
+	 ttl security.
+
+	 Note that for RIPng, TTL security is a standard behavior
+	 (required by RFC 2080), but BIRD uses <cf/tx only/ by
+	 default, for compatibility with older versions. For IPv4 RIP,
+	 default value is no.
+
+	<tag>tx class|dscp|priority <m/num/</tag>
+          These options specify the ToS/DiffServ/Traffic class/Priority
+          of the outgoing RIP packets. See <ref id="dsc-prio" name="tx
+          class"> common option for detailed description.
+</descrip>
 
 <p>The following options generally override behavior specified in RFC. If you use any of these
 options, BIRD will no longer be RFC-compliant, which means it will not be able to talk to anything
