@@ -1,7 +1,7 @@
---- a/sysdep/unix/io.c
-+++ b/sysdep/unix/io.c
-@@ -688,6 +688,10 @@ get_sockaddr(struct sockaddr_in *sa, ip_
- #define IPV6_RECVPKTINFO IPV6_PKTINFO
+--- bird.orig/sysdep/unix/io.c
++++ bird/sysdep/unix/io.c
+@@ -694,6 +694,10 @@ get_sockaddr(struct sockaddr_in *sa, ip_
+ #define IPV6_RECVHOPLIMIT IPV6_HOPLIMIT
  #endif
  
 +#ifndef IPV6_RECVPKTINFO

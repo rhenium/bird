@@ -1,5 +1,5 @@
---- a/tools/Makefile.in
-+++ b/tools/Makefile.in
+--- bird.orig/tools/Makefile.in
++++ bird/tools/Makefile.in
 @@ -69,10 +69,10 @@ tags:
  
  install: all

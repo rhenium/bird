@@ -1,5 +1,5 @@
---- a/tools/Rules.in
-+++ b/tools/Rules.in
+--- bird.orig/tools/Rules.in
++++ bird/tools/Rules.in
 @@ -66,9 +66,7 @@ else
  subdir: all.o
  

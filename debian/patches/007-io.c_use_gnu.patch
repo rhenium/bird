@@ -1,5 +1,5 @@
---- a/sysdep/unix/io.c
-+++ b/sysdep/unix/io.c
+--- bird.orig/sysdep/unix/io.c
++++ bird/sysdep/unix/io.c
 @@ -11,6 +11,8 @@
     if _GNU_SOURCE is not defined. */
  #define _GNU_SOURCE 1
