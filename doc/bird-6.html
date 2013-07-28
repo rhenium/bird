@@ -743,6 +743,7 @@ on nonbroadcast networks.
 <PRE>
 protocol ospf &lt;name&gt; {
         rfc1583compat &lt;switch&gt;;
+        stub router &lt;switch&gt;;
         tick &lt;num&gt;;
         ecmp &lt;switch&gt; [limit &lt;num&gt;];
         area &lt;id&gt; {
@@ -788,6 +789,9 @@ protocol ospf &lt;name&gt; {
                         ptp netmask &lt;switch&gt;;
                         check link &lt;switch&gt;;
                         ecmp weight &lt;num&gt;;
+                        ttl security [&lt;switch&gt;; | tx only]
+                        tx class|dscp &lt;num&gt;;
+                        tx priority &lt;num&gt;;
                         authentication [none|simple|cryptographic];
                         password "&lt;text&gt;";
                         password "&lt;text&gt;" {
@@ -821,6 +825,15 @@ protocol ospf &lt;name&gt; {
 calculation with RFC 1583
 <A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc1583.txt">ftp://ftp.rfc-editor.org/in-notes/rfc1583.txt</A>. Default
 value is no.
+<P>
+<DT><CODE>stub router <I>switch</I></CODE><DD><P>This option configures the router to be a stub router, i.e.,
+a router that participates in the OSPF topology but does not
+allow transit traffic. In OSPFv2, this is implemented by
+advertising maximum metric for outgoing links, as suggested
+by RFC 3137
+<A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc3137.txt">ftp://ftp.rfc-editor.org/in-notes/rfc3137.txt</A>.
+In OSPFv3, the stub router behavior is announced by clearing
+the R-bit in the router LSA. Default value is no.
 <P>
 <DT><CODE>tick <I>num</I></CODE><DD><P>The routing table calculation and clean-up of areas' databases
 is not performed when a single link state
@@ -1015,6 +1028,22 @@ and only the address of the iface (instead of whole network
 prefix) is propagated. It is possible that some hardware
 drivers or platforms do not implement this feature. Default value is no.
 <P>
+<DT><CODE>ttl security [<I>switch</I> | tx only]</CODE><DD><P>TTL security is a feature that protects routing protocols
+from remote spoofed packets by using TTL 255 instead of TTL 1
+for protocol packets destined to neighbors. Because TTL is
+decremented when packets are forwarded, it is non-trivial to
+spoof packets with TTL 255 from remote locations. Note that
+this option would interfere with OSPF virtual links.
+<P>If this option is enabled, the router will send OSPF packets
+with TTL 255 and drop received packets with TTL less than
+255. If this option si set to <CODE>tx only</CODE>, TTL 255 is used
+for sent packets, but is not checked for received
+packets. Default value is no.
+<P>
+<DT><CODE>tx class|dscp|priority <I>num</I></CODE><DD><P>These options specify the ToS/DiffServ/Traffic class/Priority
+of the outgoing OSPF packets. See 
+<A HREF="bird-3.html#dsc-prio">tx          class</A> common option for detailed description.
+<P>
 <DT><CODE>ecmp weight <I>num</I></CODE><DD><P>When ECMP (multipath) routes are allowed, this value specifies
 a relative weight used for nexthops going through the iface.
 Allowed values are 1-256. Default value is 1.
@@ -1174,7 +1203,7 @@ another one.
 <DT><CODE>peer table <I>table</I></CODE><DD><P>Defines secondary routing table to connect to. The
 primary one is selected by the <CODE>table</CODE> keyword.
 <P>
-<DT><CODE>mode opaque|transparent</CODE><DD><P>Specifies the mode for the pipe to work in. Default is opaque.
+<DT><CODE>mode opaque|transparent</CODE><DD><P>Specifies the mode for the pipe to work in. Default is transparent.
 </DL>
 <P>
 <H3>Attributes</H3>
@@ -1530,13 +1559,40 @@ network or never.) Routing table updates are honored only from
 neighbors, that is not configurable. Default: never.
 </DL>
 <P>
-<P>There are two options that can be specified per-interface. First is <CODE>metric</CODE>, with
-default one.  Second is <CODE>mode multicast|broadcast|quiet|nolisten|version1</CODE>, it selects mode for
-rip to work in. If nothing is specified, rip runs in multicast mode. <CODE>version1</CODE> is
-currently equivalent to <CODE>broadcast</CODE>, and it makes RIP talk to a broadcast address even
-through multicast mode is possible. <CODE>quiet</CODE> option means that RIP will not transmit
-any periodic messages to this interface and <CODE>nolisten</CODE> means that RIP will send to this
-interface but not listen to it.
+<P>There are some options that can be specified per-interface:
+<P>
+<DL>
+<DT><CODE>metric <I>num</I></CODE><DD><P>This option specifies the metric of the interface. Valid
+<P>
+<DT><CODE>mode multicast|broadcast|quiet|nolisten|version1</CODE><DD><P>This option selects the mode for RIP to work in. If nothing is
+specified, RIP runs in multicast mode. <CODE>version1</CODE> is
+currently equivalent to <CODE>broadcast</CODE>, and it makes RIP talk
+to a broadcast address even through multicast mode is
+possible. <CODE>quiet</CODE> option means that RIP will not transmit
+any periodic messages to this interface and <CODE>nolisten</CODE>
+means that RIP will send to this interface butnot listen to it.
+<P>
+<DT><CODE>ttl security [<I>switch</I> | tx only]</CODE><DD><P>TTL security is a feature that protects routing protocols
+from remote spoofed packets by using TTL 255 instead of TTL 1
+for protocol packets destined to neighbors. Because TTL is
+decremented when packets are forwarded, it is non-trivial to
+spoof packets with TTL 255 from remote locations.
+<P>If this option is enabled, the router will send RIP packets
+with TTL 255 and drop received packets with TTL less than
+255. If this option si set to <CODE>tx only</CODE>, TTL 255 is used
+for sent packets, but is not checked for received
+packets. Such setting does not offer protection, but offers
+compatibility with neighbors regardless of whether they use
+ttl security.
+<P>Note that for RIPng, TTL security is a standard behavior
+(required by RFC 2080), but BIRD uses <CODE>tx only</CODE> by
+default, for compatibility with older versions. For IPv4 RIP,
+default value is no.
+<P>
+<DT><CODE>tx class|dscp|priority <I>num</I></CODE><DD><P>These options specify the ToS/DiffServ/Traffic class/Priority
+of the outgoing RIP packets. See 
+<A HREF="bird-3.html#dsc-prio">tx           class</A> common option for detailed description.
+</DL>
 <P>
 <P>The following options generally override behavior specified in RFC. If you use any of these
 options, BIRD will no longer be RFC-compliant, which means it will not be able to talk to anything

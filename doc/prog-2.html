@@ -357,10 +357,16 @@ routing table module.
 (<B>void</B>) --     prune routing tables
 <P>
 <H3>Description</H3>
+<P>
 <P>The prune loop scans routing tables and removes routes belonging to
-inactive protocols and also stale network entries. Returns 1 when
+flushing protocols and also stale network entries. Returns 1 when
 all such routes are pruned. It is a part of the protocol flushing
 loop.
+<P>The prune loop runs in two steps. In the first step it prunes just
+the routes with flushing senders (in explicitly marked tables) so
+the route removal is propagated as usual. In the second step, all
+remaining relevant routes are removed. Ideally, there shouldn't be
+any, but it happens when pipe filters are changed.
 
 
 <HR><H3>Function</H3>

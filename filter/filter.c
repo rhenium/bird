@@ -418,6 +418,9 @@ val_in_range(struct f_val v1, struct f_val v2)
   if ((v1.type == T_ECLIST) && (v2.type == T_SET))
     return eclist_match_set(v1.val.ad, v2.val.t);
 
+  if ((v1.type == T_PATH) && (v2.type == T_SET))
+    return as_path_match_set(v1.val.ad, v2.val.t);
+
   if (v2.type == T_SET)
     switch (v1.type) {
     case T_ENUM:
@@ -436,8 +439,6 @@ val_in_range(struct f_val v1, struct f_val v2)
     }
   return CMP_ERROR;
 }
-
-static void val_print(struct f_val v);
 
 static void
 tree_node_print(struct f_tree *t, char **sep)
@@ -471,7 +472,7 @@ tree_print(struct f_tree *t)
 /*
  * val_print - format filter value
  */
-static void
+void
 val_print(struct f_val v)
 {
   char buf2[1024];
@@ -555,6 +556,8 @@ static struct rate_limit rl_runtime_err;
 #define TWOARGS_C TWOARGS \
                   if (v1.type != v2.type) \
 		    runtime( "Can't operate with values of incompatible types" );
+#define ACCESS_RTE \
+  do { if (!f_rte) runtime("No route to access"); } while (0)
 
 /**
  * interpret
@@ -818,6 +821,7 @@ interpret(struct f_inst *what)
     break;
   case 'a':	/* rta access */
     {
+      ACCESS_RTE;
       struct rta *rta = (*f_rte)->attrs;
       res.type = what->aux;
       switch(res.type) {
@@ -842,6 +846,7 @@ interpret(struct f_inst *what)
     }
     break;
   case P('a','S'):
+    ACCESS_RTE;
     ONEARG;
     if (what->aux != v1.type)
       runtime( "Attempt to set static attribute to incompatible type" );
@@ -874,6 +879,7 @@ interpret(struct f_inst *what)
     }
     break;
   case P('e','a'):	/* Access to extended attributes */
+    ACCESS_RTE;
     {
       eattr *e = NULL;
       if (!(f_flags & FF_FORCE_TMPATTR))
@@ -941,6 +947,7 @@ interpret(struct f_inst *what)
     }
     break;
   case P('e','S'):
+    ACCESS_RTE;
     ONEARG;
     {
       struct ea_list *l = lp_alloc(f_pool, sizeof(struct ea_list) + sizeof(eattr));
@@ -1018,10 +1025,12 @@ interpret(struct f_inst *what)
     }
     break;
   case 'P':
+    ACCESS_RTE;
     res.type = T_INT;
     res.val.i = (*f_rte)->pref;
     break;
   case P('P','S'):
+    ACCESS_RTE;
     ONEARG;
     if (v1.type != T_INT)
       runtime( "Can't set preference to non-integer" );
@@ -1243,6 +1252,7 @@ interpret(struct f_inst *what)
     }
     else
     {
+      ACCESS_RTE;
       v1.val.px.ip = (*f_rte)->net->n.prefix;
       v1.val.px.len = (*f_rte)->net->n.pxlen;
 
@@ -1475,22 +1485,27 @@ f_run(struct filter *filter, struct rte **rte, struct ea_list **tmp_attrs, struc
   return res.val.i;
 }
 
+struct f_val
+f_eval(struct f_inst *expr, struct linpool *tmp_pool)
+{
+  f_flags = 0;
+  f_tmp_attrs = NULL;
+  f_rte = NULL;
+  f_pool = tmp_pool;
+
+  log_reset();
+  return interpret(expr);
+}
+
 int
 f_eval_int(struct f_inst *expr)
 {
   /* Called independently in parse-time to eval expressions */
-  struct f_val res;
-
-  f_flags = 0;
-  f_tmp_attrs = NULL;
-  f_rte = NULL;
-  f_pool = cfg_mem;
-
-  log_reset();
-  res = interpret(expr);
+  struct f_val res = f_eval(expr, cfg_mem);
 
   if (res.type != T_INT)
     cf_error("Integer expression expected");
+
   return res.val.i;
 }
 
