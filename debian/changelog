@@ -1,3 +1,10 @@
+bird (1.3.11-1) unstable; urgency=low
+
+  * New upstream version 1.3.11
+  * Update patches for 1.3.11 release
+
+ -- Ondřej Surý <ondrej@debian.org>  Sun, 28 Jul 2013 21:17:09 +0200
+
 bird (1.3.10-2) unstable; urgency=low
 
   * Reword the descriptions (Courtesy of Justin B Rye) (Closes: #651283)
