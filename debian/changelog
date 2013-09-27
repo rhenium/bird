@@ -1,3 +1,21 @@
+bird (1.3.11-2) unstable; urgency=low
+
+  * Convert package to 3.0 (quilt) source format
+  * Merge bird6 package into bird and make bird6 package transitional
+  * Add bird-bgp package that has only BGP protocol enabled
+  * Remove --with quilt since it's not needed with higher dh compatibility
+    levels
+  * Remove README.source since quilt patches are now default
+  * Also add bird-bgp-dbg package
+  * Add some optimalizations to debian/rules default GCC flags
+  * debian/rules: Reautoconfize the sources by default
+  * Update copyright to machine readable format
+  * Add build dependency on debhelper >= 9~ and drop quilt dependency
+  * Drop support for $VERBOSE variable in init scripts and don't call
+    internal init API anymore
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 30 Sep 2013 13:52:00 +0200
+
 bird (1.3.11-1) unstable; urgency=low
 
   * New upstream version 1.3.11
