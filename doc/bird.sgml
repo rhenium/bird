@@ -408,8 +408,8 @@ protocol rip {
 	entries. The option may be used multiple times. Other entries
 	can be added dynamically by <cf/add roa/ command.
 
-	<tag>eval <m/expr/</tag> Evaluates given filter expression. It
-	is used by us for testing of filters.
+	<tag>eval <m/expr/</tag>
+	Evaluates given filter expression. It is used by us for	testing of filters.
 </descrip>
 
 <sect>Protocol options
@@ -443,7 +443,6 @@ to zero to disable it. An empty <cf><m/switch/</cf> is equivalent to <cf/on/
 	<cf/packets/ for packets sent and received by the protocol. Default: off.
 
 	<tag>mrtdump all|off|{ states, messages }</tag>
-
 	Set protocol MRTdump flags. MRTdump is a standard binary
 	format for logging information from routing protocols and
 	daemons.  These flags control what kind of information is
@@ -455,9 +454,9 @@ to zero to disable it. An empty <cf><m/switch/</cf> is equivalent to <cf/on/
 	state changes and <cf/messages/ logs received BGP messages.
 	Other protocols does not support MRTdump yet.
 
-	<tag>router id <m/IPv4 address/</tag> This option can be used
-	to override global router id for a given protocol. Default:
-	uses global router id.
+	<tag>router id <m/IPv4 address/</tag>
+	This option can be used to override global router id for a
+	given protocol. Default: uses global router id.
 
 	<tag>import all | none | filter <m/name/ | filter { <m/filter commands/ } | where <m/filter expression/</tag> 
 	Specify a filter to be used for filtering routes coming from
@@ -478,7 +477,7 @@ to zero to disable it. An empty <cf><m/switch/</cf> is equivalent to <cf/on/
 	using <cf/show route filtered/. Note that this option does not
 	work for the pipe protocol. Default: off.
 
-	<tag>import limit [<m/number/ | off ] [action warn | block | restart | disable]</tag>
+	<tag><label id="import-limit">import limit [<m/number/ | off ] [action warn | block | restart | disable]</tag>
 	Specify an import route limit (a maximum number of routes
 	imported from the protocol) and optionally the action to be
 	taken when the limit is hit. Warn action just prints warning
@@ -511,11 +510,12 @@ to zero to disable it. An empty <cf><m/switch/</cf> is equivalent to <cf/on/
 	accepted routes -- and these details will probably change in
 	the future. Default: <cf/off/.
 
-	<tag>description "<m/text/"</tag> This is an optional
-	description of the protocol. It is displayed as a part of the
-	output of 'show route all' command.
+	<tag>description "<m/text/"</tag>
+	This is an optional description of the protocol. It is
+	displayed as a part of the output of 'show route all' command.
 
-	<tag>table <m/name/</tag> Connect this protocol to a non-default routing table.
+	<tag>table <m/name/</tag>
+	Connect this protocol to a non-default routing table.
 </descrip>
 
 <p>There are several options that give sense only with certain protocols:
@@ -928,10 +928,16 @@ incompatible with each other (that is to prevent you from shooting in the foot).
 	  from 0 to 255. Literals of this type are written like IPv4
 	  addresses.
 
-	<tag/string/ This is a string of characters. There are no ways to modify strings in
-	  filters. You can pass them between functions, assign them to variables of type <cf/string/, print
-	  such variables, but you can't concatenate two strings. String literals
-	  are written as <cf/"This is a string constant"/.
+	<tag/string/ This is a string of characters. There are no ways
+	  to modify strings in filters. You can pass them between
+	  functions, assign them to variables of type <cf/string/,
+	  print such variables, use standard string comparison
+	  operations (e.g. <cf/=, !=, &lt;, &gt;, &lt;=, &gt;=/), but
+	  you can't concatenate two strings. String literals are
+	  written as <cf/"This is a string constant"/. Additionaly
+	  matching <cf/&tilde;/ operator could be used to match a
+	  string value against a shell pattern (represented also as a
+	  string).
 
 	<tag/ip/ This type can hold a single IP address. Depending on the compile-time configuration of BIRD you are using, it
 	  is either an IPv4 or IPv6 address. IP addresses are written in the standard notation (<cf/10.20.30.40/ or <cf/fec0:3:4::1/). You can apply special operator <cf>.mask(<M>num</M>)</cf>
@@ -1033,10 +1039,23 @@ incompatible with each other (that is to prevent you from shooting in the foot).
 
           <cf><m/P/.len</cf> returns the length of path <m/P/.
 
-          <cf>prepend(<m/P/,<m/A/)</cf> prepends ASN <m/A/ to path <m/P/ and returns the result.
+          <cf>prepend(<m/P/,<m/A/)</cf> prepends ASN <m/A/ to path
+          <m/P/ and returns the result.
+
+          <cf>delete(<m/P/,<m/A/)</cf> deletes all instances of ASN
+	  <m/A/ from from path <m/P/ and returns the result.
+	  <m/A/ may also be an integer set, in that case the
+	  operator deletes all ASNs from path <m/P/ that are also
+	  members of set <m/A/.
+
+          <cf>filter(<m/P/,<m/A/)</cf> deletes all ASNs from path
+	  <m/P/ that are not members of integer set <m/A/.
+	  I.e., <cf/filter/ do the same as <cf/delete/ with inverted
+	  set <m/A/.
+
           Statement <cf><m/P/ = prepend(<m/P/, <m/A/);</cf> can be shortened to
           <cf><m/P/.prepend(<m/A/);</cf> if <m/P/ is appropriate route attribute
-          (for example <cf/bgp_path/).
+          (for example <cf/bgp_path/). Similarly for <cf/delete/ and <cf/filter/.
 
 	<tag/bgpmask/
 	  BGP masks are patterns used for BGP path matching
@@ -1169,7 +1188,7 @@ undefined value is regarded as empty clist for most purposes.
 	Preference of the route. Valid values are 0-65535. (See the chapter about routing tables.)
 
 	<tag><m/ip/ from</tag>
-	The router which the route has originated from. Read-only.
+	The router which the route has originated from.
 	
 	<tag><m/ip/ gw</tag>
 	Next hop packets routed using this route should be forwarded to.
@@ -1181,7 +1200,6 @@ undefined value is regarded as empty clist for most purposes.
 	what protocol has told me about this route. Possible values: <cf/RTS_DUMMY/, <cf/RTS_STATIC/, <cf/RTS_INHERIT/, <cf/RTS_DEVICE/, <cf/RTS_STATIC_DEVICE/, <cf/RTS_REDIRECT/, <cf/RTS_RIP/, <cf/RTS_OSPF/, <cf/RTS_OSPF_IA/, <cf/RTS_OSPF_EXT1/, <cf/RTS_OSPF_EXT2/, <cf/RTS_BGP/, <cf/RTS_PIPE/.
 
 	<tag><m/enum/ cast</tag>
-
 	Route type (Currently <cf/RTC_UNICAST/ for normal routes,
 	<cf/RTC_BROADCAST/, <cf/RTC_MULTICAST/, <cf/RTC_ANYCAST/ will
 	be used in the future for broadcast, multicast and anycast
@@ -1198,6 +1216,19 @@ undefined value is regarded as empty clist for most purposes.
 	administratively prohibited messages). Can be changed, but
 	only to <cf/RTD_BLACKHOLE/, <cf/RTD_UNREACHABLE/ or
 	<cf/RTD_PROHIBIT/.
+
+	<tag><m/string/ ifname</tag>
+	Name of the outgoing interface. Sink routes (like blackhole,
+	unreachable or prohibit) and multipath routes have no interface
+	associated with them, so <cf/ifname/ returns an empty string for
+	such routes. Read-only.
+
+	<tag><m/int/ ifindex</tag>
+	Index of the outgoing interface. System wide index of the
+	interface. May be used for interface matching, however
+	indexes might change on interface creation/removal. Zero is
+	returned for routes with undefined outgoing
+	interfaces. Read-only.
 
 	<tag><m/int/ igp_metric</tag>
 	The optional attribute that can be used to specify a distance
@@ -1496,8 +1527,9 @@ for each neighbor using the following configuration parameters:
 
 	<tag>route limit <m/number/</tag> The maximal number of routes
 	that may be imported from the protocol. If the route limit is
-	exceeded, the connection is closed with error. Limit is currently implemented as
-	<cf/import limit number exceed restart/. Default: no limit.
+	exceeded, the connection is closed with an error. Limit is currently implemented as
+	<cf/import limit <m/number/ action restart/. This option is obsolete and it is
+        replaced by <ref id="import-limit" name="import limit option">.  Default: no limit.
 
 	<tag>disable after error <m/switch/</tag> When an error is encountered (either
 	locally or by the other side), disable the instance automatically

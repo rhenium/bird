@@ -824,24 +824,23 @@ interpret(struct f_inst *what)
       ACCESS_RTE;
       struct rta *rta = (*f_rte)->attrs;
       res.type = what->aux;
-      switch(res.type) {
-      case T_IP:
-	res.val.px.ip = * (ip_addr *) ((char *) rta + what->a2.i);
-	break;
-      case T_ENUM:
-	res.val.i = * ((char *) rta + what->a2.i);
-	break;
-      case T_STRING:	/* Warning: this is a special case for proto attribute */
-	res.val.s = rta->proto->name;
-	break;
-      case T_PREFIX:	/* Warning: this works only for prefix of network */
-	{
-	  res.val.px.ip = (*f_rte)->net->n.prefix;
-	  res.val.px.len = (*f_rte)->net->n.pxlen;
-	  break;
-	}
+
+      switch (what->a2.i)
+      {
+      case SA_FROM:	res.val.px.ip = rta->from; break;
+      case SA_GW:	res.val.px.ip = rta->gw; break;
+      case SA_NET:	res.val.px.ip = (*f_rte)->net->n.prefix;
+			res.val.px.len = (*f_rte)->net->n.pxlen; break;
+      case SA_PROTO:	res.val.s = rta->proto->name; break;
+      case SA_SOURCE:	res.val.i = rta->source; break;
+      case SA_SCOPE:	res.val.i = rta->scope; break;
+      case SA_CAST:	res.val.i = rta->cast; break;
+      case SA_DEST:	res.val.i = rta->dest; break;
+      case SA_IFNAME:	res.val.s = rta->iface ? rta->iface->name : ""; break;
+      case SA_IFINDEX:	res.val.i = rta->iface ? rta->iface->index : 0; break;
+
       default:
-	bug( "Invalid type for rta access (%x)", res.type );
+	bug("Invalid static attribute access (%x)", res.type);
       }
     }
     break;
@@ -850,31 +849,50 @@ interpret(struct f_inst *what)
     ONEARG;
     if (what->aux != v1.type)
       runtime( "Attempt to set static attribute to incompatible type" );
+
     f_rta_cow();
     {
       struct rta *rta = (*f_rte)->attrs;
-      switch (what->aux) {
 
-      case T_IP:
-	* (ip_addr *) ((char *) rta + what->a2.i) = v1.val.px.ip;
+      switch (what->a2.i)
+      {
+      case SA_FROM:
+	rta->from = v1.val.px.ip;
 	break;
 
-      case T_ENUM_SCOPE:
+      case SA_GW:
+	{
+	  ip_addr ip = v1.val.px.ip;
+	  neighbor *n = neigh_find(rta->proto, &ip, 0);
+	  if (!n || (n->scope == SCOPE_HOST))
+	    runtime( "Invalid gw address" );
+
+	  rta->dest = RTD_ROUTER;
+	  rta->gw = ip;
+	  rta->iface = n->iface;
+	  rta->nexthops = NULL;
+	  rta->hostentry = NULL;
+	}
+	break;
+
+      case SA_SCOPE:
 	rta->scope = v1.val.i;
 	break;
 
-      case T_ENUM_RTD:
+      case SA_DEST:
 	i = v1.val.i;
 	if ((i != RTD_BLACKHOLE) && (i != RTD_UNREACHABLE) && (i != RTD_PROHIBIT))
 	  runtime( "Destination can be changed only to blackhole, unreachable or prohibit" );
+
 	rta->dest = i;
 	rta->gw = IPA_NONE;
 	rta->iface = NULL;
 	rta->nexthops = NULL;
+	rta->hostentry = NULL;
 	break;
 
       default:
-	bug( "Unknown type in set of static attribute" );
+	bug("Invalid static attribute access (%x)", res.type);
       }
     }
     break;
@@ -1144,7 +1162,34 @@ interpret(struct f_inst *what)
 
   case P('C','a'):	/* (Extended) Community list add or delete */
     TWOARGS;
-    if (v1.type == T_CLIST)
+    if (v1.type == T_PATH)
+    {
+      struct f_tree *set = NULL;
+      u32 key = 0;
+      int pos;
+
+      if (v2.type == T_INT)
+	key = v2.val.i;
+      else if ((v2.type == T_SET) && (v2.val.t->from.type == T_INT))
+	set = v2.val.t;
+      else
+	runtime("Can't delete non-integer (set)");
+
+      switch (what->aux)
+      {
+      case 'a':	runtime("Can't add to path");
+      case 'd':	pos = 0; break;
+      case 'f':	pos = 1; break;
+      default:	bug("unknown Ca operation");
+      }
+
+      if (pos && !set)
+	runtime("Can't filter integer");
+
+      res.type = T_PATH;
+      res.val.ad = as_path_filter(f_pool, v1.val.ad, set, key, pos);
+    }
+    else if (v1.type == T_CLIST)
     {
       /* Community (or cluster) list */
       struct f_val dummy;
@@ -1365,8 +1410,31 @@ i_same(struct f_inst *f1, struct f_inst *f2)
     }
     break;
   case 'C': 
-    if (val_compare(* (struct f_val *) f1->a1.p, * (struct f_val *) f2->a1.p))
-      return 0;
+    {
+      struct f_val *v1 = (struct f_val *) f1->a1.p;
+      struct f_val *v2 = (struct f_val *) f2->a1.p;
+
+      /* Handle some cases that are not handled by val_compare()
+         also T_PATH, T_CLIST and T_ECLIST does not work,
+         but you cannot easily create such constants */
+
+      if ((v1->type == T_SET) && (v2->type == T_SET))
+      {
+	if (!same_tree(v1->val.t, v2->val.t))
+	  return 0;
+	break;
+      }
+
+      if ((v1->type == T_PREFIX_SET) && (v2->type == T_PREFIX_SET))
+      {
+	if (!trie_same(v1->val.ti, v2->val.ti))
+	  return 0;
+	break;
+      }
+
+      if (val_compare(*v1 , *v2))
+	return 0;
+    }
     break;
   case 'V': 
     if (strcmp((char *) f1->a2.p, (char *) f2->a2.p))
