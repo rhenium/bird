@@ -19,6 +19,7 @@ COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc --mandir=\$${prefix}/share/man \
 	dh --with quilt $@
 
 override_dh_auto_configure:
+	autoconf
 	dh_auto_configure -Bbuild-ipv4 -- $(COMMON_FLAGS) --disable-ipv6
 	dh_auto_configure -Bbuild-ipv6 -- $(COMMON_FLAGS) --enable-ipv6
 
