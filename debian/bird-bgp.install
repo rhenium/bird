@@ -1,0 +1,6 @@
+etc/bird.conf
+usr/sbin/bird
+usr/sbin/birdc
+etc/bird6.conf
+usr/sbin/bird6
+usr/sbin/birdc6

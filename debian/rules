@@ -1,42 +1,51 @@
 #!/usr/bin/make -f
 # -*- makefile -*-
-# Sample debian/rules that uses debhelper.
 # This file was originally written by Joey Hess and Craig Small.
 # As a special exception, when this file is copied by dh-make into a
 # dh-make output file, you may use that output file without restriction.
 # This special exception was added by Craig Small in version 0.37 of dh-make.
 
-# Uncomment this to turn on verbose mode.
-#export DH_VERBOSE=1
-
 export DEB_BUILD_HARDENING=1
 
 COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc --mandir=\$${prefix}/share/man \
 	--infodir=\$${prefix}/share/info --localstatedir=/var \
-	--with-protocols=all --enable-client 
+	--enable-client 
 
 %:
 	dh --with quilt $@
 
 override_dh_auto_configure:
 	autoconf
-	dh_auto_configure -Bbuild-ipv4 -- $(COMMON_FLAGS) --disable-ipv6
-	dh_auto_configure -Bbuild-ipv6 -- $(COMMON_FLAGS) --enable-ipv6
+	dh_auto_configure -Bbuild-ipv4 -- $(COMMON_FLAGS) --disable-ipv6 --with-protocols=all
+	dh_auto_configure -Bbuild-ipv6 -- $(COMMON_FLAGS) --enable-ipv6 --with-protocols=all
+	dh_auto_configure -Bbuild-ipv4-bgp -- $(COMMON_FLAGS) --disable-ipv6 --with-protocols=bgp,pipe,static
+	dh_auto_configure -Bbuild-ipv6-bgp -- $(COMMON_FLAGS) --enable-ipv6 --with-protocols=bgp,pipe,static
 
 override_dh_auto_build:
 	dh_auto_build -Bbuild-ipv4
 	dh_auto_build -Bbuild-ipv6
+	dh_auto_build -Bbuild-ipv4-bgp
+	dh_auto_build -Bbuild-ipv6-bgp
 
 override_dh_auto_clean:
 	dh_auto_clean -Bbuild-ipv4
 	dh_auto_clean -Bbuild-ipv6
+	dh_auto_clean -Bbuild-ipv4-bgp
+	dh_auto_clean -Bbuild-ipv6-bgp
 
 override_dh_auto_install:
 	dh_auto_install -Bbuild-ipv4
 	dh_auto_install -Bbuild-ipv6
+	dh_auto_install -Bbuild-ipv4-bgp --destdir=debian/bgp
+	dh_auto_install -Bbuild-ipv6-bgp --destdir=debian/bgp
+
+override_dh_install:
+	dh_install -pbird --sourcedir=debian/tmp
+	dh_install -pbird-bgp --sourcedir=debian/bgp
 
 override_dh_strip:
-	dh_strip --dbg-package=bird-dbg
+	dh_strip -pbird --dbg-package=bird-dbg
+	dh_strip -pbird-bgp --dbg-package=bird-bgp-dbg
 
 override_dh_installinit:
 	dh_installinit --name=bird
