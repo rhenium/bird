@@ -22,7 +22,7 @@ Conflicts: zebra, routed
 Breaks: bird6 (<< 1.3.12~git20130926-2~)
 Replaces: bird6 (<< 1.3.12~git20130926-2~)
 Provides: bird6
-Description: BIRD Internet Routing Daemon
+Description: Internet Routing Daemon
  BIRD is an Internet routing daemon with full support for all the major
  routing protocols. It allows redistribution between protocols with a
  powerful route filtering syntax and an easy-to-use configuration
@@ -36,7 +36,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}
 Conflicts: zebra, routed, bird, bird6
 Replaces: bird, bird6
 Provides: bird, bird6
-Description: BIRD Internet Routing Daemon
+Description: Internet Routing Daemon [BGP-only version]
  BIRD is an Internet routing daemon with full support for all the major
  routing protocols. It allows redistribution between protocols with a
  powerful route filtering syntax and an easy-to-use configuration
@@ -49,7 +49,7 @@ Package: bird6
 Architecture: all
 Depends: ${shlibs:Depends}, ${misc:Depends}, bird (>= 1.3.12~git20130926-1~)
 Section: oldlibs
-Description: BIRD Internet Routing Daemon [transitional packages]
+Description: Internet Routing Daemon [transitional packages]
  BIRD is an Internet routing daemon with full support for all the major
  routing protocols. It allows redistribution between protocols with a
  powerful route filtering syntax and an easy-to-use configuration
@@ -80,7 +80,7 @@ Replaces: bird-dbg
 Provides: bird-dbg
 Section: debug
 Priority: extra
-Description: Internet Routing Daemon - debug symbols
+Description: Internet Routing Daemon - debug symbols [BGP-only version]
  BIRD is an Internet routing daemon with full support for all the major
  routing protocols. It allows redistribution between protocols with a
  powerful route filtering syntax and an easy-to-use configuration
