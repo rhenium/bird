@@ -1,0 +1,4 @@
+bird-bgp: binary-without-manpage usr/sbin/bird
+bird-bgp: binary-without-manpage usr/sbin/bird6
+bird-bgp: binary-without-manpage usr/sbin/birdc
+bird-bgp: binary-without-manpage usr/sbin/birdc6
