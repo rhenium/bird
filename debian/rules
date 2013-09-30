@@ -12,7 +12,7 @@ COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc --mandir=\$${prefix}/share/man \
 	--enable-client 
 
 %:
-	dh --with quilt $@
+	dh $@
 
 override_dh_auto_configure:
 	autoconf
