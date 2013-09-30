@@ -9,17 +9,20 @@ export DEB_BUILD_HARDENING=1
 
 COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc --mandir=\$${prefix}/share/man \
 	--infodir=\$${prefix}/share/info --localstatedir=/var \
-	--enable-client 
+	--enable-client
+
+CFLAGS := -flto
+LDFLAGS := -Wl,-z,defs -Wl,--as-needed
 
 %:
 	dh $@
 
 override_dh_auto_configure:
 	autoconf
-	dh_auto_configure -Bbuild-ipv4 -- $(COMMON_FLAGS) --disable-ipv6 --with-protocols=all
-	dh_auto_configure -Bbuild-ipv6 -- $(COMMON_FLAGS) --enable-ipv6 --with-protocols=all
-	dh_auto_configure -Bbuild-ipv4-bgp -- $(COMMON_FLAGS) --disable-ipv6 --with-protocols=bgp,pipe,static
-	dh_auto_configure -Bbuild-ipv6-bgp -- $(COMMON_FLAGS) --enable-ipv6 --with-protocols=bgp,pipe,static
+	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" dh_auto_configure -Bbuild-ipv4 -- $(COMMON_FLAGS) --disable-ipv6 --with-protocols=all
+	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" dh_auto_configure -Bbuild-ipv6 -- $(COMMON_FLAGS) --enable-ipv6 --with-protocols=all
+	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" dh_auto_configure -Bbuild-ipv4-bgp -- $(COMMON_FLAGS) --disable-ipv6 --with-protocols=bgp,pipe,static
+	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" dh_auto_configure -Bbuild-ipv6-bgp -- $(COMMON_FLAGS) --enable-ipv6 --with-protocols=bgp,pipe,static
 
 override_dh_auto_build:
 	dh_auto_build -Bbuild-ipv4
