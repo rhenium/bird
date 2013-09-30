@@ -2,16 +2,15 @@ Source: bird
 Section: net
 Priority: extra
 Build-Depends: bison,
-	       debhelper (>= 7.0.50~),
+	       debhelper (>= 9~),
 	       flex,
 	       m4,
 	       libreadline-dev | libreadline6-dev | libreadline5-dev,
 	       libncurses5-dev,
 	       hardening-wrapper,
-	       quilt (>= 0.40),
 	       dh-autoreconf
 Maintainer: Ondřej Surý <ondrej@debian.org>
-Standards-Version: 3.9.2
+Standards-Version: 3.9.4
 Vcs-Browser: http://git.debian.org/?p=users/ondrej/bird.git
 Vcs-Git: git://git.debian.org/users/ondrej/bird.git
 Homepage: http://bird.network.cz/
@@ -49,6 +48,7 @@ Description: BIRD Internet Routing Daemon
 Package: bird6
 Architecture: all
 Depends: ${shlibs:Depends}, ${misc:Depends}, bird (>= 1.3.12~git20130926-1~)
+Section: oldlibs
 Description: BIRD Internet Routing Daemon [transitional packages]
  BIRD is an Internet routing daemon with full support for all the major
  routing protocols. It allows redistribution between protocols with a
