@@ -13,7 +13,7 @@ COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc --mandir=\$${prefix}/share/man \
 
 GCC_VERSION=$(shell gcc --version | head -1 | sed -e 's/.* //' |cut -f 1-2 -d .)
 
-ifeq (,$(findstring $(GCC_VERSION),$(4.4 4.5)))
+ifeq (,$(findstring $(GCC_VERSION),"4.4 4.5"))
 	CFLAGS := -flto
 else
 	CFLAGS :=
