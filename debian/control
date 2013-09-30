@@ -59,8 +59,25 @@ Description: BIRD Internet Routing Daemon [transitional packages]
 
 Package: bird-dbg
 Architecture: any
-Depends: ${misc:Depends}, bird (= ${binary:Version}) | bird6 (= ${binary:Version})
+Depends: ${misc:Depends}, bird (= ${binary:Version})
 Recommends: gdb
+Section: debug
+Priority: extra
+Description: Internet Routing Daemon - debug symbols
+ BIRD is an Internet routing daemon with full support for all the major
+ routing protocols. It allows redistribution between protocols with a
+ powerful route filtering syntax and an easy-to-use configuration
+ interface.
+ .
+ This package provides the symbols needed for debugging BIRD with gdb.
+
+Package: bird-bgp-dbg
+Architecture: any
+Depends: ${misc:Depends}, bird-bgp (= ${binary:Version})
+Recommends: gdb
+Conflicts: bird-dbg
+Replaces: bird-dbg
+Provides: bird-dbg
 Section: debug
 Priority: extra
 Description: Internet Routing Daemon - debug symbols
