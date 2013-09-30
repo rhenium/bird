@@ -1,48 +1,38 @@
-This package was debianized by Florian Lohoff <flo@rfc822.org> on
-Wed, 14 Jun 2000 17:53:15 +0200.
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: bird
+Upstream-Contact: bird-users@bird.network.cz
+Source: http://bird.network.cz
 
-It was downloaded from ftp://bird.network.cz/pub/bird/
+Files: *
+Copyright: 1998-2008 Martin Mareš
+	   1998-2013 Ondřej Filip
+	   1998-2000 Pavel Machek
+	   2009-2013 Ondřej Zajíček
+License: GPL-2+
 
-Upstream Authors:
- Martin Mareš <mj@ucw.cz>
- Pavel Machek <pavel@ucw.cz>
- Ondřej Filip <feela@network.cz>
- Ondřej Zajíček <santiago@crfreenet.org>
-
-Copyright:
-
- (c) 1998-2008 Martin Mareš <mj@ucw.cz>
- (c) 1998-2010 Ondřej Filip <feela@network.cz>
- (c) 1998-2000 Pavel Machek <pavel@ucw.cz>
- (c) 2009-2010 Ondřej Zajíček <santiago@crfreenet.org>
-
+Files: ./lib/md5.c
+Copyright: 1993 Colin Plumb
 License:
+  This code is in the public domain; do with it what you wish.
 
-    This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 2 of the License, or
-    (at your option) any later version.
+Files: debian/*
+Copyright: 2010-2013 Ondřej Surý <ondrej@debian.org>
+License: GPL-2+
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-
-On Debian GNU/Linux systems, the complete text of the GNU General
-Public License can be found in `/usr/share/common-licenses/GPL'.
-
-
-./lib/md5.c is public domain written by Colin Plumb in 1993
-and it was adapted for BIRD by Martin Mareš.
-
-
-The (new) Debian packaging is:
-
-    Copyright (C) 2010 Ondřej Surý <ondrej@debian.org>
-
-and is licensed under the GPL version 3,
-see `/usr/share/common-licenses/GPL-3'.
+License: GPL-2+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation; either version 2 of the License, or
+  (at your option) any later version.
+  .
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+  .
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+  .
+  On Debian GNU/Linux systems, the complete text of the GNU General
+  Public License can be found in `/usr/share/common-licenses/GPL-2'.
