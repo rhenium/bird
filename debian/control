@@ -1,9 +1,10 @@
 Source: bird
 Section: net
 Priority: extra
-Build-Depends: bison,
+Build-Depends: quilt,
 	       debhelper (>= 9~),
 	       flex,
+	       bison,
 	       m4,
 	       libreadline-dev | libreadline6-dev | libreadline5-dev,
 	       libncurses5-dev,
