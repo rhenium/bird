@@ -20,8 +20,8 @@ Package: bird
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Conflicts: zebra, routed
-Breaks: bird6 (<< 1.3.12~git20130926-2~)
-Replaces: bird6 (<< 1.3.12~git20130926-2~)
+Breaks: bird6 (<< 1.3.11-2~)
+Replaces: bird6 (<< 1.3.11-2~)
 Provides: bird6
 Description: Internet Routing Daemon
  BIRD is an Internet routing daemon with full support for all the major
@@ -48,7 +48,7 @@ Description: Internet Routing Daemon [BGP-only version]
 
 Package: bird6
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, bird (>= 1.3.12~git20130926-1~)
+Depends: ${shlibs:Depends}, ${misc:Depends}, bird (>= ${source:Version})
 Section: oldlibs
 Description: Internet Routing Daemon [transitional packages]
  BIRD is an Internet routing daemon with full support for all the major
