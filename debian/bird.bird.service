@@ -1,5 +1,5 @@
 [Unit]
-Description=BIRD Internet Routing Daemon
+Description=BIRD Internet Routing Daemon (IPv4)
 After=network.target
 
 [Service]
