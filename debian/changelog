@@ -5,6 +5,8 @@ bird (1.3.11-4) unstable; urgency=low
   * Remove redundant debian/patches/008-io.c_pktinfo.patch
   * Link all.o with $(CC) again to try if sparc is ok now
   * Add -flto to LDFLAGS as well (not sure if needed though)
+  * Add -fPIC to C/LDFLAGS
+  * Enable hardening using the buildflags.mk
 
  -- Ondřej Surý <ondrej@debian.org>  Sat, 05 Oct 2013 19:50:51 +0200
 
