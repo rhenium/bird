@@ -1,3 +1,13 @@
+bird (1.3.11-4) unstable; urgency=low
+
+  * Don't drop default CFLAGS when using -flto
+  * Remove redundant debian/patches/007-io.c_use_gnu.patch
+  * Remove redundant debian/patches/008-io.c_pktinfo.patch
+  * Link all.o with $(CC) again to try if sparc is ok now
+  * Add -flto to LDFLAGS as well (not sure if needed though)
+
+ -- Ondřej Surý <ondrej@debian.org>  Sat, 05 Oct 2013 19:50:51 +0200
+
 bird (1.3.11-3) unstable; urgency=low
 
   * Add an LTO support detection
