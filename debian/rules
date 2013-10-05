@@ -9,7 +9,7 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 DPKG_EXPORT_BUILDFLAGS = 1
 include /usr/share/dpkg/buildflags.mk
 
-COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc --mandir=\$${prefix}/share/man \
+COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc/bird --mandir=\$${prefix}/share/man \
 	--infodir=\$${prefix}/share/info --localstatedir=/var --with-runtimedir=/run/bird \
 	--enable-client
 
@@ -52,6 +52,12 @@ override_dh_auto_install:
 	dh_auto_install -Bbuild-ipv6-bgp --destdir=debian/bgp
 
 override_dh_install:
+	for d in tmp bgp; do \
+	  install -d -m 755 debian/$$d/etc/bird; \
+	  install -m 644 debian/envvars debian/$$d/etc/bird/envvars; \
+	  install -d -m 755 debian/$$d/usr/lib/bird; \
+	  install -m 755 debian/prepare-environment debian/$$d/usr/lib/bird/prepare-environment; \
+	done
 	dh_install -pbird --sourcedir=debian/tmp
 	dh_install -pbird-bgp --sourcedir=debian/bgp
 
