@@ -1,13 +1,14 @@
 --- bird.orig/tools/Rules.in
 +++ bird/tools/Rules.in
-@@ -66,9 +66,7 @@ else
+@@ -66,9 +66,9 @@ else
  subdir: all.o
  
  all.o: $(objs)
 -#       $(LD) -r -o $@ $^
--#	Changed to $(CC) because $(LD) has problems with crosscompiling
++#	$(LD) -r -o $@ $^
+ #	Changed to $(CC) because $(LD) has problems with crosscompiling
 -	$(CC) -nostdlib -r -o $@ $^
-+	$(LD) $(LDFLAGS) -r -o $@ $^
++	$(CC) $(CFLAGS) -nostdlib -r -o $@ $^
  
  endif
  
