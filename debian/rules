@@ -14,14 +14,7 @@ COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc/bird --mandir=\$${prefix}/share/ma
 	--enable-client
 
 CFLAGS += -g -O2 -fno-strict-aliasing -fno-strict-overflow -fPIC
-LDFLAGS += -Wl,-z,defs -Wl,--as-needed -fPIC
-
-GCC_VERSION=$(shell gcc --version | head -1 | sed -e 's/.* //' |cut -f 1-2 -d .)
-
-ifeq (,$(findstring $(GCC_VERSION),"4.4 4.5"))
-CFLAGS += -flto
-LDFLAGS += -flto
-endif
+LDFLAGS += -g -O2 -fno-strict-aliasing -fno-strict-overflow -fPIC -Wl,-z,defs -Wl,--as-needed
 
 %:
 	dh $@
