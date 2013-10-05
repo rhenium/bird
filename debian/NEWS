@@ -1,0 +1,15 @@
+bird (1.3.11-5) unstable; urgency=low
+
+  BIRD now uses privilege separation to increase the security, so the deamon
+  doesn't run with root privileges anymore.  This change also required to
+  rework the packaging a little bit, so you need to be aware of:
+  
+  * The directory with configuration files had moved from /etc to /etc/bird/
+
+  * The daemon now runs as bird:bird, the user and group can be configured
+    in the /etc/bird/envvars configuration file
+
+  * The run directory where control socket resides has been moved
+    to /run/bird/
+
+ -- Ondřej Surý <ondrej@debian.org>  Sat, 05 Oct 2013 22:27:45 +0200
