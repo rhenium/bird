@@ -2,11 +2,9 @@
 
 set -eu
 
+BIRD_RUN_DIR=/run/bird
 . /etc/bird/envvars
 
-BIRD_RUN_DIR=/run/bird
-BIRD_RUN_USER=bird
-BIRD_RUN_GROUP=bird
 
 mkdir --parents "$BIRD_RUN_DIR";
 
