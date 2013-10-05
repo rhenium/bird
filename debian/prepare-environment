@@ -2,7 +2,7 @@
 
 set -eu
 
-source /etc/bird/envvars
+. /etc/bird/envvars
 
 BIRD_RUN_DIR=/run/bird
 BIRD_RUN_USER=bird

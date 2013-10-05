@@ -7,9 +7,12 @@ start on runlevel [2345]
 stop on runlevel [016]
 
 respawn
-pre-start exec /usr/lib/bird/prepare-environment
+pre-start script
+/usr/lib/bird/prepare-environment
+/usr/sbin/bird -p
+end script
 
 script
-source /etc/bird/envvars
+. /etc/bird/envvars
 /usr/sbin/bird -f -u $BIRD_RUN_USER -g $BIRD_RUN_GROUP
 end script

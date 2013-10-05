@@ -18,7 +18,7 @@ Homepage: http://bird.network.cz/
 
 Package: bird
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
 Conflicts: zebra, routed
 Breaks: bird6 (<< 1.3.11-2~)
 Replaces: bird6 (<< 1.3.11-2~)
@@ -33,7 +33,7 @@ Description: Internet Routing Daemon
 
 Package: bird-bgp
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
 Conflicts: zebra, routed, bird, bird6
 Replaces: bird, bird6
 Provides: bird, bird6

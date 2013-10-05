@@ -5,8 +5,9 @@ After=network.target
 [Service]
 EnvironmentFile=/etc/bird/envvars
 ExecStartPre=/usr/lib/bird/prepare-environment
-ExecReload=/usr/sbin/birdc reload
-ExecStart=/usr/sbin/bird -f -u $KNOT_RUN_USER -g $KNOT_RUN_GROUP
+ExecStartPre=/usr/sbin/bird -p
+ExecReload=/usr/sbin/birdc configure
+ExecStart=/usr/sbin/bird -f -u $BIRD_RUN_USER -g $BIRD_RUN_GROUP $BIRD_ARGS
 Restart=on-abort
 
 [Install]

@@ -12,11 +12,10 @@
 
 # PATH should only include /usr/* if it runs after the mountnfs.sh script
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
-DESC="Internet routing daemon"
+DESC="BIRD Internet Routing Daemon (IPv4)"
 NAME=bird
 DAEMON=/usr/sbin/$NAME
-DAEMON_ARGS=""
-#PIDFILE=/var/run/$NAME.pid
+BIRD_ARGS=""
 SCRIPTNAME=/etc/init.d/$NAME
 
 # Exit if the package is not installed
@@ -41,7 +40,7 @@ do_start()
 	start-stop-daemon --start --quiet --name $NAME --exec $DAEMON --test > /dev/null \
 		|| return 1
 	start-stop-daemon --start --quiet --name $NAME --exec $DAEMON -- \
-		-u $BIRD_RUN_USER -g $BIRD_RUN_GROUP -s $BIRD_RUN_DIR/bird.ctl \
+		-u $BIRD_RUN_USER -g $BIRD_RUN_GROUP $BIRD_ARGS \
 		|| return 2
 	# Add code here, if necessary, that waits for the process to be ready
 	# to handle requests from services started subsequently which depend
