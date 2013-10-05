@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+dpkg-maintscript-helper rm_conffile /etc/default/bird 1.3.0~rc3-2~ -- "$@"
+
+if test "$1" = "purge"; then
+    dpkg-statoverride --remove /etc/bird/bird.conf >/dev/null 2>/dev/null || true
+    dpkg-statoverride --remove /etc/bird/bird6.conf >/dev/null 2>/dev/null || true
+    dpkg-statoverride --remove /etc/bird >/dev/null 2>/dev/null || true
+
+    deluser --quiet bird > /dev/null || true
+fi
+
+#DEBHELPER#
+
+exit 0

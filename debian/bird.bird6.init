@@ -22,8 +22,8 @@ SCRIPTNAME=/etc/init.d/$NAME
 # Exit if the package is not installed
 [ -x "$DAEMON" ] || exit 0
 
-# Read configuration variable file if it is present
-[ -r /etc/default/$NAME ] && . /etc/default/$NAME
+# read the RUN variables
+. /etc/bird/envvars
 
 # Define LSB log_* functions.
 # Depend on lsb-base (>= 3.0-6) to ensure that this file is present.
@@ -41,7 +41,7 @@ do_start()
 	start-stop-daemon --start --quiet --name $NAME --exec $DAEMON --test > /dev/null \
 		|| return 1
 	start-stop-daemon --start --quiet --name $NAME --exec $DAEMON -- \
-		$DAEMON_ARGS \
+		-u $BIRD_RUN_USER -g $BIRD_RUN_GROUP -s $BIRD_RUN_DIR/bird.ctl \
 		|| return 2
 	# Add code here, if necessary, that waits for the process to be ready
 	# to handle requests from services started subsequently which depend
