@@ -7,7 +7,7 @@
 -#       $(LD) -r -o $@ $^
 -#	Changed to $(CC) because $(LD) has problems with crosscompiling
 -	$(CC) -nostdlib -r -o $@ $^
-+	$(LD) -r -o $@ $^
++	$(LD) $(LDFLAGS) -r -o $@ $^
  
  endif
  
