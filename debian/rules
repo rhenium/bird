@@ -5,20 +5,22 @@
 # dh-make output file, you may use that output file without restriction.
 # This special exception was added by Craig Small in version 0.37 of dh-make.
 
-export DEB_BUILD_HARDENING=1
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
 
 COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc --mandir=\$${prefix}/share/man \
 	--infodir=\$${prefix}/share/info --localstatedir=/var \
 	--enable-client
 
+CFLAGS += -g -O2 -fno-strict-aliasing -fno-strict-overflow -fPIC
+LDFLAGS += -Wl,-z,defs -Wl,--as-needed -fPIC
+
 GCC_VERSION=$(shell gcc --version | head -1 | sed -e 's/.* //' |cut -f 1-2 -d .)
 
-CFLAGS := -g -O2 -fno-strict-aliasing -fno-strict-overflow -fPIC
-LDFLAGS := -Wl,-z,defs -Wl,--as-needed -fPIC
-
 ifeq (,$(findstring $(GCC_VERSION),"4.4 4.5"))
-CFLAGS := -flto $(CFLAGS)
-LDFLAGS := -flto $(LDFLAGS)
+CFLAGS += -flto
+LDFLAGS += -flto
 endif
 
 %:

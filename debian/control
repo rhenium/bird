@@ -2,13 +2,13 @@ Source: bird
 Section: net
 Priority: extra
 Build-Depends: quilt,
+	       dpkg-dev (>= 1.16.1.1~),
 	       debhelper (>= 9~),
 	       flex,
 	       bison,
 	       m4,
 	       libreadline-dev | libreadline6-dev | libreadline5-dev,
 	       libncurses5-dev,
-	       hardening-wrapper,
 	       dh-autoreconf
 Maintainer: Ondřej Surý <ondrej@debian.org>
 Standards-Version: 3.9.4
