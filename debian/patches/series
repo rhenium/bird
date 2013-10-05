@@ -1,3 +1,2 @@
-008-io.c_pktinfo.patch
 009-link_using_ld.patch
 010-no_strip_by_default.patch
