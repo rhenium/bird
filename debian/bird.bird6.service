@@ -1,0 +1,13 @@
+[Unit]
+Description=BIRD Internet Routing Daemon (IPv6)
+After=network.target
+
+[Service]
+EnvironmentFile=/etc/bird/envvars
+ExecStartPre=/usr/lib/bird/prepare-environment
+ExecReload=/usr/sbin/birdc6 configure
+ExecStart=/usr/sbin/bird6 -f -u $KNOT_RUN_USER -g $KNOT_RUN_GROUP
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target

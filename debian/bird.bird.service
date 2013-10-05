@@ -1,0 +1,13 @@
+[Unit]
+Description=BIRD Internet Routing Daemon
+After=network.target
+
+[Service]
+EnvironmentFile=/etc/bird/envvars
+ExecStartPre=/usr/lib/bird/prepare-environment
+ExecReload=/usr/sbin/birdc reload
+ExecStart=/usr/sbin/bird -f -u $KNOT_RUN_USER -g $KNOT_RUN_GROUP
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
