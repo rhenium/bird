@@ -10,7 +10,7 @@ DPKG_EXPORT_BUILDFLAGS = 1
 include /usr/share/dpkg/buildflags.mk
 
 COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc --mandir=\$${prefix}/share/man \
-	--infodir=\$${prefix}/share/info --localstatedir=/var --runtimedir=/run/bird \
+	--infodir=\$${prefix}/share/info --localstatedir=/var --with-runtimedir=/run/bird \
 	--enable-client
 
 CFLAGS += -g -O2 -fno-strict-aliasing -fno-strict-overflow -fPIC
