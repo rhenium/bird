@@ -1,6 +1,6 @@
 bird (1.3.11-5) unstable; urgency=low
 
-  BIRD now uses privilege separation to increase the security, so the deamon
+  BIRD now uses privilege separation to increase the security, so the daemon
   doesn't run with root privileges anymore.  This change also required to
   rework the packaging a little bit, so you need to be aware of:
   
