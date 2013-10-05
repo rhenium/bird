@@ -1,0 +1,15 @@
+# bird - BIRD Internet Routing Daemon
+
+description "BIRD Internet Routing Daemon"
+author "Ondřej Surý <ondrej@debian.org>"
+
+start on runlevel [2345]
+stop on runlevel [016]
+
+respawn
+pre-start exec /usr/lib/bird/prepare-environment
+
+script
+source /etc/bird/envvars
+/usr/sbin/bird -f -u $BIRD_RUN_USER -g $BIRD_RUN_GROUP
+end script
