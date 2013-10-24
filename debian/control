@@ -9,7 +9,7 @@ Build-Depends: quilt,
 	       m4,
 	       libreadline-dev | libreadline6-dev | libreadline5-dev,
 	       libncurses5-dev,
-	       dh-autoreconf
+	       autotools-dev
 Maintainer: Ondřej Surý <ondrej@debian.org>
 Standards-Version: 3.9.4
 Vcs-Browser: http://git.debian.org/?p=users/ondrej/bird.git
