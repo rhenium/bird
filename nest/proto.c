@@ -48,7 +48,6 @@ static void
 proto_enqueue(list *l, struct proto *p)
 {
   add_tail(l, &p->n);
-  p->last_state_change = now;
 }
 
 static void
@@ -362,6 +361,8 @@ proto_init(struct proto_config *c)
 
   q->proto_state = PS_DOWN;
   q->core_state = FS_HUNGRY;
+  q->last_state_change = now;
+
   proto_enqueue(&initial_proto_list, q);
   if (p == &proto_unix_iface)
     initial_device_proto = q;
@@ -699,6 +700,9 @@ proto_build(struct protocol *p)
     }
 }
 
+/* FIXME: convert this call to some protocol hook */
+extern void bfd_init_all(void);
+
 /**
  * protos_build - build a protocol list
  *
@@ -736,6 +740,11 @@ protos_build(void)
 #ifdef CONFIG_BGP
   proto_build(&proto_bgp);
 #endif
+#ifdef CONFIG_BFD
+  proto_build(&proto_bfd);
+  bfd_init_all();
+#endif
+
   proto_pool = rp_new(&root_pool, "Protocols");
   proto_flush_event = ev_new(proto_pool);
   proto_flush_event->hook = proto_flush_loop;
@@ -1069,6 +1078,7 @@ proto_notify_state(struct proto *p, unsigned ps)
     return;
 
   p->proto_state = ps;
+  p->last_state_change = now;
 
   switch (ps)
     {

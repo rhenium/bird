@@ -159,6 +159,9 @@ kif_choose_primary(struct iface *i)
 	  return a;
     }
 
+  if (a = kif_get_primary_ip(i))
+    return a;
+
   return find_preferred_ifa(i, IPA_NONE, IPA_NONE);
 }
 
@@ -846,12 +849,11 @@ static void
 krt_scan_timer_start(struct krt_proto *p)
 {
   if (!krt_scan_count)
-  {
     krt_scan_timer = tm_new_set(krt_pool, krt_scan, NULL, 0, KRT_CF->scan_time);
-    tm_start(krt_scan_timer, 0);
-  }
 
   krt_scan_count++;
+
+  tm_start(krt_scan_timer, 0);
 }
 
 static void
