@@ -51,7 +51,7 @@ struct f_prefix {
 struct f_val {
   int type;
   union {
-    int i;
+    uint i;
     u64 ec;
     /*    ip_addr ip; Folded into prefix */	
     struct f_prefix px;
@@ -78,12 +78,13 @@ struct f_inst *f_generate_roa_check(struct symbol *sym, struct f_inst *prefix, s
 struct f_tree *build_tree(struct f_tree *);
 struct f_tree *find_tree(struct f_tree *t, struct f_val val);
 int same_tree(struct f_tree *t1, struct f_tree *t2);
+void tree_format(struct f_tree *t, buffer *buf);
 
 struct f_trie *f_new_trie(linpool *lp);
 void trie_add_prefix(struct f_trie *t, ip_addr px, int plen, int l, int h);
 int trie_match_prefix(struct f_trie *t, ip_addr px, int plen);
 int trie_same(struct f_trie *t1, struct f_trie *t2);
-void trie_print(struct f_trie *t);
+void trie_format(struct f_trie *t, buffer *buf);
 
 void fprefix_get_bounds(struct f_prefix *px, int *l, int *h);
 
@@ -107,7 +108,7 @@ struct rte;
 
 int f_run(struct filter *filter, struct rte **rte, struct ea_list **tmp_attrs, struct linpool *tmp_pool, int flags);
 struct f_val f_eval(struct f_inst *expr, struct linpool *tmp_pool);
-int f_eval_int(struct f_inst *expr);
+uint f_eval_int(struct f_inst *expr);
 u32 f_eval_asn(struct f_inst *expr);
 
 char *filter_name(struct filter *filter);
@@ -118,7 +119,8 @@ int i_same(struct f_inst *f1, struct f_inst *f2);
 int val_compare(struct f_val v1, struct f_val v2);
 int val_same(struct f_val v1, struct f_val v2);
 
-void val_print(struct f_val v);
+void val_format(struct f_val v, buffer *buf);
+
 
 #define F_NOP 0
 #define F_NONL 1

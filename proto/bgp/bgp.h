@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include "nest/route.h"
+#include "nest/bfd.h"
 
 struct linpool;
 struct eattr;
@@ -44,6 +45,7 @@ struct bgp_config {
   int passive;				/* Do not initiate outgoing connection */
   int interpret_communities;		/* Hardwired handling of well-known communities */
   int secondary;			/* Accept also non-best routes (i.e. RA_ACCEPTED) */
+  int allow_local_as;			/* Allow that number of local ASNs in incoming AS_PATHs */
   unsigned connect_retry_time;
   unsigned hold_time, initial_hold_time;
   unsigned keepalive_time;
@@ -52,8 +54,10 @@ struct bgp_config {
   unsigned error_delay_time_min;	/* Time to wait after an error is detected */
   unsigned error_delay_time_max;
   unsigned disable_after_error;		/* Disable the protocol when error is detected */
+
   char *password;			/* Password used for MD5 authentication */
   struct rtable_config *igp_table;	/* Table used for recursive next hop lookups */
+  int bfd;				/* Use BFD for liveness detection */
 };
 
 #define MLL_SELF 1
@@ -99,6 +103,7 @@ struct bgp_proto {
   struct bgp_conn incoming_conn;	/* Incoming connection we have neither accepted nor rejected yet */
   struct object_lock *lock;		/* Lock for neighbor connection */
   struct neighbor *neigh;		/* Neighbor entry corresponding to remote ip, NULL if multihop */
+  struct bfd_request *bfd_req;		/* BFD request, if BFD is used */
   ip_addr source_addr;			/* Local address used as an advertised next hop */
   rtable *igp_table;			/* Table used for recursive next hop lookups */
   struct event *event;			/* Event for respawning and shutting process */
@@ -287,6 +292,7 @@ void bgp_log_error(struct bgp_proto *p, u8 class, char *msg, unsigned code, unsi
 #define BEM_INVALID_NEXT_HOP	2
 #define BEM_INVALID_MD5		3	/* MD5 authentication kernel request failed (possibly not supported) */
 #define BEM_NO_SOCKET		4
+#define BEM_BFD_DOWN		5
 
 /* Automatic shutdown error codes */
 

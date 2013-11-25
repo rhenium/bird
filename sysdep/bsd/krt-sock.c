@@ -654,17 +654,25 @@ krt_read_addr(struct ks_msg *msg)
 
   if ((masklen = ipa_mklen(imask)) < 0)
   {
-    log("Invalid masklen");
+    log(L_ERR "KIF: Invalid masklen %I for %s", imask, iface->name);
     return;
   }
 
+#ifdef IPV6
+  /* Clean up embedded interface ID returned in link-local address */
+
+  if (ipa_has_link_scope(iaddr))
+    _I0(iaddr) = 0xfe800000;
+
+  if (ipa_has_link_scope(ibrd))
+    _I0(ibrd) = 0xfe800000;
+#endif
+
+
   bzero(&ifa, sizeof(ifa));
-
   ifa.iface = iface;
-
-  memcpy(&ifa.ip, &iaddr, sizeof(ip_addr));
+  ifa.ip = iaddr;
   ifa.pxlen = masklen;
-  memcpy(&ifa.brd, &ibrd, sizeof(ip_addr));
 
   scope = ipa_classify(ifa.ip);
   if (scope < 0)
@@ -673,16 +681,6 @@ krt_read_addr(struct ks_msg *msg)
     return;
   }
   ifa.scope = scope & IADDR_SCOPE_MASK;
-
-#ifdef IPV6
-  /* Clean up embedded interface ID returned in link-local address */
-
-  if (ipa_has_link_scope(ifa.ip))
-    _I0(ifa.ip) = 0xfe800000;
-
-  if (ipa_has_link_scope(ifa.brd))
-    _I0(ifa.brd) = 0xfe800000;
-#endif
 
   if (masklen < BITS_PER_IP_ADDRESS)
   {
@@ -696,12 +694,15 @@ krt_read_addr(struct ks_msg *msg)
       ifa.opposite = ipa_opposite_m2(ifa.ip);
 #endif
 
+    if (iface->flags & IF_BROADCAST)
+      ifa.brd = ibrd;
+
     if (!(iface->flags & IF_MULTIACCESS))
-      ifa.opposite = ifa.brd;
+      ifa.opposite = ibrd;
   }
-  else if (!(iface->flags & IF_MULTIACCESS) && ipa_nonzero(ifa.brd))
+  else if (!(iface->flags & IF_MULTIACCESS) && ipa_nonzero(ibrd))
   {
-    ifa.prefix = ifa.opposite = ifa.brd;
+    ifa.prefix = ifa.opposite = ibrd;
     ifa.flags |= IA_PEER;
   }
   else
@@ -1057,3 +1058,36 @@ kif_sys_shutdown(struct kif_proto *p)
   krt_buffer_release(&p->p);
 }
 
+
+struct ifa *
+kif_get_primary_ip(struct iface *i)
+{
+#ifndef IPV6
+  static int fd = -1;
+  
+  if (fd < 0)
+    fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+  struct ifreq ifr;
+  memset(&ifr, 0, sizeof(ifr));
+  strncpy(ifr.ifr_name, i->name, IFNAMSIZ);
+
+  int rv = ioctl(fd, SIOCGIFADDR, (char *) &ifr);
+  if (rv < 0)
+    return NULL;
+
+  ip_addr addr;
+  struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
+  memcpy(&addr, &sin->sin_addr.s_addr, sizeof(ip_addr));
+  ipa_ntoh(addr);
+
+  struct ifa *a;
+  WALK_LIST(a, i->addrs)
+  {
+    if (ipa_equal(a->ip, addr))
+      return a;
+  }
+#endif
+
+  return NULL;
+}

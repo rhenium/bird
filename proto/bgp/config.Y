@@ -26,7 +26,7 @@ CF_KEYWORDS(BGP, LOCAL, NEIGHBOR, AS, HOLD, TIME, CONNECT, RETRY,
 	PREFER, OLDER, MISSING, LLADDR, DROP, IGNORE, ROUTE, REFRESH,
 	INTERPRET, COMMUNITIES, BGP_ORIGINATOR_ID, BGP_CLUSTER_LIST, IGP,
 	TABLE, GATEWAY, DIRECT, RECURSIVE, MED, TTL, SECURITY, DETERMINISTIC,
-	SECONDARY)
+	SECONDARY, ALLOW, BFD)
 
 CF_GRAMMAR
 
@@ -34,6 +34,7 @@ CF_ADDTO(proto, bgp_proto '}' { bgp_check_config(BGP_CFG); } )
 
 bgp_proto_start: proto_start BGP {
      this_proto = proto_config_new(&proto_bgp, sizeof(struct bgp_config), $1);
+     BGP_CFG->multihop = -1;	/* undefined */
      BGP_CFG->hold_time = 240;
      BGP_CFG->connect_retry_time = 120;
      BGP_CFG->initial_hold_time = 240;
@@ -74,6 +75,7 @@ bgp_proto:
  | bgp_proto STARTUP HOLD TIME expr ';' { BGP_CFG->initial_hold_time = $5; }
  | bgp_proto CONNECT RETRY TIME expr ';' { BGP_CFG->connect_retry_time = $5; }
  | bgp_proto KEEPALIVE TIME expr ';' { BGP_CFG->keepalive_time = $4; }
+ | bgp_proto DIRECT ';' { BGP_CFG->multihop = 0; }
  | bgp_proto MULTIHOP ';' { BGP_CFG->multihop = 64; }
  | bgp_proto MULTIHOP expr ';' { BGP_CFG->multihop = $3; if (($3<1) || ($3>255)) cf_error("Multihop must be in range 1-255"); }
  | bgp_proto NEXT HOP SELF ';' { BGP_CFG->next_hop_self = 1; BGP_CFG->next_hop_keep = 0; }
@@ -108,8 +110,11 @@ bgp_proto:
  | bgp_proto PASSIVE bool ';' { BGP_CFG->passive = $3; }
  | bgp_proto INTERPRET COMMUNITIES bool ';' { BGP_CFG->interpret_communities = $4; }
  | bgp_proto SECONDARY bool ';' { BGP_CFG->secondary = $3; }
+ | bgp_proto ALLOW LOCAL AS ';' { BGP_CFG->allow_local_as = -1; }
+ | bgp_proto ALLOW LOCAL AS expr ';' { BGP_CFG->allow_local_as = $5; }
  | bgp_proto IGP TABLE rtable ';' { BGP_CFG->igp_table = $4; }
  | bgp_proto TTL SECURITY bool ';' { BGP_CFG->ttl_security = $4; }
+ | bgp_proto BFD bool ';' { BGP_CFG->bfd = $3; cf_check_bfd($3); }
  ;
 
 CF_ADDTO(dynamic_attr, BGP_ORIGIN

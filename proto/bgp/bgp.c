@@ -59,8 +59,8 @@
 #include "nest/iface.h"
 #include "nest/protocol.h"
 #include "nest/route.h"
-#include "nest/locks.h"
 #include "nest/cli.h"
+#include "nest/locks.h"
 #include "conf/conf.h"
 #include "lib/socket.h"
 #include "lib/resource.h"
@@ -76,6 +76,7 @@ static void bgp_close(struct bgp_proto *p, int apply_md5);
 static void bgp_connect(struct bgp_proto *p);
 static void bgp_active(struct bgp_proto *p);
 static sock *bgp_setup_listen_sk(ip_addr addr, unsigned port, u32 flags);
+static void bgp_update_bfd(struct bgp_proto *p, int use_bfd);
 
 
 /**
@@ -153,8 +154,12 @@ bgp_initiate(struct bgp_proto *p)
   if (rv < 0)
     return;
 
+  if (p->cf->bfd)
+    bgp_update_bfd(p, p->cf->bfd);
+
   if (p->startup_delay)
     {
+      p->start_state = BSS_DELAY;
       BGP_TRACE(D_EVENTS, "Startup delayed by %d seconds", p->startup_delay);
       bgp_start_timer(p->startup_timer, p->startup_delay);
     }
@@ -765,6 +770,37 @@ bgp_neigh_notify(neighbor *n)
     }
 }
 
+static void
+bgp_bfd_notify(struct bfd_request *req)
+{
+  struct bgp_proto *p = req->data;
+  int ps = p->p.proto_state;
+
+  if (req->down && ((ps == PS_START) || (ps == PS_UP)))
+    {
+      BGP_TRACE(D_EVENTS, "BFD session down");
+      bgp_store_error(p, NULL, BE_MISC, BEM_BFD_DOWN);
+      if (ps == PS_UP)
+	bgp_update_startup_delay(p);
+      bgp_stop(p, 0);
+    }
+}
+
+static void
+bgp_update_bfd(struct bgp_proto *p, int use_bfd)
+{
+  if (use_bfd && !p->bfd_req)
+    p->bfd_req = bfd_request_session(p->p.pool, p->cf->remote_ip, p->source_addr,
+				     p->cf->multihop ? NULL : p->neigh->iface,
+				     bgp_bfd_notify, p);
+
+  if (!use_bfd && p->bfd_req)
+    {
+      rfree(p->bfd_req);
+      p->bfd_req = NULL;
+    }
+}
+
 static int
 bgp_reload_routes(struct proto *P)
 {
@@ -825,6 +861,7 @@ bgp_start(struct proto *P)
   p->outgoing_conn.state = BS_IDLE;
   p->incoming_conn.state = BS_IDLE;
   p->neigh = NULL;
+  p->bfd_req = NULL;
 
   rt_lock_table(p->igp_table);
 
@@ -969,6 +1006,24 @@ bgp_check_config(struct bgp_config *c)
   if (c->c.class == SYM_TEMPLATE)
     return;
 
+
+  /* EBGP direct by default, IBGP multihop by default */
+  if (c->multihop < 0)
+    c->multihop = internal ? 64 : 0;
+
+  /* Different default for gw_mode */
+  if (!c->gw_mode)
+    c->gw_mode = c->multihop ? GW_RECURSIVE : GW_DIRECT;
+
+  /* Different default based on rs_client */
+  if (!c->missing_lladdr)
+    c->missing_lladdr = c->rs_client ? MLL_IGNORE : MLL_SELF;
+
+  /* Disable after error incompatible with restart limit action */
+  if (c->c.in_limit && (c->c.in_limit->action == PLA_RESTART) && c->disable_after_error)
+    c->c.in_limit->action = PLA_DISABLE;
+
+
   if (!c->local_as)
     cf_error("Local AS number must be set");
 
@@ -984,7 +1039,6 @@ bgp_check_config(struct bgp_config *c)
   if (internal && c->rs_client)
     cf_error("Only external neighbor can be RS client");
 
-
   if (c->multihop && (c->gw_mode == GW_DIRECT))
     cf_error("Multihop BGP cannot use direct gateway mode");
 
@@ -992,19 +1046,8 @@ bgp_check_config(struct bgp_config *c)
 		      ipa_has_link_scope(c->source_addr)))
     cf_error("Multihop BGP cannot be used with link-local addresses");
 
-
-  /* Different default based on rs_client */
-  if (!c->missing_lladdr)
-    c->missing_lladdr = c->rs_client ? MLL_IGNORE : MLL_SELF;
-
-  /* Different default for gw_mode */
-  if (!c->gw_mode)
-    c->gw_mode = (c->multihop || internal) ? GW_RECURSIVE : GW_DIRECT;
-
-  /* Disable after error incompatible with restart limit action */
-  if (c->c.in_limit && (c->c.in_limit->action == PLA_RESTART) && c->disable_after_error)
-    c->c.in_limit->action = PLA_DISABLE;
-
+  if (c->multihop && c->bfd && ipa_zero(c->source_addr))
+    cf_error("Multihop BGP with BFD requires specified source address");
 
   if ((c->gw_mode == GW_RECURSIVE) && c->c.table->sorted)
     cf_error("BGP in recursive mode prohibits sorted table");
@@ -1033,6 +1076,9 @@ bgp_reconfigure(struct proto *P, struct proto_config *C)
     && ((!old->password && !new->password)
 	|| (old->password && new->password && !strcmp(old->password, new->password)))
     && (get_igp_table(old) == get_igp_table(new));
+
+  if (same && (p->start_state > BSS_PREPARE))
+    bgp_update_bfd(p, new->bfd);
 
   /* We should update our copy of configuration ptr as old configuration will be freed */
   if (same)
@@ -1115,7 +1161,7 @@ bgp_store_error(struct bgp_proto *p, struct bgp_conn *c, u8 class, u32 code)
 
 static char *bgp_state_names[] = { "Idle", "Connect", "Active", "OpenSent", "OpenConfirm", "Established", "Close" };
 static char *bgp_err_classes[] = { "", "Error: ", "Socket: ", "Received: ", "BGP Error: ", "Automatic shutdown: ", ""};
-static char *bgp_misc_errors[] = { "", "Neighbor lost", "Invalid next hop", "Kernel MD5 auth failed", "No listening socket" };
+static char *bgp_misc_errors[] = { "", "Neighbor lost", "Invalid next hop", "Kernel MD5 auth failed", "No listening socket", "BFD session down" };
 static char *bgp_auto_errors[] = { "", "Route limit exceeded"};
 
 static const char *
