@@ -59,11 +59,7 @@ Description: Internet Routing Daemon [transitional packages]
  This package is transitional only and can be safely removed.
 
 Package: bird-dbg
-<<<<<<< HEAD
-Architecture: any [!hurd-any]
-=======
 Architecture: linux-any kfreebsd-any
->>>>>>> Don't build on hurd, since bird does have a support only for linux and bsd kernels
 Depends: ${misc:Depends}, bird (= ${binary:Version})
 Recommends: gdb
 Section: debug
@@ -77,11 +73,7 @@ Description: Internet Routing Daemon - debug symbols
  This package provides the symbols needed for debugging BIRD with gdb.
 
 Package: bird-bgp-dbg
-<<<<<<< HEAD
-Architecture: any [!hurd-any]
-=======
 Architecture: linux-any kfreebsd-any
->>>>>>> Don't build on hurd, since bird does have a support only for linux and bsd kernels
 Depends: ${misc:Depends}, bird-bgp (= ${binary:Version})
 Recommends: gdb
 Conflicts: bird-dbg
