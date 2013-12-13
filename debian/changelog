@@ -1,3 +1,9 @@
+bird (1.4.0-2) unstable; urgency=low
+
+  * Enable default example router id because it's mandatory for IPv6
+
+ -- Ondřej Surý <ondrej@debian.org>  Fri, 13 Dec 2013 16:37:28 +0100
+
 bird (1.4.0-1) unstable; urgency=low
 
   * New upstream version 1.4.0
