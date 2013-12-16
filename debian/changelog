@@ -1,8 +1,14 @@
+bird (1.4.0-3) unstable; urgency=low
+
+  * Add 'exec' before bird execution in upstart jobs
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 16 Dec 2013 13:00:01 +0100
+
 bird (1.4.0-2) unstable; urgency=low
 
   * Enable default example router id because it's mandatory for IPv6
 
- -- Ondřej Surý <ondrej@debian.org>  Fri, 13 Dec 2013 16:37:28 +0100
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 16 Dec 2013 12:59:35 +0100
 
 bird (1.4.0-1) unstable; urgency=low
 
