@@ -1,0 +1,41 @@
+--- bird.orig/doc/LinuxDocTools.pm
++++ bird/doc/LinuxDocTools.pm
+@@ -372,7 +372,7 @@ sub process_file
+         }
+     }
+   #
+-  my($precmd) = "|sgmlpre output=$global->{format} $global->{define}";
++  my($precmd) = "|/usr/lib/linuxdoc-tools/sgmlpre output=$global->{format} $global->{define}";
+ 
+   #
+   #  You can hack $NsgmlsOpts here, etcetera.
+--- bird.orig/doc/Makefile
++++ bird/doc/Makefile
+@@ -12,8 +12,8 @@ endif
+ .PHONY: prog.sgml bird.sgml
+ 
+ docs: progdocs userdocs
+-progdocs: prog.html prog.ps
+-userdocs: bird.html bird.ps
++progdocs: prog.html prog.pdf
++userdocs: bird.html bird.pdf
+ 
+ prog.sgml:
+ 	$(srcdir)/tools/progdoc $(srcdir_abs)
+@@ -25,6 +25,10 @@ prog.sgml:
+ 	latex $<
+ 	latex $<
+ 
++%.pdf: %.tex
++	pdflatex $<
++	pdflatex $<
++
+ %.ps: %.dvi
+ 	dvips -D600 -ta4 -o $@ $<
+ 
+@@ -43,4 +47,4 @@ clean:
+ 	rm -f prog.sgml
+ 
+ distclean: clean
+-	rm -f *.html *.ps
++	rm -f *.html *.ps *.pdf

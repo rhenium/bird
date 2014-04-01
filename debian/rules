@@ -30,6 +30,8 @@ override_dh_auto_build:
 	dh_auto_build -Bbuild-ipv6
 	dh_auto_build -Bbuild-ipv4-bgp
 	dh_auto_build -Bbuild-ipv6-bgp
+	# Build the upstream documentation
+	dh_auto_build -Ddoc
 
 override_dh_auto_clean:
 	dh_auto_clean -Bbuild-ipv4

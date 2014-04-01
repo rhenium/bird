@@ -1,2 +1,3 @@
+011-generate_docs_with_modern_linuxdoc.patch
 009-link_using_ld.patch
 010-split_example_config_files.patch
