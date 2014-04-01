@@ -131,7 +131,8 @@ CF_KEYWORDS(NONE, SIMPLE, AUTHENTICATION, STRICT, CRYPTOGRAPHIC, TTL, SECURITY)
 CF_KEYWORDS(ELIGIBLE, POLL, NETWORKS, HIDDEN, VIRTUAL, CHECK, LINK, ONLY, BFD)
 CF_KEYWORDS(RX, BUFFER, LARGE, NORMAL, STUBNET, HIDDEN, SUMMARY, TAG, EXTERNAL)
 CF_KEYWORDS(WAIT, DELAY, LSADB, ECMP, LIMIT, WEIGHT, NSSA, TRANSLATOR, STABILITY)
-CF_KEYWORDS(GLOBAL, LSID, ROUTER, SELF, INSTANCE, REAL, NETMASK, TX, PRIORITY)
+CF_KEYWORDS(GLOBAL, LSID, ROUTER, SELF, INSTANCE, REAL, NETMASK, TX, PRIORITY, LENGTH)
+CF_KEYWORDS(SECONDARY)
 
 %type <t> opttext
 %type <ld> lsadb_args
@@ -302,14 +303,16 @@ ospf_iface_item:
  | AUTHENTICATION NONE { OSPF_PATT->autype = OSPF_AUTH_NONE ; }
  | AUTHENTICATION SIMPLE { OSPF_PATT->autype = OSPF_AUTH_SIMPLE ; }
  | AUTHENTICATION CRYPTOGRAPHIC { OSPF_PATT->autype = OSPF_AUTH_CRYPT ; }
- | RX BUFFER LARGE { OSPF_PATT->rxbuf = OSPF_RXBUF_LARGE ; } 
- | RX BUFFER NORMAL { OSPF_PATT->rxbuf = OSPF_RXBUF_NORMAL ; } 
- | RX BUFFER expr { OSPF_PATT->rxbuf = $3 ; if (($3 < OSPF_RXBUF_MINSIZE) || ($3 > OSPF_MAX_PKT_SIZE)) cf_error("Buffer size must be in range 256-65535"); } 
+ | RX BUFFER NORMAL { OSPF_PATT->rx_buffer = 0; } 
+ | RX BUFFER LARGE { OSPF_PATT->rx_buffer = OSPF_MAX_PKT_SIZE; } 
+ | RX BUFFER expr { OSPF_PATT->rx_buffer = $3; if (($3 < OSPF_MIN_PKT_SIZE) || ($3 > OSPF_MAX_PKT_SIZE)) cf_error("Buffer size must be in range 256-65535"); }
  | TX tos { OSPF_PATT->tx_tos = $2; }
  | TX PRIORITY expr { OSPF_PATT->tx_priority = $3; }
+ | TX LENGTH expr { OSPF_PATT->tx_length = $3; if (($3 < OSPF_MIN_PKT_SIZE) || ($3 > OSPF_MAX_PKT_SIZE)) cf_error("TX length must be in range 256-65535"); }
  | TTL SECURITY bool { OSPF_PATT->ttl_security = $3; }
  | TTL SECURITY TX ONLY { OSPF_PATT->ttl_security = 2; }
  | BFD bool { OSPF_PATT->bfd = $2; cf_check_bfd($2); }
+ | SECONDARY bool { OSPF_PATT->bsd_secondary = $2; }
  | password_list
  ;
 
@@ -383,6 +386,10 @@ ospf_instance_id:
  | INSTANCE expr { set_instance_id($2); }
  ;
 
+ospf_iface_patt_list:
+   iface_patt_list { if (OSPF_VERSION == 3) iface_patt_check(); } ospf_instance_id
+ ; 
+
 ospf_iface_opts:
    /* empty */
  | ospf_iface_opts ospf_iface_item ';'
@@ -394,7 +401,7 @@ ospf_iface_opt_list:
  ;
 
 ospf_iface:
-  ospf_iface_start iface_patt_list ospf_instance_id ospf_iface_opt_list { ospf_iface_finish(); }
+  ospf_iface_start ospf_iface_patt_list ospf_iface_opt_list { ospf_iface_finish(); }
  ;
 
 opttext:

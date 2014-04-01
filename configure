@@ -3230,6 +3230,8 @@ ac_res=$ac_cv_search_clock_gettime
 if test "$ac_res" != no; then :
   test "$ac_res" = "none required" || LIBS="$ac_res $LIBS"
 
+else
+  as_fn_error $? "Function clock_gettime not available." "$LINENO" 5
 fi
 
 
@@ -5761,7 +5763,8 @@ fi
 $as_echo "$ac_cv_lib_tinfo_tgetent" >&6; }
 if test "x$ac_cv_lib_tinfo_tgetent" = x""yes; then :
   USE_TERMCAP_LIB=-ltinfo
-					{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for tgetent in -ltermcap" >&5
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for tgetent in -ltermcap" >&5
 $as_echo_n "checking for tgetent in -ltermcap... " >&6; }
 if test "${ac_cv_lib_termcap_tgetent+set}" = set; then :
   $as_echo_n "(cached) " >&6
@@ -5799,6 +5802,8 @@ fi
 $as_echo "$ac_cv_lib_termcap_tgetent" >&6; }
 if test "x$ac_cv_lib_termcap_tgetent" = x""yes; then :
   USE_TERMCAP_LIB=-ltermcap
+else
+  as_fn_error $? "The client requires ncurses library. Either install the library or use --disable-client to compile without the client." "$LINENO" 5
 fi
 
 fi

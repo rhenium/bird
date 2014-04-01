@@ -351,15 +351,14 @@ krt_learn_announce_update(struct krt_proto *p, rte *e)
   ee->pflags = 0;
   ee->pref = p->p.preference;
   ee->u.krt = e->u.krt;
-  rte_update(p->p.table, nn, &p->p, &p->p, ee);
+  rte_update(&p->p, nn, ee);
 }
 
 static void
 krt_learn_announce_delete(struct krt_proto *p, net *n)
 {
   n = net_find(p->p.table, n->n.prefix, n->n.pxlen);
-  if (n)
-    rte_update(p->p.table, n, &p->p, &p->p, NULL);
+  rte_update(&p->p, n, NULL);
 }
 
 /* Called when alien route is discovered during scan */
@@ -654,6 +653,13 @@ krt_got_route(struct krt_proto *p, rte *e)
       return;
     }
 
+  if (!p->ready)
+    {
+      /* We wait for the initial feed to have correct KRF_INSTALLED flag */
+      verdict = KRF_IGNORE;
+      goto sentenced;
+    }
+
   old = net->routes;
   if ((net->n.flags & KRF_INSTALLED) && rte_is_valid(old))
     {
@@ -697,7 +703,7 @@ krt_export_rte(struct krt_proto *p, rte **new, ea_list **tmpa)
   if (filter == FILTER_ACCEPT)
     return 1;
 
-  struct proto *src = (*new)->attrs->proto;
+  struct proto *src = (*new)->attrs->src->proto;
   *tmpa = src->make_tmp_attrs ? src->make_tmp_attrs(*new, krt_filter_lp) : NULL;
   return f_run(filter, new, tmpa, krt_filter_lp, FF_FORCE_TMPATTR) <= F_ACCEPT;
 }
@@ -780,7 +786,9 @@ krt_prune(struct krt_proto *p)
   if (KRT_CF->learn)
     krt_learn_prune(p);
 #endif
-  p->initialized = 1;
+
+  if (p->ready)
+    p->initialized = 1;
 }
 
 void
@@ -853,7 +861,7 @@ krt_scan_timer_start(struct krt_proto *p)
 
   krt_scan_count++;
 
-  tm_start(krt_scan_timer, 0);
+  tm_start(krt_scan_timer, 1);
 }
 
 static void
@@ -866,6 +874,12 @@ krt_scan_timer_stop(struct krt_proto *p)
     rfree(krt_scan_timer);
     krt_scan_timer = NULL;
   }
+}
+
+static void
+krt_scan_timer_kick(struct krt_proto *p UNUSED)
+{
+  tm_start(krt_scan_timer, 0);
 }
 
 #else
@@ -886,13 +900,19 @@ static void
 krt_scan_timer_start(struct krt_proto *p)
 {
   p->scan_timer = tm_new_set(p->p.pool, krt_scan, p, 0, KRT_CF->scan_time);
-  tm_start(p->scan_timer, 0);
+  tm_start(p->scan_timer, 1);
 }
 
 static void
 krt_scan_timer_stop(struct krt_proto *p)
 {
   tm_stop(p->scan_timer);
+}
+
+static void
+krt_scan_timer_kick(struct krt_proto *p UNUSED)
+{
+  tm_start(p->scan_timer, 0);
 }
 
 #endif
@@ -939,7 +959,7 @@ krt_import_control(struct proto *P, rte **new, ea_list **attrs, struct linpool *
   struct krt_proto *p = (struct krt_proto *) P;
   rte *e = *new;
 
-  if (e->attrs->proto == P)
+  if (e->attrs->src->proto == P)
     return -1;
 
   if (!KRT_CF->devroutes && 
@@ -971,6 +991,16 @@ krt_notify(struct proto *P, struct rtable *table UNUSED, net *net,
     krt_replace_rte(p, net, new, old, eattrs);
 }
 
+static void
+krt_feed_done(struct proto *P)
+{
+  struct krt_proto *p = (struct krt_proto *) P;
+
+  p->ready = 1;
+  krt_scan_timer_kick(p);
+}
+
+
 static int
 krt_rte_same(rte *a, rte *b)
 {
@@ -991,10 +1021,11 @@ krt_init(struct proto_config *c)
   struct krt_proto *p = proto_new(c, sizeof(struct krt_proto));
 
   p->p.accept_ra_types = RA_OPTIMAL;
-  p->p.make_tmp_attrs = krt_make_tmp_attrs;
-  p->p.store_tmp_attrs = krt_store_tmp_attrs;
   p->p.import_control = krt_import_control;
   p->p.rt_notify = krt_notify;
+  p->p.feed_done = krt_feed_done;
+  p->p.make_tmp_attrs = krt_make_tmp_attrs;
+  p->p.store_tmp_attrs = krt_store_tmp_attrs;
   p->p.rte_same = krt_rte_same;
 
   krt_sys_init(p);
@@ -1016,6 +1047,9 @@ krt_start(struct proto *P)
 
   krt_scan_timer_start(p);
 
+  if (P->gr_recovery && KRT_CF->graceful_restart)
+    P->gr_wait = 1;
+
   return PS_UP;
 }
 
@@ -1029,6 +1063,9 @@ krt_shutdown(struct proto *P)
   /* FIXME we should flush routes even when persist during reconfiguration */
   if (p->initialized && !KRT_CF->persist)
     krt_flush_routes(p);
+
+  p->ready = 0;
+  p->initialized = 0;
 
   krt_sys_shutdown(p);
 
@@ -1046,7 +1083,7 @@ krt_reconfigure(struct proto *p, struct proto_config *new)
   if (!krt_sys_reconfigure((struct krt_proto *) p, n, o))
     return 0;
 
-  /* persist needn't be the same */
+  /* persist, graceful restart need not be the same */
   return o->scan_time == n->scan_time && o->learn == n->learn && o->devroutes == n->devroutes;
 }
 

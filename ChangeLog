@@ -1,3 +1,265 @@
+commit 60442b1698563ebc5837454d89dbe4afa037882d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Mar 31 18:51:51 2014 +0200
+
+    NEWS and version update.
+
+commit d96ec7f6e0d26546d9a27064fd13591618258894
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Mar 31 18:51:16 2014 +0200
+
+    Updates BFD documentation.
+
+commit eb5ea6bdd6fa45f03425ea38b8d1b16fd5ff7469
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Mar 31 13:21:13 2014 +0200
+
+    Fixes build on some old systems.
+
+commit 43eb8f610f7796375419dc8d72df7a41c01c82af
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Mar 31 12:02:20 2014 +0200
+
+    Removes conflicting definition.
+    
+    This function is a part of Readline interface for a long time
+    (with a different type).
+
+commit d7c0628591b802e202903b63fce53b6a422a3db2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Mar 31 00:56:44 2014 +0200
+
+    Check validity of interface definitions.
+    
+    Thanks to Aleksey Berezin for the bugreport.
+
+commit 0c3d9dacafdb807d2101c67610969707353f434a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Mar 25 14:58:00 2014 +0100
+
+    Fixes file descriptor leak when parser ends with error.
+    
+    Thanks to MrBr for the bugreport.
+
+commit 4e7c974d22ee5d938d8d8e7018f0a63f609d630b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Mar 24 19:22:19 2014 +0100
+
+    Fixes a bug in graceful restart.
+
+commit 9637c7c0acbc56bbf6fedc44d89f921386843992
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Mar 24 13:33:15 2014 +0100
+
+    Minor fixes in documentation.
+
+commit dad92c30c7892457335d52a09548330498567ea8
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Mar 24 12:56:56 2014 +0100
+
+    Reformat bird.sgml to have consistent line length.
+
+commit c980f8002e0f0578d5e715d48d65d9fb9a0c5a70
+Merge: 2e84b4e 227af30
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Mar 24 12:41:43 2014 +0100
+
+    Merge branch 'bgp-grace'
+
+commit 227af309e55a59f14d1a5a757f17900164bffc97
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Mar 24 12:32:12 2014 +0100
+
+    Fixes some minor issues in graceful restart.
+
+commit 2e84b4e82dbf8fce0fd12fb0c25d925ffd287970
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Mar 23 01:40:37 2014 +0100
+
+    Fixes a bug in rte_src handling.
+
+commit 6eda3f135f5bab4db456531d25bc3e5f669ec22e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Mar 23 01:35:33 2014 +0100
+
+    Documentation (and minor fixes) for BGP graceful restart.
+
+commit 0c791f873aeb7c1052c97db7da4fe23873d69603
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Mar 20 14:07:12 2014 +0100
+
+    BGP graceful restart support.
+    
+    Also significant core protocol state changes needed for that,
+    global graceful restart recovery state and kernel proto support
+    for recovery.
+
+commit d40c26594c22ad934a13061e11b373bdf81af8f9
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Feb 26 13:25:39 2014 +0100
+
+    Fixes issues with static protocol reconfiguration.
+    
+    The old static route was not removed when the nexthop changed and the
+    new one was not viable (no neighbor).
+    
+    Thanks to Pierluigi Rolando for the original patch.
+
+commit 3216eb03ddddc057bb18fa4dd02b7935a604f71f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Feb 26 12:52:00 2014 +0100
+
+    Fixes longstanding issue with interfaces staying in IF_TMP_DOWN.
+    
+    Thanks to Pierluigi Rolando and others for the bugreport.
+
+commit d776540811cdf672dc113f29feef2415465589c6
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Feb 12 12:57:38 2014 +0100
+
+    Adds configure error message.
+
+commit 4e398e34bf140baf73fe8dceaf81078fb343f65a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Feb 7 13:09:55 2014 +0100
+
+    Workaround thread-unsafeness of cli_echo().
+
+commit 9ae0f4b78c5e3619ee19969c052c863bf96be6d9
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Feb 7 11:46:01 2014 +0100
+
+    Fixes autoconf check for ncurses.
+
+commit 5c200e0a4d26d183e04fda43de16340521002c40
+Merge: 4a5eb28 080ed4d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Feb 6 20:15:05 2014 +0100
+
+    Merge branch 'add-path'
+
+commit 4a5eb284c9d51441e09976021d1bd93c21408d46
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Feb 6 18:09:18 2014 +0100
+
+    Update include directive documentation.
+    
+    Thanks to Pierluigi Rolando for the bugreport.
+
+commit 12201fd854424628be7a00e1180ba082db7efa0b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Feb 6 18:00:41 2014 +0100
+
+    Fix a documentation update.
+
+commit 10c2e1e0125dfa600b1c2b6553883cccf2d025dd
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Feb 6 17:54:25 2014 +0100
+
+    Fixes crash when state of disabled OSPF protocol is queried.
+    
+    Thanks to Ondrej Caletka for the bugreport.
+
+commit cba9cbf1bdb253c7727da10ff4f835d7ffbadeed
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Feb 6 17:51:16 2014 +0100
+
+    Silence this annoying warning.
+
+commit 48e5f32db676645640f84ab3d630cce975aa6b20
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Feb 6 17:46:01 2014 +0100
+
+    Many changes in I/O and OSPF sockets and packet handling.
+    
+    I/O:
+     - BSD: specify src addr on IP sockets by IP_HDRINCL
+     - BSD: specify src addr on UDP sockets by IP_SENDSRCADDR
+     - Linux: specify src addr on IP/UDP sockets by IP_PKTINFO
+     - IPv6: specify src addr on IP/UDP sockets by IPV6_PKTINFO
+     - Alternative SKF_BIND flag for binding to IP address
+     - Allows IP/UDP sockets without tx_hook, on these
+       sockets a packet is discarded when TX queue is full
+     - Use consistently SOL_ for socket layer values.
+    
+    OSPF:
+     - Packet src addr is always explicitly set
+     - Support for secondary addresses in BSD
+     - Dynamic RX/TX buffers
+     - Fixes some minor buffer overruns
+     - Interface option 'tx length'
+     - Names for vlink pseudoifaces (vlinkX)
+     - Vlinks use separate socket for TX
+     - Vlinks do not use fixed associated iface
+     - Fixes TTL for direct unicast packets
+     - Fixes DONTROUTE for OSPF sockets
+     - Use ifa->ifname instead of ifa->iface->name
+
+commit f48fa14214301382b2e6b134788a7506b61b664f
+Merge: 6601a14 300e400
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Feb 6 16:47:43 2014 +0100
+
+    Merge commit 'origin/master' into socket
+
+commit 300e4008f02382b87409dabb52a317b8336de55b
+Author: Ondrej Filip <feela@network.cz>
+Date:   Wed Feb 5 23:32:28 2014 +0100
+
+    Fedora init script improvement suggested by alex@alex.org.uk
+
+commit e9e6fbf924630abf821aa38f99e571f706536350
+Author: Ondrej Filip <feela@network.cz>
+Date:   Wed Feb 5 15:57:37 2014 +0100
+
+    Minor changes in Fedora init script.
+
+commit ec35c7c2fc24e499a86022860c38460ae4bbad39
+Author: Ondrej Filip <feela@network.cz>
+Date:   Tue Jan 21 23:43:22 2014 +0100
+
+    Small doc update.
+
+commit 6601a14831cdd32fc671ebc9dc299d2be427e489
+Merge: 2d0b7e2 283c7df
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Dec 10 22:30:46 2013 +0100
+
+    Merge branch 'add-path'
+
+commit 2d0b7e24a52d51904faa8a8e96d68863491c110a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Dec 2 11:54:32 2013 +0100
+
+    Fixes problem with source address selection in BGP and BFD.
+
+commit 080ed4d8c2c1982dd0c81c62703064b620a67a01
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Dec 1 18:25:39 2013 +0100
+
+    Fixes bug in documentation.
+
+commit 10115b1d70552f3ec4446dfec9e62c3a16d9eae0
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Dec 1 18:20:09 2013 +0100
+
+    Updates add-path documentation.
+
+commit e7d2ac4401be8aaf9629e248cad6a74498a6be24
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Nov 26 22:37:24 2013 +0100
+
+    Finishes add-path.
+    
+    Fixes some bugs and uses generic hash implementation.
+
+commit 283c7dfada53a6dee6a8a17ecab492ffafd44b66
+Merge: 736e143 0bb4e37
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Nov 25 18:42:47 2013 +0100
+
+    Merge branch 'master' into add-path
+
 commit 0bb4e37db317a1290bad24fe430cac6569a9bd8c
 Author: Ondrej Filip <feela@network.cz>
 Date:   Mon Nov 25 15:16:20 2013 +0100
@@ -101,6 +363,21 @@ Author: Ondrej Filip <feela@network.cz>
 Date:   Sat Nov 23 13:26:52 2013 +0100
 
     Added a few sentences about symbol names.
+
+commit 736e143fa50607fcd88132291e96089b899af979
+Merge: 094d2bd 2b3d52a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Nov 23 11:50:34 2013 +0100
+
+    Merge branch 'master' into add-path
+    
+    Conflicts:
+    
+    	filter/filter.c
+    	nest/proto.c
+    	nest/rt-table.c
+    	proto/bgp/bgp.h
+    	proto/bgp/config.Y
 
 commit 2b3d52aa421ae1c31e30107beefd82fddbb42854
 Author: Ondrej Zajicek <santiago@crfreenet.org>
@@ -1062,6 +1339,17 @@ Date:   Thu Aug 16 13:09:26 2012 +0200
     When there are overlapping IP prefixes and one disappears,
     neighbors associated with it was removed even if there
     is another covering IP prefix.
+
+commit 094d2bdb79e1ffa0a02761fd651aa0f0b6b0c585
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Aug 14 16:25:22 2012 +0200
+
+    Implements ADD-PATH extension for BGP.
+    
+    Allows to send and receive multiple routes for one network by one BGP
+    session. Also contains necessary core changes to support this (routing
+    tables accepting several routes for one network from one protocol).
+    It needs some more cleanup before merging to the master branch.
 
 commit d760229ab897fa1bf1fd0fe7019cc2431d21a1cc
 Author: Ondrej Filip <feela@network.cz>
