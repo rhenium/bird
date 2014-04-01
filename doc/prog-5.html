@@ -143,6 +143,15 @@ of the attribute blocks and translating them to the language of BIRD's extended 
 and <B>bgp_encode_attrs()</B> which does the converse. Both functions are built around a
 <B>bgp_attr_table</B> array describing all important characteristics of all known attributes.
 Unknown transitive attributes are attached to the route as <I>EAF_TYPE_OPAQUE</I> byte streams.
+<P>BGP protocol implements graceful restart in both restarting (local restart)
+and receiving (neighbor restart) roles. The first is handled mostly by the
+graceful restart code in the nest, BGP protocol just handles capabilities,
+sets <B>gr_wait</B> and locks graceful restart until end-of-RIB mark is received.
+The second is implemented by internal restart of the BGP state to <I>BS_IDLE</I>
+and protocol state to <I>PS_START</I>, but keeping the protocol up from the core
+point of view and therefore maintaining received routes. Routing table
+refresh cycle (<B>rt_refresh_begin()</B>, <B>rt_refresh_end()</B>) is used for removing
+stale routes after reestablishment of BGP session during graceful restart.
 <P>
 <P><HR><H3>Function</H3>
 <P><I>int</I>
@@ -226,6 +235,59 @@ closes its socket and frees all resources associated with it.
 It also handles disable_after_error and might stop BGP instance when error
 happened and disable_after_error is on.
 <P>It should be called when BGP protocol error happened.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>bgp_handle_graceful_restart</B>
+(<I>struct bgp_proto *</I> <B>p</B>) --     handle detected BGP graceful restart
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct bgp_proto *</I> <B>p</B><DD><P>BGP instance
+</DL>
+<H3>Description</H3>
+<P>This function is called when a BGP graceful restart of the neighbor is
+detected (when the TCP connection fails or when a new TCP connection
+appears). The function activates processing of the restart - starts routing
+table refresh cycle and activates BGP restart timer. The protocol state goes
+back to <I>PS_START</I>, but changing BGP state back to <I>BS_IDLE</I> is left for the
+caller.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>bgp_graceful_restart_done</B>
+(<I>struct bgp_proto *</I> <B>p</B>) --     finish active BGP graceful restart
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct bgp_proto *</I> <B>p</B><DD><P>BGP instance
+</DL>
+<H3>Description</H3>
+<P>This function is called when the active BGP graceful restart of the neighbor
+should be finished - either successfully (the neighbor sends all paths and
+reports end-of-RIB on the new session) or unsuccessfully (the neighbor does
+not support BGP graceful restart on the new session). The function ends
+routing table refresh cycle and stops BGP restart timer.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>bgp_graceful_restart_timeout</B>
+(<I>timer *</I> <B>t</B>) --     timeout of graceful restart 'restart timer'
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>timer *</I> <B>t</B><DD><P>timer
+</DL>
+<H3>Description</H3>
+<P>This function is a timeout hook for <B>gr_timer</B>, implementing BGP restart time
+limit for reestablisment of the BGP session after the graceful restart. When
+fired, we just proceed with the usual protocol restart.
 
 
 <HR><H3>Function</H3>

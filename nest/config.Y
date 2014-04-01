@@ -24,6 +24,17 @@ static list *this_p_list;
 static struct password_item *this_p_item;
 static int password_id;
 
+static void
+iface_patt_check(void)
+{
+  struct iface_patt_node *pn;
+
+  WALK_LIST(pn, this_ipatt->ipn_list)
+    if (!pn->pattern || pn->pxlen)
+      cf_error("Interface name/mask expected, not IP prefix");
+}
+
+
 static inline void
 reset_passwords(void)
 {
@@ -49,6 +60,7 @@ CF_KEYWORDS(PASSWORD, FROM, PASSIVE, TO, ID, EVENTS, PACKETS, PROTOCOLS, INTERFA
 CF_KEYWORDS(PRIMARY, STATS, COUNT, FOR, COMMANDS, PREEXPORT, GENERATE, ROA, MAX, FLUSH, AS)
 CF_KEYWORDS(LISTEN, BGP, V6ONLY, DUAL, ADDRESS, PORT, PASSWORDS, DESCRIPTION, SORTED)
 CF_KEYWORDS(RELOAD, IN, OUT, MRTDUMP, MESSAGES, RESTRICT, MEMORY, IGP_METRIC, CLASS, DSCP)
+CF_KEYWORDS(GRACEFUL, RESTART, WAIT)
 
 CF_ENUM(T_ENUM_RTS, RTS_, DUMMY, STATIC, INHERIT, DEVICE, STATIC_DEVICE, REDIRECT,
 	RIP, OSPF, OSPF_IA, OSPF_EXT1, OSPF_EXT2, BGP, PIPE)
@@ -108,6 +120,11 @@ listen_opt:
  | V6ONLY { new_config->listen_bgp_flags = 0; }
  | DUAL { new_config->listen_bgp_flags = 1; }
  ;
+
+
+CF_ADDTO(conf, gr_opts)
+
+gr_opts: GRACEFUL RESTART WAIT expr ';' { new_config->gr_wait = $4; } ;
 
 
 /* Creation of routing tables */
@@ -265,6 +282,9 @@ iface_patt_list:
    iface_patt_node
  | iface_patt_list ',' iface_patt_node
  ;
+
+/* For name/mask-only iface patterns */
+iface_patt_list_nopx: iface_patt_list { iface_patt_check(); }
 
 iface_patt_init: {
    /* Generic this_ipatt init */
