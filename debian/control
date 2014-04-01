@@ -9,7 +9,9 @@ Build-Depends: quilt,
 	       m4,
 	       libreadline-dev | libreadline6-dev | libreadline5-dev,
 	       libncurses5-dev,
-	       autotools-dev
+	       autotools-dev,
+	       xsltproc,
+	       docbook-xsl
 Maintainer: Ondřej Surý <ondrej@debian.org>
 Standards-Version: 3.9.4
 Vcs-Browser: http://git.debian.org/?p=users/ondrej/bird.git
