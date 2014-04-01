@@ -1,3 +1,19 @@
+bird (1.4.1-1) unstable; urgency=high
+
+  * New upstream version 1.4.1
+   o BGP add-path support (RFC draft).
+   o BGP graceful restart (RFC 4724).
+   o OSPF: many changes in socket layer.
+   o OSPF: support for secondary addresses in BSD.
+   o OSPF: names for vlink pseudointerfaces (vlinkX).
+   o Several bugfixes.
+  * Fix new readline compatibility (Closes: #688385)
+  * Add manpage for bird (Closes: #579996)
+  * Build documentation and install it into bird-doc package (Closes: #664464)
+  * Add a uscan watch file
+
+ -- Ondřej Surý <ondrej@debian.org>  Tue, 01 Apr 2014 12:33:05 +0200
+
 bird (1.4.0-3) unstable; urgency=low
 
   * Add 'exec' before bird execution in upstart jobs
