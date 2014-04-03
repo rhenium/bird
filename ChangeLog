@@ -1,3 +1,25 @@
+commit 538fec7b1b7dd729eadf1c933e27f59080cd3576
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 2 23:00:10 2014 +0200
+
+    NEWS and version update.
+
+commit 2750b2484f256686a38ef6b89db7e2afe9b7999a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 2 20:09:37 2014 +0200
+
+    Fixes missing line in BFD context help.
+
+commit 864f52a5f4c47ac8dc44a8808beb7f038cbf9899
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 2 19:58:23 2014 +0200
+
+    Fixes nasty bug in BFD.
+    
+    When a BFD session is removed while being scheduled for notification,
+    the session stays in notify list and is removed twice, which leads to
+    a strange crash after a while.
+
 commit 60442b1698563ebc5837454d89dbe4afa037882d
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Mar 31 18:51:51 2014 +0200
