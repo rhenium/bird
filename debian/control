@@ -14,7 +14,7 @@ Build-Depends: quilt,
 	       docbook-xsl,
 	       linuxdoc-tools-latex
 Maintainer: Ondřej Surý <ondrej@debian.org>
-Standards-Version: 3.9.4
+Standards-Version: 3.9.5
 Vcs-Browser: http://git.debian.org/?p=users/ondrej/bird.git
 Vcs-Git: git://git.debian.org/users/ondrej/bird.git
 Homepage: http://bird.network.cz/
