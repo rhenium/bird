@@ -1,3 +1,28 @@
+commit 6c6ebd64c3e44a2658a7ae8729159f1653c00a89
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Apr 14 14:47:20 2014 +0200
+
+    NEWS and version update.
+
+commit 7c4a8007255403d046d7e909f710f0b1ed1791b1
+Author: Ondrej Filip <feela@network.cz>
+Date:   Mon Apr 14 12:28:30 2014 +0200
+
+    Fixed bug in unused function.
+
+commit 859cbd75e12966b09985b2a992da5ffb250938f8
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Apr 14 12:50:03 2014 +0200
+
+    Fixes a bug in (mainly) IPv6 BGP.
+    
+    Stack variable may be used unitialized and that would lead to spurious
+    rta_free(), which may cause crash. The bug was introduced in 1.4.1 from
+    merging add-path branch.
+    
+    Thanks to Peter Andreev for reporting it and Alexander V. Chernikov for
+    resolving it.
+
 commit 538fec7b1b7dd729eadf1c933e27f59080cd3576
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Wed Apr 2 23:00:10 2014 +0200
