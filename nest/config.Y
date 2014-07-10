@@ -208,7 +208,7 @@ proto_item:
  | IMPORT KEEP FILTERED bool { this_proto->in_keep_filtered = $4; }
  | TABLE rtable { this_proto->table = $2; }
  | ROUTER ID idval { this_proto->router_id = $3; }
- | DESCRIPTION TEXT { this_proto->dsc = $2; }
+ | DESCRIPTION text { this_proto->dsc = $2; }
  ;
 
 imexport:
@@ -388,7 +388,7 @@ password_item:
 ;
 
 password_item_begin:
-   PASSWORD TEXT {
+   PASSWORD text {
      if (!this_p_list) {
      	this_p_list = cfg_alloc(sizeof(list));
      	init_list(this_p_list);
@@ -498,7 +498,6 @@ r_args:
      if ($$->export_mode) cf_error("Protocol specified twice");
      if ($3->class != SYM_PROTO || !c->proto) cf_error("%s is not a protocol", $3->name);
      $$->export_mode = $2;
-     $$->primary_only = 1;
      $$->export_protocol = c->proto;
      $$->running_on_config = c->proto->cf->global;
    }

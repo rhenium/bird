@@ -1,3 +1,139 @@
+commit 7c00551749005ad951845eb924f76e1fd28e62a2
+Author: Ondrej Filip <feela@network.cz>
+Date:   Wed Jul 9 23:46:02 2014 +0200
+
+    Version 1.4.4.
+
+commit 06c4b6ac9da204453049fa56a204474486a9c9e9
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jul 9 18:42:59 2014 +0200
+
+    NEWS and version update.
+
+commit 029ec22d0acedb79e03394b60ea99bb46c479d79
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jul 9 18:34:42 2014 +0200
+
+    Fixes a bug in BSD kernel interfacing code.
+    
+    The bug was introduced in 05476c4d04a24bdb26fa64e05ab31bc36118f34e.
+
+commit 751482899c190194b4958bc54ded428f98f565e9
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jul 7 22:56:21 2014 +0200
+
+    Implements default router preference (RFC 4191) for RAdv.
+    
+    Thanks to Baptiste Jonglez for the patch.
+
+commit 6285793f18817091060c7257f7d4af0db010a67a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jul 7 22:23:37 2014 +0200
+
+    Replaces function name in test.conf as it collided with new keyword.
+
+commit 20e8d040b09f1e01c431c686f1ced5a12ba7bc68
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jun 30 11:55:22 2014 +0200
+
+    Fixes integer overflow in show memory command.
+    
+    Thanks to Job Snijders for the bugreport.
+
+commit 8945f73d946a9323daf8dfc1bf5b3884cf6d7664
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 26 13:30:27 2014 +0200
+
+    Ensures that msg_controllen includes last padding.
+    
+    Although RFC 3542 allows both cases, Theo de Raadt thinks
+    he knows better, and msg_controllen without last padding
+    fails on OpenBSD.
+    
+    Thanks to Job Snijders for the bugreport.
+
+commit 9d5960cfa5b4c15ddd48dbab599f864a6aa1e025
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jun 10 12:16:01 2014 +0200
+
+    Fixes max include depth in documentation.
+    
+    Thanks to Artyom Gavrichenkov for the patch.
+
+commit 9eceab33f97724be148f9f05614d7551940e85f1
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu May 29 23:05:03 2014 +0200
+
+    String constants could be used for string option values.
+    
+    Thanks to Frederik Kriewitz for the patch.
+
+commit 05476c4d04a24bdb26fa64e05ab31bc36118f34e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 18 11:42:26 2014 +0200
+
+    IPv4/IPv6 integrated socket code.
+
+commit 1149aa977d906a6400f998d5f6600871584395d0
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon May 5 11:05:12 2014 +0200
+
+    Fixes a problem with undoing of deconfiguring of protocol.
+    
+    Thanks to Sergey Popovich for the original patch.
+
+commit 5a3905fe905ab1cc1a58fe9e6a4284f7d5057d13
+Merge: 66370ea 7d9ab86
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 4 11:59:50 2014 +0200
+
+    Merge commit 'origin/master'
+
+commit 66370eac1f88ec74b3017f1c39038d7b8b776de6
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 4 00:01:06 2014 +0200
+
+    Fixes BGP crash when update with some attributes and empty NLRI is received.
+    
+    Thanks to Charlie Allom for the bugreport.
+
+commit 7d9ab86b7ac7d1f039af92a58eb749a24811b5c9
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 4 00:01:06 2014 +0200
+
+    Fixes BGP crash when update with some attributes and empty NLRI is received.
+
+commit c865cae3eb327d1e0a745352c483bc7cb00f9323
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Apr 28 17:31:03 2014 +0200
+
+    Fixes 'show route export' w.r.t. protocols with different RA_* types.
+
+commit 984d734944a39b70a59f74e57f0e6fc3f720dd48
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Apr 27 00:46:32 2014 +0200
+
+    Fixes limit verification during reconfiguration.
+
+commit 145368f5474436ad7c48fa26f5bde8108ae5ef4a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 23 13:54:28 2014 +0200
+
+    Extends multipath support for OSPF.
+    
+    Fixes cases where the same network or external route are propagated by
+    several OSPF routes and some other corner cases in next hop construction
+    and ECMP. Allows to specify whether external routes should be merged.
+    
+    Thanks to Peter Christensen for the original patch.
+
+commit 4dd24f05f384ac14546d4bebbfcb0ecf9a976ec6
+Merge: 1cb0f83 6c6ebd6
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 23 13:52:15 2014 +0200
+
+    Merge commit 'origin/master'
+
 commit 6c6ebd64c3e44a2658a7ae8729159f1653c00a89
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Apr 14 14:47:20 2014 +0200
@@ -22,6 +158,12 @@ Date:   Mon Apr 14 12:50:03 2014 +0200
     
     Thanks to Peter Andreev for reporting it and Alexander V. Chernikov for
     resolving it.
+
+commit 1cb0f83d291d9bb3da06067bc2ea838238d5c487
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Apr 7 11:48:25 2014 +0200
+
+    Fixes some asserts.
 
 commit 538fec7b1b7dd729eadf1c933e27f59080cd3576
 Author: Ondrej Zajicek <santiago@crfreenet.org>
