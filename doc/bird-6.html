@@ -932,6 +932,7 @@ protocol ospf &lt;name&gt; {
         stub router &lt;switch&gt;;
         tick &lt;num&gt;;
         ecmp &lt;switch&gt; [limit &lt;num&gt;];
+        merge external &lt;switch&gt;;
         area &lt;id&gt; {
                 stub;
                 nssa;
@@ -1035,6 +1036,13 @@ several directions to the destination, each with the same (computed)
 cost. This option also allows to specify a limit on maximal number of
 nexthops in one route. By default, ECMP is disabled. If enabled,
 default value of the limit is 16.
+<P>
+<DT><CODE>merge external <I>switch</I></CODE><DD><P>This option specifies whether OSPF should merge external routes from
+different routers/LSAs for the same destination. When enabled together
+with <CODE>ecmp</CODE>, equal-cost external routes will be combined to multipath
+routes in the same way as regular routes. When disabled, external routes
+from different LSAs are treated as separate even if they represents the
+same destination. Default value is no.
 <P>
 <DT><CODE>area <I>id</I></CODE><DD><P>This defines an OSPF area with given area ID (an integer or an IPv4
 address, similarly to a router ID). The most important area is the
@@ -1594,6 +1602,9 @@ of RA) hosts may use the router as a default router. 0 means do not use
 as a default router. For <CODE>sensitive</CODE> option, see 
 <A HREF="#dsc-trigger">trigger</A>.
 Default: 3 * <CODE>max ra       interval</CODE>, <CODE>sensitive</CODE> yes.
+<P>
+<DT><CODE>default preference low|medium|high</CODE><DD><P>This option specifies the Default Router Preference value to advertise
+to hosts. Default: medium.
 <P>
 <DT><CODE>rdnss local <I>switch</I></CODE><DD><P>Use only local (interface-specific) RDNSS definitions for this
 interface. Otherwise, both global and local definitions are used. Could
