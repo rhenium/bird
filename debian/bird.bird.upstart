@@ -14,5 +14,5 @@ end script
 
 script
 . /etc/bird/envvars
-exec /usr/sbin/bird -f -u $BIRD_RUN_USER -g $BIRD_RUN_GROUP
+exec /usr/sbin/bird -f -u $BIRD_RUN_USER -g $BIRD_RUN_GROUP $BIRD_ARGS
 end script
