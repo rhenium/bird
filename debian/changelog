@@ -1,3 +1,14 @@
+bird (1.4.4-2) unstable; urgency=medium
+
+  [ Frederik Kriewitz ]
+  * add missing $BIRD_ARGS to upstart scripts
+
+  [ Ondřej Surý ]
+  * Fix Vcs URLs to anonscm.debian.org
+  * Add sp to Build-Depends (Closes: #758318)
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 18 Aug 2014 10:43:50 +0200
+
 bird (1.4.4-1) unstable; urgency=medium
 
   * New upstream version 1.4.4
