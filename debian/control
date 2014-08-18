@@ -12,7 +12,8 @@ Build-Depends: quilt,
 	       autotools-dev,
 	       xsltproc,
 	       docbook-xsl,
-	       linuxdoc-tools-latex
+	       linuxdoc-tools-latex,
+	       sp
 Maintainer: Ondřej Surý <ondrej@debian.org>
 Standards-Version: 3.9.5
 Vcs-Browser: http://anonscm.debian.org/?p=users/ondrej/bird.git
