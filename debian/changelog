@@ -1,3 +1,14 @@
+bird (1.4.5-1) unstable; urgency=medium
+
+  * New upstream version 1.4.5
+   o New 'show route noexport' command option.
+   o Port option for BGP sessions.
+   o Better constant handling in set literals.
+   o Better rate filtering of log messages.
+   o Several minor bugfixes.
+
+ -- Ondřej Surý <ondrej@debian.org>  Wed, 08 Oct 2014 10:22:54 +0200
+
 bird (1.4.4-2) unstable; urgency=medium
 
   [ Frederik Kriewitz ]
