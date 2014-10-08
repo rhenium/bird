@@ -156,7 +156,7 @@ an atomic process.
 KRT instance to be initialized later and performing table scan
 only once for all the instances.
 <P>The code uses OS-dependent parts for kernel updates and scans. These parts are
-in more specific sysdep directories (e.g. sysdep/linux) in functions krt_sys_* 
+in more specific sysdep directories (e.g. sysdep/linux) in functions krt_sys_*
 and kif_sys_* (and some others like <B>krt_replace_rte()</B>) and krt-sys.h header file.
 This is also used for platform specific protocol options and route attributes.
 <P>There was also an old code that used traditional UNIX ioctls for these tasks.

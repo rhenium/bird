@@ -72,7 +72,7 @@ MTU and addresses assigned.
 <DT><CODE>show symbols [table|filter|function|protocol|template|roa|<I>symbol</I>]</CODE><DD><P>Show the list of symbols defined in the configuration (names of
 protocols, routing tables etc.).
 <P>
-<DT><CODE>show route [[for] <I>prefix</I>|<I>IP</I>] [table <I>sym</I>] [filter <I>f</I>|where <I>c</I>] [(export|preexport) <I>p</I>] [protocol <I>p</I>] [<I>options</I>]</CODE><DD><P>Show contents of a routing table (by default of the main one or the
+<DT><CODE>show route [[for] <I>prefix</I>|<I>IP</I>] [table <I>sym</I>] [filter <I>f</I>|where <I>c</I>] [(export|preexport|noexport) <I>p</I>] [protocol <I>p</I>] [<I>options</I>]</CODE><DD><P>Show contents of a routing table (by default of the main one or the
 table attached to a respective protocol), that is routes, their metrics
 and (in case the <CODE>all</CODE> switch is given) all their attributes.
 <P>
@@ -85,9 +85,13 @@ only the selected route is shown.
 <P>
 <P>You can also ask for printing only routes processed and accepted by
 a given filter (<CODE>filter <I>name</I></CODE> or <CODE>filter { <I>filter</I> }</CODE> or matching a given condition (<CODE>where <I>condition</I></CODE>).
-The <CODE>export</CODE> and <CODE>preexport</CODE> switches ask for printing of entries
-that are exported to the specified protocol. With <CODE>preexport</CODE>, the
-export filter of the protocol is skipped.
+<P>The <CODE>export</CODE>, <CODE>preexport</CODE> and <CODE>noexport</CODE> switches ask for
+printing of routes that are exported to the specified protocol.
+With <CODE>preexport</CODE>, the export filter of the protocol is skipped.
+With <CODE>noexport</CODE>, routes rejected by the export filter are printed
+instead. Note that routes not exported to the protocol for other reasons
+(e.g. secondary routes or routes imported from that protocol) are not
+printed even with <CODE>noexport</CODE>.
 <P>
 <P>You can also select just routes added by a specific protocol.
 <CODE>protocol <I>p</I></CODE>.
