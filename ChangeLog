@@ -1,3 +1,58 @@
+commit cfdea7b85f6c520cc5a62eb907d2190db14c9900
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Oct 5 23:59:18 2014 +0200
+
+    NEWS and version update.
+
+commit 7aa809016e9a2e24ef914888f7413dc1f2721b17
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Oct 2 12:46:26 2014 +0200
+
+    Implements show route noexport option.
+    
+    Shows routes that would be exported to the protocol but are rejected by
+    the export filter.
+
+commit 1123e707400984108f48ac7c1be559f7ed8d9306
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Oct 2 11:41:34 2014 +0200
+
+    Implements token bucket filter for rate limiting.
+
+commit dcde7ae597ccb7d81648b9ecab7c0f61c88e60f2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Oct 2 11:33:55 2014 +0200
+
+    Allows to configure different remote port for BGP sessions.
+    
+    Thanks to João Taveira Araújo for the original patch.
+
+commit 252c7e4d0b7b45c89f69b3c4763b0c013aa5830d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Oct 2 11:05:55 2014 +0200
+
+    Refresh kernel protocol when interface disappears.
+    
+    When an interface goes down, (Linux) kernel removes routes pointing to
+    that ifacem but does not send withdraws for them. We rescan the
+    kernel table to ensure synchronization.
+    
+    Thanks to Alexander Demenshin for the bugreport.
+
+commit b2f008378a39104152b20a969942cd6c99644984
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Oct 2 11:02:14 2014 +0200
+
+    Allows more constants in set literals.
+    
+    Thanks to Michael Fincham for the bugreport.
+
+commit 0479b44373892db273f3e0365c7cbaad2eeb0d5f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Oct 2 10:59:34 2014 +0200
+
+    Fixes some warnings.
+
 commit 7c00551749005ad951845eb924f76e1fd28e62a2
 Author: Ondrej Filip <feela@network.cz>
 Date:   Wed Jul 9 23:46:02 2014 +0200
