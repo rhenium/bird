@@ -251,7 +251,7 @@ kif_init_config(int class)
   if (kif_cf)
     cf_error("Kernel device protocol already defined");
 
-  kif_cf = (struct kif_config *) proto_config_new(&proto_unix_iface, sizeof(struct kif_config), class);
+  kif_cf = (struct kif_config *) proto_config_new(&proto_unix_iface, class);
   kif_cf->scan_time = 60;
   init_list(&kif_cf->primary);
 
@@ -277,15 +277,16 @@ kif_copy_config(struct proto_config *dest, struct proto_config *src)
 
 
 struct protocol proto_unix_iface = {
-  name:		"Device",
-  template:	"device%d",
-  preference:	DEF_PREF_DIRECT,
-  preconfig:	kif_preconfig,
-  init:		kif_init,
-  start:	kif_start,
-  shutdown:	kif_shutdown,
-  reconfigure:	kif_reconfigure,
-  copy_config:	kif_copy_config
+  .name = 		"Device",
+  .template = 		"device%d",
+  .preference =		DEF_PREF_DIRECT,
+  .config_size =	sizeof(struct kif_config),
+  .preconfig =		kif_preconfig,
+  .init =		kif_init,
+  .start =		kif_start,
+  .shutdown =		kif_shutdown,
+  .reconfigure =	kif_reconfigure,
+  .copy_config =	kif_copy_config
 };
 
 /*
@@ -1022,7 +1023,7 @@ krt_reload_routes(struct proto *P)
 }
 
 static void
-krt_feed_done(struct proto *P)
+krt_feed_end(struct proto *P)
 {
   struct krt_proto *p = (struct krt_proto *) P;
 
@@ -1055,7 +1056,7 @@ krt_init(struct proto_config *c)
   p->p.rt_notify = krt_rt_notify;
   p->p.if_notify = krt_if_notify;
   p->p.reload_routes = krt_reload_routes;
-  p->p.feed_done = krt_feed_done;
+  p->p.feed_end = krt_feed_end;
   p->p.make_tmp_attrs = krt_make_tmp_attrs;
   p->p.store_tmp_attrs = krt_store_tmp_attrs;
   p->p.rte_same = krt_rte_same;
@@ -1150,7 +1151,7 @@ krt_init_config(int class)
     cf_error("Kernel protocol already defined");
 #endif
 
-  krt_cf = (struct krt_config *) proto_config_new(&proto_unix_kernel, sizeof(struct krt_config), class);
+  krt_cf = (struct krt_config *) proto_config_new(&proto_unix_kernel, class);
   krt_cf->scan_time = 60;
 
   krt_sys_init_config(krt_cf);
@@ -1198,20 +1199,21 @@ krt_get_attr(eattr * a, byte * buf, int buflen UNUSED)
 
 
 struct protocol proto_unix_kernel = {
-  name:		"Kernel",
-  template:	"kernel%d",
-  attr_class:	EAP_KRT,
-  preference:	DEF_PREF_INHERITED,
-  preconfig:	krt_preconfig,
-  postconfig:	krt_postconfig,
-  init:		krt_init,
-  start:	krt_start,
-  shutdown:	krt_shutdown,
-  reconfigure:	krt_reconfigure,
-  copy_config:	krt_copy_config,
-  get_attr:	krt_get_attr,
+  .name =		"Kernel",
+  .template =		"kernel%d",
+  .attr_class =		EAP_KRT,
+  .preference =		DEF_PREF_INHERITED,
+  .config_size =	sizeof(struct krt_config),
+  .preconfig =		krt_preconfig,
+  .postconfig =		krt_postconfig,
+  .init =		krt_init,
+  .start =		krt_start,
+  .shutdown =		krt_shutdown,
+  .reconfigure =	krt_reconfigure,
+  .copy_config =	krt_copy_config,
+  .get_attr =		krt_get_attr,
 #ifdef KRT_ALLOW_LEARN
-  dump:		krt_dump,
-  dump_attrs:	krt_dump_attrs,
+  .dump =		krt_dump,
+  .dump_attrs =		krt_dump_attrs,
 #endif
 };

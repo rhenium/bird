@@ -1016,13 +1016,12 @@ code.
 <HR><H3>Function</H3>
 <P><I>void *</I>
 <B>proto_config_new</B>
-(<I>struct protocol *</I> <B>pr</B>, <I>unsigned</I> <B>size</B>, <I>int</I> <B>class</B>) --  create a new protocol configuration
+(<I>struct protocol *</I> <B>pr</B>, <I>int</I> <B>class</B>) --  create a new protocol configuration
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
 <DT><I>struct protocol *</I> <B>pr</B><DD><P>protocol the configuration will belong to
-<DT><I>unsigned</I> <B>size</B><DD><P>size of the structure including generic data
 <DT><I>int</I> <B>class</B><DD><P>SYM_PROTO or SYM_TEMPLATE
 </DL>
 <H3>Description</H3>
@@ -1846,12 +1845,12 @@ interfaces to the debug output.
 <HR><H3>Function</H3>
 <P><I>void</I>
 <B>if_delete</B>
-(<I>struct iface *</I> <B>old</B>) --     remove interface 
+(<I>struct iface *</I> <B>old</B>) --     remove interface
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>struct iface *</I> <B>old</B><DD><P>interface 
+<DT><I>struct iface *</I> <B>old</B><DD><P>interface
 </DL>
 <H3>Description</H3>
 <P>This function is called by the low-level platform dependent code
@@ -2235,10 +2234,11 @@ willing to start up on the same interface.
 <P>The solution is very simple: when any protocol wishes to use a network port
 or some other non-shareable resource, it asks the core to lock it and it doesn't
 use the resource until it's notified that it has acquired the lock.
-<P>Object locks are represented by <I>object_lock</I> structures which are in turn a kind of
-resource. Lockable resources are uniquely determined by resource type
+<P>Object locks are represented by <I>object_lock</I> structures which are in turn a
+kind of resource. Lockable resources are uniquely determined by resource type
 (<I>OBJLOCK_UDP</I> for a UDP port etc.), IP address (usually a broadcast or
-multicast address the port is bound to), port number and interface.
+multicast address the port is bound to), port number, interface and optional
+instance ID.
 <P>
 <P><HR><H3>Function</H3>
 <P><I>struct object_lock *</I>

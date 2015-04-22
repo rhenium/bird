@@ -41,6 +41,10 @@ struct config {
   u32 gr_wait;				/* Graceful restart wait timeout */
 
   int cli_debug;			/* Tracing of CLI connections and commands */
+  int latency_debug;			/* I/O loop tracks duration of each event */
+  u32 latency_limit;			/* Events with longer duration are logged (us) */
+  u32 watchdog_warning;			/* I/O loop watchdog limit for warning (us) */
+  u32 watchdog_timeout;			/* Watchdog timeout (in seconds, 0 = disabled) */
   char *err_msg;			/* Parser error message */
   int err_lino;				/* Line containing error */
   char *err_file_name;			/* File name containing error */
@@ -107,6 +111,8 @@ struct symbol {
   void *def;
   char name[1];
 };
+
+#define SYM_MAX_LEN 64
 
 /* Remember to update cf_symbol_class_name() */
 #define SYM_VOID 0

@@ -316,20 +316,20 @@ protocol rip {
 <sect>Global options
 
 <p><descrip>
-	<tag>include "<m/filename/"</tag> 
+	<tag>include "<m/filename/"</tag>
 	This statement causes inclusion of a new file. <m/Filename/ could also
 	be a wildcard. The maximal depth is 8. Note that this statement could be
 	used anywhere in the config file, not just as a top-level option.
 
-	<tag><label id="dsc-log">log "<m/filename/"|syslog [name <m/name/]|stderr all|{ <m/list of classes/ }</tag> 
+	<tag><label id="dsc-log">log "<m/filename/"|syslog [name <m/name/]|stderr all|{ <m/list of classes/ }</tag>
 	Set logging of messages having the given class (either <cf/all/ or
 	<cf/{ error, trace }/ etc.) into selected destination (a file specified
 	as a filename string, syslog with optional name argument, or the stderr
 	output). Classes are:
 	<cf/info/, <cf/warning/, <cf/error/ and <cf/fatal/ for messages about local problems,
-	<cf/debug/ for debugging messages, 
-	<cf/trace/ when you want to know what happens in the network, 
-	<cf/remote/ for messages about misbehavior of remote machines, 
+	<cf/debug/ for debugging messages,
+	<cf/trace/ when you want to know what happens in the network,
+	<cf/remote/ for messages about misbehavior of remote machines,
 	<cf/auth/ about authentication failures,
 	<cf/bug/ for internal BIRD bugs.
 	You may specify more than one <cf/log/ line to establish logging to
@@ -343,6 +343,23 @@ protocol rip {
 	Control logging of client connections (0 for no logging, 1 for logging
 	of connects and disconnects, 2 and higher for logging of all client
 	commands). Default: 0.
+
+	<tag>debug latency <m/switch/</tag>
+	Activate tracking of elapsed time for internal events. Recent events
+	could be examined using <cf/dump events/ command. Default: off.
+
+	<tag>debug latency limit <m/time/</tag>
+	If <cf/debug latency/ is enabled, this option allows to specify a limit
+	for elapsed time. Events exceeding the limit are logged. Default: 1 s.
+
+	<tag>watchdog warning <m/time/</tag>
+	Set time limit for I/O loop cycle. If one iteration took more time to
+	complete, a warning is logged. Default: 5 s.
+
+	<tag>watchdog timeout <m/time/</tag>
+	Set time limit for I/O loop cycle. If the limit is breached, BIRD is
+	killed by abort signal. The timeout has effective granularity of
+	seconds, zero means disabled. Default: disabled (0).
 
 	<tag>mrtdump "<m/filename/"</tag>
 	Set MRTdump file name. This option must be specified to allow MRTdump
@@ -358,7 +375,7 @@ protocol rip {
 
 	<tag>function <m/name/ (<m/parameters/) <m/local variables/ { <m/commands/ }</tag>
 	Define a function. You can learn more about functions in the following chapter.
- 
+
 	<tag>protocol rip|ospf|bgp|... [<m/name/ [from <m/name2/]] { <m>protocol options</m> }</tag>
 	Define a protocol instance called <cf><m/name/</cf> (or with a name like
 	"rip5" generated automatically if you don't specify any
@@ -508,7 +525,7 @@ agreement").
 	This option can be used to override global router id for a given
 	protocol. Default: uses global router id.
 
-	<tag>import all | none | filter <m/name/ | filter { <m/filter commands/ } | where <m/filter expression/</tag> 
+	<tag>import all | none | filter <m/name/ | filter { <m/filter commands/ } | where <m/filter expression/</tag>
 	Specify a filter to be used for filtering routes coming from the
 	protocol to the routing table. <cf/all/ is shorthand for <cf/where true/
 	and <cf/none/ is shorthand for <cf/where false/. Default: <cf/all/.
@@ -586,7 +603,7 @@ agreement").
 	An interface option can be used more times with different interface-specific
 	options, in that case for given interface the first matching interface
 	option is used.
-	
+
 	This option is allowed in BFD, Direct, OSPF, RAdv and RIP protocols, but
 	in OSPF protocol it is used in the <cf/area/ subsection.
 
@@ -599,7 +616,7 @@ agreement").
 
 	<cf>interface "eth1", "eth4", "eth5" { type ptp; };</cf> - start the
 	protocol on enumerated interfaces with <cf>type ptp</cf> option.
-	
+
 	<cf>interface -192.168.1.0/24, 192.168.0.0/16;</cf> - start the protocol
 	on all interfaces that have address from 192.168.0.0/16, but not from
 	192.168.1.0/24.
@@ -632,7 +649,7 @@ agreement").
 	used. Specifying passwords does not mean that authentication is enabled,
 	authentication can be enabled by separate, protocol-dependent
 	<cf/authentication/ option.
-	
+
 	This option is allowed in OSPF and RIP protocols. BGP has also
 	<cf/password/ option, but it is slightly different and described
 	separately.
@@ -1085,7 +1102,7 @@ foot).
 	is true, but <cf>1.0.0.0/16 &tilde; [ 1.0.0.0/8- ]</cf> is false.
 
 	Cisco-style patterns like <cf>10.0.0.0/8 ge 16 le 24</cf> can be expressed
-	in BIRD as <cf>10.0.0.0/8{16,24}</cf>, <cf>192.168.0.0/16 le 24</cf> as 
+	in BIRD as <cf>10.0.0.0/8{16,24}</cf>, <cf>192.168.0.0/16 le 24</cf> as
 	<cf>192.168.0.0/16{16,24}</cf> and <cf>192.168.0.0/16 ge 24</cf> as
 	<cf>192.168.0.0/16{24,32}</cf>.
 
@@ -1129,7 +1146,7 @@ foot).
 	&tilde; [= 2 3 5 * =]</cf> syntax). The masks resemble wildcard patterns
 	as used by UNIX shells. Autonomous system numbers match themselves,
 	<cf/*/ matches any (even empty) sequence of arbitrary AS numbers and
-	<cf/?/ matches one arbitrary AS number. For example, if <cf>bgp_path</cf> 
+	<cf/?/ matches one arbitrary AS number. For example, if <cf>bgp_path</cf>
  	is 4 3 2 1, then: <tt>bgp_path &tilde; [= * 4 3 * =]</tt> is true,
 	but <tt>bgp_path &tilde; [= * 4 5 * =]</tt> is false. BGP mask
 	expressions can also contain integer expressions enclosed in parenthesis
@@ -1206,7 +1223,7 @@ prefix and an ASN as arguments.
 
 <sect>Control structures
 
-<p>Filters support two control structures: conditions and case switches. 
+<p>Filters support two control structures: conditions and case switches.
 
 <p>Syntax of a condition is: <cf>if <M>boolean expression</M> then <m/command1/;
 else <m/command2/;</cf> and you can use <cf>{ <m/command_1/; <m/command_2/;
@@ -1232,9 +1249,9 @@ case arg1 {
 	else: print "something else";
 }
 
-if 1234 = i then printn "."; else { 
-  print "not 1234"; 
-  print "You need {} around multiple commands"; 
+if 1234 = i then printn "."; else {
+  print "not 1234";
+  print "You need {} around multiple commands";
 }
 </code>
 
@@ -1267,7 +1284,7 @@ clist for most purposes.
 
 	<tag><m/ip/ from</tag>
 	The router which the route has originated from.
-	
+
 	<tag><m/ip/ gw</tag>
 	Next hop packets routed using this route should be forwarded to.
 
@@ -1448,7 +1465,7 @@ protocol bfd [&lt;name&gt;] {
 	BFD sessions are usually created on demand as requested by other
 	protocols (like OSPF or BGP). This option allows to explicitly add
 	a BFD session to the specified neighbor regardless of such requests.
-	
+
 	The session is identified by the IP address of the neighbor, with
 	optional specification of used interface and local IP. By default
 	the neighbor must be directly connected, unless the the session is
@@ -1559,13 +1576,13 @@ MD5 password authentication
 (RFC 2385<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc2385.txt">),
 extended communities
 (RFC 4360<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc4360.txt">),
-route reflectors 
+route reflectors
 (RFC 4456<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc4456.txt">),
 graceful restart
 (RFC 4724<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc4724.txt">),
 multiprotocol extensions
 (RFC 4760<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc4760.txt">),
-4B AS numbers 
+4B AS numbers
 (RFC 4893<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc4893.txt">),
 and 4B AS numbers in extended communities
 (RFC 5668<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc5668.txt">).
@@ -1620,10 +1637,20 @@ using the following configuration parameters:
 	address, equivalent to the <cf/source address/ option (see below). This
 	parameter is mandatory.
 
-	<tag>neighbor <m/ip/ [port <m/number/] as <m/number/</tag>
+	<tag>neighbor [<m/ip/] [port <m/number/] [as <m/number/]</tag>
 	Define neighboring router this instance will be talking to and what AS
-	it's located in. In case the neighbor is in the same AS as we are, we
-	automatically switch to iBGP. This parameter is mandatory.
+	it is located in. In case the neighbor is in the same AS as we are, we
+	automatically switch to iBGP. Optionally, the remote port may also be
+	specified. The parameter may be used multiple times with different
+	sub-options (e.g., both <cf/neighbor 10.0.0.1 as 65000;/ and
+	<cf/neighbor 10.0.0.1; neighbor as 65000;/ are valid). This parameter is
+	mandatory.
+
+	<tag>interface <m/string/</tag>
+	Define interface we should use for link-local BGP IPv6 sessions.
+	Interface can also be specified as a part of <cf/neighbor address/
+	(e.g., <cf/neighbor fe80::1234%eth0 as 65000;/). It is an error to use
+	this parameter for non link-local sessions.
 
 	<tag>direct</tag>
 	Specify that the neighbor is directly connected. The IP address of the
@@ -1691,6 +1718,13 @@ using the following configuration parameters:
 	Specifies a table that is used as an IGP routing table. Default: the
 	same as the table BGP is connected to.
 
+	<tag>check link <M>switch</M></tag>
+	BGP could use hardware link state into consideration.  If enabled,
+	BIRD tracks the link state of the associated interface and when link
+	disappears (e.g. an ethernet cable is unplugged), the BGP session is
+	immediately shut down. Note that this option cannot be used with
+	multihop BGP. Default: disabled.
+
 	<tag>bfd <M>switch</M></tag>
 	BGP could use BFD protocol as an advisory mechanism for neighbor
 	liveness and failure detection. If enabled, BIRD setups a BFD session
@@ -1709,7 +1743,7 @@ using the following configuration parameters:
 	(IPv4), 2.6.35+ (IPv6), BSD: since long ago, IPv4 only. Note that full
 	(ICMP protection, for example) RFC 5082 support is provided by Linux
 	only. Default: disabled.
-	
+
 	<tag>password <m/string/</tag>
 	Use this password for MD5 authentication of BGP sessions. Default: no
 	authentication. Password has to be set by external utility
@@ -1732,7 +1766,7 @@ using the following configuration parameters:
 	id. Clients in a cluster need not know their cluster id and this option
 	is not allowed for them. Default: the same as router id.
 
-	<tag>rs client</tag> 
+	<tag>rs client</tag>
 	Be a route server and treat the neighbor as a route server client.
 	A route server is used as a replacement for full mesh EBGP routing in
 	Internet exchange points in a similar way to route reflectors used in
@@ -1760,7 +1794,7 @@ using the following configuration parameters:
 	TX direction. When active, all available routes accepted by the export
 	filter are advertised to the neighbor. Default: off.
 
-	<tag>allow local as [<m/number/]</tag> 
+	<tag>allow local as [<m/number/]</tag>
 	BGP prevents routing loops by rejecting received routes with the local
 	AS number in the AS path. This option allows to loose or disable the
 	check. Optional <cf/number/ argument can be used to specify the maximum
@@ -1770,13 +1804,17 @@ using the following configuration parameters:
 	other means. Default: 0 (no local AS number allowed).
 
 	<tag>enable route refresh <m/switch/</tag>
-	When BGP speaker changes its import filter, it has to re-examine all
-	routes received from its neighbor against the new filter. As these
-	routes might not be available, there is a BGP protocol extension Route
-	Refresh (specified in RFC 2918) that allows BGP speaker to request
-	re-advertisement of all routes from its neighbor. This option specifies
-	whether BIRD advertises this capability and accepts such requests. Even
-	when disabled, BIRD can send route refresh requests. Default: on.
+	After the initial route exchange, BGP protocol uses incremental updates
+	to keep BGP speakers synchronized. Sometimes (e.g., if BGP speaker
+	changes its import filter, or if there is suspicion of inconsistency) it
+	is necessary to do a new complete route exchange. BGP protocol extension
+	Route Refresh (RFC 2918) allows BGP speaker to request re-advertisement
+	of all routes from its neighbor. BGP protocol extension Enhanced Route
+	Refresh (RFC 7313) specifies explicit begin and end for such exchanges,
+	therefore the receiver can remove stale routes that were not advertised
+	during the exchange. This option specifies whether BIRD advertises these
+	capabilities and supports related procedures. Note that even when
+	disabled, BIRD can send route refresh requests. Default: on.
 
 	<tag>graceful restart <m/switch/|aware</tag>
 	When a BGP speaker restarts or crashes, neighbors will discard all
@@ -1858,13 +1896,13 @@ using the following configuration parameters:
 	Delay in seconds between sending of two consecutive Keepalive messages.
 	Default: One third of the hold time.
 
+	<tag>connect delay time <m/number/</tag>
+	Delay in seconds between protocol startup and the first attempt to
+	connect. Default: 5 seconds.
+
 	<tag>connect retry time <m/number/</tag>
 	Time in seconds to wait before retrying a failed attempt to connect.
 	Default: 120 seconds.
-
-	<tag>start delay time <m/number/</tag>
-	Delay in seconds between protocol startup and the first attempt to
-	connect. Default: 5 seconds.
 
 	<tag>error wait time <m/number/,<m/number/</tag>
 	Minimum and maximum delay in seconds between a protocol failure (either
@@ -2292,6 +2330,7 @@ networks.
 <code>
 protocol ospf &lt;name&gt; {
 	rfc1583compat &lt;switch&gt;;
+	instance id &lt;num&gt;;
 	stub router &lt;switch&gt;;
 	tick &lt;num&gt;;
 	ecmp &lt;switch&gt; [limit &lt;num&gt;];
@@ -2336,6 +2375,7 @@ protocol ospf &lt;name&gt; {
 			tx length &lt;num&gt;;
 			type [broadcast|bcast|pointopoint|ptp|
 				nonbroadcast|nbma|pointomultipoint|ptmp];
+			link lsa suppression &lt;switch&gt;;
 			strict nonbroadcast &lt;switch&gt;;
 			real broadcast &lt;switch&gt;;
 			ptp netmask &lt;switch&gt;;
@@ -2378,14 +2418,24 @@ protocol ospf &lt;name&gt; {
 	RFC 1583 <htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc1583.txt">.
 	Default	value is no.
 
+	<tag>instance id <m/num/</tag>
+	When multiple OSPF protocol instances are active on the same links, they
+	should use different instance IDs to distinguish their packets. Although
+	it could be done on per-interface basis, it is often preferred to set
+	one instance ID to whole OSPF domain/topology (e.g., when multiple
+	instances are used to represent separate logical topologies on the same
+	physical network). This option specifies the default instance ID for all
+	interfaces of the OSPF instance. Note that this option, if used, must
+	precede interface definitions. Default value is 0.
+
 	<tag>stub router <M>switch</M></tag>
 	This option configures the router to be a stub router, i.e., a router
 	that participates in the OSPF topology but does not allow transit
 	traffic. In OSPFv2, this is implemented by advertising maximum metric
-	for outgoing links, as suggested by
-	RFC 3137 <htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc3137.txt">.
-	In OSPFv3, the stub router behavior is announced by clearing the R-bit
-	in the router LSA. Default value is no.
+	for outgoing links. In OSPFv3, the stub router behavior is announced by
+	clearing the R-bit in the router LSA. See RFC 6987
+	<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc6987.txt"> for
+	details. Default value is no.
 
 	<tag>tick <M>num</M></tag>
 	The routing table calculation and clean-up of areas' databases is not
@@ -2487,22 +2537,26 @@ protocol ospf &lt;name&gt; {
 	prefix. When option <cf/summary/ is used, also default stub networks
 	that are subnetworks of given stub network are suppressed. This might be
 	used, for example, to aggregate generated stub networks.
-	 
+
 	<tag>interface <M>pattern</M> [instance <m/num/]</tag>
 	Defines that the specified interfaces belong to the area being defined.
 	See <ref id="dsc-iface" name="interface"> common option for detailed
 	description. In OSPFv2, extended interface clauses are used, because
-	OSPFv2 handles each network prefix as a separate virtual interface. In
-	OSPFv3, you can specify instance ID for that interface description, so
-	it is possible to have several instances of that interface with
-	different options or even in different areas.
+	each network prefix is handled as a separate virtual interface.
+
+	You can specify alternative instance ID for the interface definition,
+	therefore it is possible to have several instances of that interface
+	with different options or even in different areas. For OSPFv2,
+	instance ID support is an extension (RFC 6549
+	<htmlurl url="ftp://ftp.rfc-editor.org/in-notes/rfc6549.txt">) and is
+	supposed to be set per-protocol. For OSPFv3, it is an integral feature.
 
 	<tag>virtual link <M>id</M> [instance <m/num/]</tag>
 	Virtual link to router with the router id. Virtual link acts as a
 	point-to-point interface belonging to backbone. The actual area is used
-	as transport area. This item cannot be in the backbone. In OSPFv3, you
-	could also use several virtual links to one destination with different
-	instance IDs.
+	as a transport area. This item cannot be in the backbone. Like with
+	<cf/interface/ option, you could also use several virtual links to one
+	destination with different instance IDs.
 
 	<tag>cost <M>num</M></tag>
 	Specifies output cost (metric) of an interface. Default value is 10.
@@ -2533,8 +2587,8 @@ protocol ospf &lt;name&gt; {
 
 	<tag>wait <M>num</M></tag>
 	After start, router waits for the specified number of seconds between
-	starting election and building adjacency. Default value is 40.
-	 
+	starting election and building adjacency. Default value is 4*<m/hello/.
+
 	<tag>dead count <M>num</M></tag>
 	When the router does not receive any messages from a neighbor in
 	<m/dead count/*<m/hello/ seconds, it will consider the neighbor down.
@@ -2600,9 +2654,16 @@ protocol ospf &lt;name&gt; {
 	communication, or if the NBMA network is used as an (possibly
 	unnumbered) PtP link.
 
-	<tag>strict nonbroadcast <M>switch</M></tag>
+	<tag>link lsa suppression <m/switch/</tag>
+	In OSPFv3, link LSAs are generated for each link, announcing link-local
+	IPv6 address of the router to its local neighbors. These are useless on
+	PtP or PtMP networks and this option allows to suppress the link LSA
+	origination for such interfaces. The option is ignored on other than PtP
+	or PtMP interfaces. Default value is no.
+
+	<tag>strict nonbroadcast <m/switch/</tag>
 	If set, don't send hello to any undefined neighbor. This switch is
-	ignored on other than NBMA or PtMP networks. Default value is no.
+	ignored on other than NBMA or PtMP interfaces. Default value is no.
 
 	<tag>real broadcast <m/switch/</tag>
 	In <cf/type broadcast/ or <cf/type ptp/ network configuration, OSPF
@@ -3390,11 +3451,10 @@ versions of BIRD:
 <sect>Getting more help
 
 <p>If you use BIRD, you're welcome to join the bird-users mailing list
-(<HTMLURL URL="mailto:bird-users@bird.network.cz" name="bird-users@bird.network.cz">)
+(<HTMLURL URL="mailto:bird-users@network.cz" name="bird-users@network.cz">)
 where you can share your experiences with the other users and consult
-your problems with the authors. To subscribe to the list, just send a
-<tt/subscribe bird-users/ command in a body of a mail to
-(<HTMLURL URL="mailto:majordomo@bird.network.cz" name="majordomo@bird.network.cz">).
+your problems with the authors. To subscribe to the list, visit
+<HTMLURL URL="http://bird.network.cz/?m_list" name="http://bird.network.cz/?m_list">.
 The home page of BIRD can be found at <HTMLURL URL="http://bird.network.cz/" name="http://bird.network.cz/">.
 
 <p>BIRD is a relatively young system and it probably contains some bugs. You can

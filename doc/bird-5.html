@@ -226,7 +226,7 @@ matches all prefixes (regardless of IP address) whose prefix length is
 address <CODE>1.2.3.4</CODE>. <CODE>1.2.0.0/16 ~ [ 1.0.0.0/8{15,17} ]</CODE>
 is true, but <CODE>1.0.0.0/16 ~ [ 1.0.0.0/8- ]</CODE> is false.
 <P>Cisco-style patterns like <CODE>10.0.0.0/8 ge 16 le 24</CODE> can be expressed
-in BIRD as <CODE>10.0.0.0/8{16,24}</CODE>, <CODE>192.168.0.0/16 le 24</CODE> as 
+in BIRD as <CODE>10.0.0.0/8{16,24}</CODE>, <CODE>192.168.0.0/16 le 24</CODE> as
 <CODE>192.168.0.0/16{16,24}</CODE> and <CODE>192.168.0.0/16 ge 24</CODE> as
 <CODE>192.168.0.0/16{24,32}</CODE>.
 <P>
@@ -259,7 +259,7 @@ not members of integer set <I>A</I>. I.e., <CODE>filter</CODE> do the same as
 ~ [= 2 3 5 * =]</CODE> syntax). The masks resemble wildcard patterns
 as used by UNIX shells. Autonomous system numbers match themselves,
 <CODE>*</CODE> matches any (even empty) sequence of arbitrary AS numbers and
-<CODE>?</CODE> matches one arbitrary AS number. For example, if <CODE>bgp_path</CODE> 
+<CODE>?</CODE> matches one arbitrary AS number. For example, if <CODE>bgp_path</CODE>
 is 4 3 2 1, then: <CODE>bgp_path ~ [= * 4 3 * =]</CODE> is true,
 but <CODE>bgp_path ~ [= * 4 5 * =]</CODE> is false. BGP mask
 expressions can also contain integer expressions enclosed in parenthesis
@@ -331,7 +331,7 @@ prefix and an ASN as arguments.
 <H2><A NAME="ss5.4">5.4</A> <A HREF="bird.html#toc5.4">Control structures</A>
 </H2>
 
-<P>Filters support two control structures: conditions and case switches. 
+<P>Filters support two control structures: conditions and case switches.
 <P>
 <P>Syntax of a condition is: <CODE>if <I>boolean expression</I> then <I>command1</I>;
 else <I>command2</I>;</CODE> and you can use <CODE>{ <I>command_1</I>; <I>command_2</I>;
@@ -358,9 +358,9 @@ case arg1 {
         else: print "something else";
 }
 
-if 1234 = i then printn "."; else { 
-  print "not 1234"; 
-  print "You need {} around multiple commands"; 
+if 1234 = i then printn "."; else {
+  print "not 1234";
+  print "You need {} around multiple commands";
 }
 </PRE>
 <HR>

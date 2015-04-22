@@ -33,7 +33,7 @@ static inline u8 bfd_pkt_get_version(struct bfd_ctl_packet *pkt)
 { return pkt->vdiag >> 5; }
 
 static inline u8 bfd_pkt_get_diag(struct bfd_ctl_packet *pkt)
-{ return pkt->vdiag && 0x1f; }
+{ return pkt->vdiag & 0x1f; }
 
 
 static inline u8 bfd_pkt_get_state(struct bfd_ctl_packet *pkt)
@@ -231,7 +231,7 @@ bfd_open_tx_sk(struct bfd_proto *p, ip_addr local, struct iface *ifa)
   sk->tos = IP_PREC_INTERNET_CONTROL;
   sk->priority = sk_priority_control;
   sk->ttl = ifa ? 255 : -1;
-  sk->flags = SKF_THREAD | SKF_BIND;
+  sk->flags = SKF_THREAD | SKF_BIND | SKF_HIGH_PORT;
 
 #ifdef IPV6
   sk->flags |= SKF_V6ONLY;

@@ -245,7 +245,6 @@ proto_free_ahooks(struct proto *p)
 /**
  * proto_config_new - create a new protocol configuration
  * @pr: protocol the configuration will belong to
- * @size: size of the structure including generic data
  * @class: SYM_PROTO or SYM_TEMPLATE
  *
  * Whenever the configuration file says that a new instance
@@ -262,9 +261,9 @@ proto_free_ahooks(struct proto *p)
  * initialized during protos_commit()).
  */
 void *
-proto_config_new(struct protocol *pr, unsigned size, int class)
+proto_config_new(struct protocol *pr, int class)
 {
-  struct proto_config *c = cfg_allocz(size);
+  struct proto_config *c = cfg_allocz(pr->config_size);
 
   if (class == SYM_PROTO)
     add_tail(&new_config->protos, &c->n);
@@ -943,8 +942,8 @@ proto_feed_more(void *P)
       p->export_state = ES_READY;
       proto_log_state_change(p);
 
-      if (p->feed_done)
-	p->feed_done(p);
+      if (p->feed_end)
+	p->feed_end(p);
     }
   else
     {
@@ -977,6 +976,9 @@ proto_schedule_feed(struct proto *p, int initial)
 
   p->attn->hook = initial ? proto_feed_initial : proto_feed_more;
   ev_schedule(p->attn);
+
+  if (p->feed_begin)
+    p->feed_begin(p, initial);
 }
 
 /*

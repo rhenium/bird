@@ -1988,7 +1988,7 @@ rt_init_hostcache(rtable *tab)
   hc->slab = sl_new(rt_table_pool, sizeof(struct hostentry));
 
   hc->lp = lp_new(rt_table_pool, 1008);
-  hc->trie = f_new_trie(hc->lp);
+  hc->trie = f_new_trie(hc->lp, sizeof(struct f_trie_node));
 
   tab->hostcache = hc;
 }
@@ -2136,7 +2136,7 @@ rt_update_hostcache(rtable *tab)
 
   /* Reset the trie */
   lp_flush(hc->lp);
-  hc->trie = f_new_trie(hc->lp);
+  hc->trie = f_new_trie(hc->lp, sizeof(struct f_trie_node));
 
   WALK_LIST_DELSAFE(n, x, hc->hostentries)
     {
@@ -2409,11 +2409,12 @@ rt_show(struct rt_show_data *d)
 	n = net_route(d->table, d->prefix, d->pxlen);
       else
 	n = net_find(d->table, d->prefix, d->pxlen);
+
       if (n)
-	{
-	  rt_show_net(this_cli, n, d);
-	  cli_msg(0, "");
-	}
+	rt_show_net(this_cli, n, d);
+
+      if (d->rt_counter)
+	cli_msg(0, "");
       else
 	cli_msg(8001, "Network not in table");
     }

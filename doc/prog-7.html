@@ -26,12 +26,12 @@ they must be manipulated using the following functions and macros.
 <P><HR><H3>Function</H3>
 <P><I>char *</I>
 <B>ip_scope_text</B>
-(<I>unsigned</I> <B>scope</B>) --     get textual representation of address scope
+(<I>uint</I> <B>scope</B>) --     get textual representation of address scope
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>unsigned</I> <B>scope</B><DD><P>scope (<I>SCOPE_xxx</I>)
+<DT><I>uint</I> <B>scope</B><DD><P>scope (<I>SCOPE_xxx</I>)
 </DL>
 <H3>Description</H3>
 <P>Returns a pointer to a textual name of the scope given.
@@ -145,7 +145,7 @@ of an address prefix of size <B>x</B>.
 
 <HR><H3>Function</H3>
 <P><I>int</I>
-<B>ipa_mklen</B>
+<B>ipa_masklen</B>
 (<I>ip_addr</I> <B>x</B>) --     calculate netmask length
 <P>
 <H3>Arguments</H3>
@@ -221,14 +221,14 @@ for an invalid address.
 
 
 <HR><H3>Function</H3>
-<P><I>ip_addr</I>
-<B>ipa_class_mask</B>
-(<I>ip_addr</I> <B>x</B>) --     guess netmask according to address class
+<P><I>ip4_addr</I>
+<B>ip4_class_mask</B>
+(<I>ip4_addr</I> <B>x</B>) --     guess netmask according to address class
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>ip_addr</I> <B>x</B><DD><P>IP address
+<DT><I>ip4_addr</I> <B>x</B><DD><P>IPv4 address
 </DL>
 <H3>Description</H3>
 <P>This function (available in IPv4 version only) returns a
@@ -288,7 +288,7 @@ if they are the same.
 
 <HR><H3>Function</H3>
 <P><I>ip_addr</I>
-<B>ipa_build</B>
+<B>ipa_build6</B>
 (<I>u32</I> <B>a1</B>, <I>u32</I> <B>a2</B>, <I>u32</I> <B>a3</B>, <I>u32</I> <B>a4</B>) --     build an IPv6 address from parts
 <P>
 <H3>Arguments</H3>
@@ -303,23 +303,6 @@ if they are the same.
 <P><B>ipa_build()</B> takes <B>a1</B> to <B>a4</B> and assembles them to a single IPv6
 address. It's used for example when a protocol wants to bind its
 socket to a hard-wired multicast address.
-
-
-<HR><H3>Function</H3>
-<P><I>ip_addr</I>
-<B>ipa_absolutize</B>
-(<I>ip_addr</I> <B>x</B>, <I>ip_addr</I> <B>y</B>) --     convert link scope IPv6 address to universe scope
-<P>
-<H3>Arguments</H3>
-<P>
-<DL>
-<DT><I>ip_addr</I> <B>x</B><DD><P>link scope IPv6 address
-<DT><I>ip_addr</I> <B>y</B><DD><P>universe scope IPv6 prefix of the interface
-</DL>
-<H3>Description</H3>
-<P>This function combines a link-scope IPv6 address <B>x</B> with the universe
-scope prefix <B>x</B> of the network assigned to an interface to get a
-universe scope form of <B>x</B>.
 
 
 <HR><H3>Function</H3>

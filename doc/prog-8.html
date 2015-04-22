@@ -862,6 +862,23 @@ takes place.
 which allows destination of the packet to be chosen dynamically.
 Raw IP sockets should use 0 for <B>port</B>.
 
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>io_log_event</B>
+(<I>void *</I> <B>hook</B>, <I>void *</I> <B>data</B>) --     mark approaching event into event log
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>void *</I> <B>hook</B><DD><P>event hook address
+<DT><I>void *</I> <B>data</B><DD><P>event data address
+</DL>
+<H3>Description</H3>
+<P>Store info (hook, data, timestamp) about the following internal event into
+a circular event log (<B>event_log</B>). When latency tracking is enabled, the log
+entry is kept open (in <B>event_open</B>) so the duration can be filled later.
+
 <P>
 <HR>
 Next
