@@ -26,21 +26,23 @@ CF_KEYWORDS(BGP, LOCAL, NEIGHBOR, AS, HOLD, TIME, CONNECT, RETRY,
 	PREFER, OLDER, MISSING, LLADDR, DROP, IGNORE, ROUTE, REFRESH,
 	INTERPRET, COMMUNITIES, BGP_ORIGINATOR_ID, BGP_CLUSTER_LIST, IGP,
 	TABLE, GATEWAY, DIRECT, RECURSIVE, MED, TTL, SECURITY, DETERMINISTIC,
-	SECONDARY, ALLOW, BFD, ADD, PATHS, RX, TX, GRACEFUL, RESTART, AWARE)
+	SECONDARY, ALLOW, BFD, ADD, PATHS, RX, TX, GRACEFUL, RESTART, AWARE,
+	CHECK, LINK, PORT)
 
 CF_GRAMMAR
 
 CF_ADDTO(proto, bgp_proto '}' { bgp_check_config(BGP_CFG); } )
 
 bgp_proto_start: proto_start BGP {
-     this_proto = proto_config_new(&proto_bgp, sizeof(struct bgp_config), $1);
+     this_proto = proto_config_new(&proto_bgp, $1);
+     BGP_CFG->remote_port = BGP_PORT;
      BGP_CFG->multihop = -1;	/* undefined */
      BGP_CFG->hold_time = 240;
-     BGP_CFG->connect_retry_time = 120;
      BGP_CFG->initial_hold_time = 240;
      BGP_CFG->compare_path_lengths = 1;
      BGP_CFG->igp_metric = 1;
-     BGP_CFG->start_delay_time = 5;
+     BGP_CFG->connect_delay_time = 5;
+     BGP_CFG->connect_retry_time = 120;
      BGP_CFG->error_amnesia_time = 300;
      BGP_CFG->error_delay_time_min = 60;
      BGP_CFG->error_delay_time_max = 300;
@@ -55,29 +57,30 @@ bgp_proto_start: proto_start BGP {
  }
  ;
 
+bgp_nbr_opts:
+   /* empty */
+ | bgp_nbr_opts PORT expr { BGP_CFG->remote_port = $3; if (($3<1) || ($3>65535)) cf_error("Invalid port number");  }
+ | bgp_nbr_opts AS expr { BGP_CFG->remote_as = $3; }
+ ;
+
 bgp_proto:
    bgp_proto_start proto_name '{'
  | bgp_proto proto_item ';'
  | bgp_proto LOCAL AS expr ';' { BGP_CFG->local_as = $4; }
  | bgp_proto LOCAL ipa AS expr ';' { BGP_CFG->source_addr = $3; BGP_CFG->local_as = $5; }
- | bgp_proto NEIGHBOR ipa ipa_scope ipa_port AS expr ';' {
+ | bgp_proto NEIGHBOR bgp_nbr_opts ';'
+ | bgp_proto NEIGHBOR ipa ipa_scope bgp_nbr_opts ';' {
      if (ipa_nonzero(BGP_CFG->remote_ip))
        cf_error("Only one neighbor per BGP instance is allowed");
-     if (!ipa_has_link_scope($3) != !$4)
-       cf_error("Link-local address and interface scope must be used together");
-
      BGP_CFG->remote_ip = $3;
-     BGP_CFG->iface = $4;
-     BGP_CFG->remote_port = ($5 > 0) ? $5 : BGP_PORT;
-     BGP_CFG->remote_as = $7;
+     if ($4) BGP_CFG->iface = $4;
    }
+ | bgp_proto INTERFACE TEXT ';' { BGP_CFG->iface = if_get_by_name($3); }
  | bgp_proto RR CLUSTER ID idval ';' { BGP_CFG->rr_cluster_id = $5; }
  | bgp_proto RR CLIENT ';' { BGP_CFG->rr_client = 1; }
  | bgp_proto RS CLIENT ';' { BGP_CFG->rs_client = 1; }
  | bgp_proto HOLD TIME expr ';' { BGP_CFG->hold_time = $4; }
  | bgp_proto STARTUP HOLD TIME expr ';' { BGP_CFG->initial_hold_time = $5; }
- | bgp_proto CONNECT RETRY TIME expr ';' { BGP_CFG->connect_retry_time = $5; }
- | bgp_proto KEEPALIVE TIME expr ';' { BGP_CFG->keepalive_time = $4; }
  | bgp_proto DIRECT ';' { BGP_CFG->multihop = 0; }
  | bgp_proto MULTIHOP ';' { BGP_CFG->multihop = 64; }
  | bgp_proto MULTIHOP expr ';' { BGP_CFG->multihop = $3; if (($3<1) || ($3>255)) cf_error("Multihop must be in range 1-255"); }
@@ -96,8 +99,11 @@ bgp_proto:
  | bgp_proto DEFAULT BGP_MED expr ';' { BGP_CFG->default_med = $4; }
  | bgp_proto DEFAULT BGP_LOCAL_PREF expr ';' { BGP_CFG->default_local_pref = $4; }
  | bgp_proto SOURCE ADDRESS ipa ';' { BGP_CFG->source_addr = $4; }
- | bgp_proto START DELAY TIME expr ';' { BGP_CFG->start_delay_time = $5; }
- | bgp_proto ERROR FORGET TIME expr ';' { BGP_CFG->error_amnesia_time = $5; } 
+ | bgp_proto START DELAY TIME expr ';' { BGP_CFG->connect_delay_time = $5; log(L_WARN "%s: Start delay time option is deprecated, use connect delay time", this_proto->name); }
+ | bgp_proto CONNECT DELAY TIME expr ';' { BGP_CFG->connect_delay_time = $5; }
+ | bgp_proto CONNECT RETRY TIME expr ';' { BGP_CFG->connect_retry_time = $5; }
+ | bgp_proto KEEPALIVE TIME expr ';' { BGP_CFG->keepalive_time = $4; }
+ | bgp_proto ERROR FORGET TIME expr ';' { BGP_CFG->error_amnesia_time = $5; }
  | bgp_proto ERROR WAIT TIME expr ',' expr ';' { BGP_CFG->error_delay_time_min = $5; BGP_CFG->error_delay_time_max = $7; }
  | bgp_proto DISABLE AFTER ERROR bool ';' { BGP_CFG->disable_after_error = $5; }
  | bgp_proto ENABLE ROUTE REFRESH bool ';' { BGP_CFG->enable_refresh = $5; }
@@ -109,6 +115,7 @@ bgp_proto:
      this_proto->in_limit = cfg_allocz(sizeof(struct proto_limit));
      this_proto->in_limit->limit = $4;
      this_proto->in_limit->action = PLA_RESTART;
+     log(L_WARN "%s: Route limit option is deprecated, use import limit", this_proto->name);
    }
  | bgp_proto PASSIVE bool ';' { BGP_CFG->passive = $3; }
  | bgp_proto INTERPRET COMMUNITIES bool ';' { BGP_CFG->interpret_communities = $4; }
@@ -123,6 +130,7 @@ bgp_proto:
  | bgp_proto GRACEFUL RESTART TIME expr ';' { BGP_CFG->gr_time = $5; }
  | bgp_proto IGP TABLE rtable ';' { BGP_CFG->igp_table = $4; }
  | bgp_proto TTL SECURITY bool ';' { BGP_CFG->ttl_security = $4; }
+ | bgp_proto CHECK LINK bool ';' { BGP_CFG->check_link = $4; }
  | bgp_proto BFD bool ';' { BGP_CFG->bfd = $3; cf_check_bfd($3); }
  ;
 

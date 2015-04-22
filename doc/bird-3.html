@@ -75,9 +75,9 @@ used anywhere in the config file, not just as a top-level option.
 as a filename string, syslog with optional name argument, or the stderr
 output). Classes are:
 <CODE>info</CODE>, <CODE>warning</CODE>, <CODE>error</CODE> and <CODE>fatal</CODE> for messages about local problems,
-<CODE>debug</CODE> for debugging messages, 
-<CODE>trace</CODE> when you want to know what happens in the network, 
-<CODE>remote</CODE> for messages about misbehavior of remote machines, 
+<CODE>debug</CODE> for debugging messages,
+<CODE>trace</CODE> when you want to know what happens in the network,
+<CODE>remote</CODE> for messages about misbehavior of remote machines,
 <CODE>auth</CODE> about authentication failures,
 <CODE>bug</CODE> for internal BIRD bugs.
 You may specify more than one <CODE>log</CODE> line to establish logging to
@@ -89,6 +89,19 @@ following section. Default: off.
 <DT><CODE>debug commands <I>number</I></CODE><DD><P>Control logging of client connections (0 for no logging, 1 for logging
 of connects and disconnects, 2 and higher for logging of all client
 commands). Default: 0.
+<P>
+<DT><CODE>debug latency <I>switch</I></CODE><DD><P>Activate tracking of elapsed time for internal events. Recent events
+could be examined using <CODE>dump events</CODE> command. Default: off.
+<P>
+<DT><CODE>debug latency limit <I>time</I></CODE><DD><P>If <CODE>debug latency</CODE> is enabled, this option allows to specify a limit
+for elapsed time. Events exceeding the limit are logged. Default: 1 s.
+<P>
+<DT><CODE>watchdog warning <I>time</I></CODE><DD><P>Set time limit for I/O loop cycle. If one iteration took more time to
+complete, a warning is logged. Default: 5 s.
+<P>
+<DT><CODE>watchdog timeout <I>time</I></CODE><DD><P>Set time limit for I/O loop cycle. If the limit is breached, BIRD is
+killed by abort signal. The timeout has effective granularity of
+seconds, zero means disabled. Default: disabled (0).
 <P>
 <DT><CODE>mrtdump "<I>filename</I>"</CODE><DD><P>Set MRTdump file name. This option must be specified to allow MRTdump
 feature. Default: no dump file.

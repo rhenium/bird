@@ -717,7 +717,7 @@ bgp_new_bucket(struct bgp_proto *p, ea_list *new, unsigned hash)
   struct bgp_bucket *b;
   unsigned ea_size = sizeof(ea_list) + new->count * sizeof(eattr);
   unsigned ea_size_aligned = BIRD_ALIGN(ea_size, CPU_STRUCT_ALIGN);
-  unsigned size = sizeof(struct bgp_bucket) + ea_size;
+  unsigned size = sizeof(struct bgp_bucket) + ea_size_aligned;
   unsigned i;
   byte *dest;
   unsigned index = hash & (p->hash_size - 1);
@@ -991,7 +991,7 @@ bgp_create_attrs(struct bgp_proto *p, rte *e, ea_list **attrs, struct linpool *p
   if (p->cf->next_hop_self ||
       rta->dest != RTD_ROUTER ||
       ipa_equal(rta->gw, IPA_NONE) ||
-      ipa_has_link_scope(rta->gw) ||
+      ipa_is_link_local(rta->gw) ||
       (!p->is_internal && !p->cf->next_hop_keep &&
        (!p->neigh || (rta->iface != p->neigh->iface))))
     set_next_hop(z, p->source_addr);

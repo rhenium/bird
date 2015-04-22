@@ -292,6 +292,41 @@ fired, we just proceed with the usual protocol restart.
 
 <HR><H3>Function</H3>
 <P><I>void</I>
+<B>bgp_refresh_begin</B>
+(<I>struct bgp_proto *</I> <B>p</B>) --     start incoming enhanced route refresh sequence
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct bgp_proto *</I> <B>p</B><DD><P>BGP instance
+</DL>
+<H3>Description</H3>
+<P>This function is called when an incoming enhanced route refresh sequence is
+started by the neighbor, demarcated by the BoRR packet. The function updates
+the load state and starts the routing table refresh cycle. Note that graceful
+restart also uses routing table refresh cycle, but RFC 7313 and load states
+ensure that these two sequences do not overlap.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>bgp_refresh_end</B>
+(<I>struct bgp_proto *</I> <B>p</B>) --     finish incoming enhanced route refresh sequence
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct bgp_proto *</I> <B>p</B><DD><P>BGP instance
+</DL>
+<H3>Description</H3>
+<P>This function is called when an incoming enhanced route refresh sequence is
+finished by the neighbor, demarcated by the EoRR packet. The function updates
+the load state and ends the routing table refresh cycle. Routes not received
+during the sequence are removed by the nest.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
 <B>bgp_connect</B>
 (<I>struct bgp_proto *</I> <B>p</B>) --     initiate an outgoing connection
 <P>
@@ -304,6 +339,18 @@ fired, we just proceed with the usual protocol restart.
 <P>The <B>bgp_connect()</B> function creates a new <I>bgp_conn</I> and initiates
 a TCP connection to the peer. The rest of connection setup is governed
 by the BGP state machine as described in the standard.
+
+
+<HR><H3>Function</H3>
+<P><I>struct bgp_proto *</I>
+<B>bgp_find_proto</B>
+(<I>sock *</I> <B>sk</B>) --     find existing proto for incoming connection
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>sock *</I> <B>sk</B><DD><P>TCP socket
+</DL>
 
 
 <HR><H3>Function</H3>
@@ -491,105 +538,82 @@ by a <I>rta</I>.
 </H2>
 
 <P>
-<P>The OSPF protocol is quite complicated and its complex implemenation is
-split to many files. In <CODE>ospf.c</CODE>, you will find mainly the interface
-for communication with the core (e.g., reconfiguration hooks, shutdown
-and initialisation and so on). In <CODE>packet.c</CODE>, you will find various
-functions for sending and receiving generic OSPF packets. There are
-also routines for authentication and checksumming. File <CODE>iface.c</CODE> contains
-the interface state machine and functions for allocation and deallocation of OSPF's
-interface data structures. Source <CODE>neighbor.c</CODE> includes the neighbor state
-machine and functions for election of Designated Router and Backup
-Designated router. In <CODE>hello.c</CODE>, there are routines for sending
-and receiving of hello packets as well as functions for maintaining
-wait times and the inactivity timer. Files <CODE>lsreq.c</CODE>, <CODE>lsack.c</CODE>, <CODE>dbdes.c</CODE>
-contain functions for sending and receiving of link-state requests,
-link-state acknowledgements and database descriptions respectively.
-In <CODE>lsupd.c</CODE>, there are functions for sending and receiving
-of link-state updates and also the flooding algorithm. Source <CODE>topology.c</CODE> is
-a place where routines for searching LSAs in the link-state database,
-adding and deleting them reside, there also are functions for originating
-of various types of LSAs (router LSA, net LSA, external LSA). File <CODE>rt.c</CODE>
-contains routines for calculating the routing table. <CODE>lsalib.c</CODE> is a set
-of various functions for working with the LSAs (endianity conversions,
-calculation of checksum etc.).
-<P>One instance of the protocol is able to hold LSA databases for
-multiple OSPF areas, to exchange routing information between
-multiple neighbors and to calculate the routing tables. The core
-structure is <I>proto_ospf</I> to which multiple <I>ospf_area</I> and
-<I>ospf_iface</I> structures are connected. <I>ospf_area</I> is also connected to
-<I>top_hash_graph</I> which is a dynamic hashing structure that
-describes the link-state database. It allows fast search, addition
-and deletion. Each LSA is kept in two pieces: header and body. Both of them are
+<P>The OSPF protocol is quite complicated and its complex implemenation is split
+to many files. In <CODE>ospf.c</CODE>, you will find mainly the interface for
+communication with the core (e.g., reconfiguration hooks, shutdown and
+initialisation and so on). File <CODE>iface.c</CODE> contains the interface state
+machine and functions for allocation and deallocation of OSPF's interface
+data structures. Source <CODE>neighbor.c</CODE> includes the neighbor state machine and
+functions for election of Designated Router and Backup Designated router. In
+<CODE>packet.c</CODE>, you will find various functions for sending and receiving generic
+OSPF packets. There are also routines for authentication and checksumming.
+In <CODE>hello.c</CODE>, there are routines for sending and receiving of hello packets
+as well as functions for maintaining wait times and the inactivity timer.
+Files <CODE>lsreq.c</CODE>, <CODE>lsack.c</CODE>, <CODE>dbdes.c</CODE> contain functions for sending and
+receiving of link-state requests, link-state acknowledgements and database
+descriptions respectively.  In <CODE>lsupd.c</CODE>, there are functions for sending and
+receiving of link-state updates and also the flooding algorithm. Source
+<CODE>topology.c</CODE> is a place where routines for searching LSAs in the link-state
+database, adding and deleting them reside, there also are functions for
+originating of various types of LSAs (router LSA, net LSA, external LSA).
+File <CODE>rt.c</CODE> contains routines for calculating the routing table. <CODE>lsalib.c</CODE>
+is a set of various functions for working with the LSAs (endianity
+conversions, calculation of checksum etc.).
+<P>One instance of the protocol is able to hold LSA databases for multiple OSPF
+areas, to exchange routing information between multiple neighbors and to
+calculate the routing tables. The core structure is <I>ospf_proto</I> to which
+multiple <I>ospf_area</I> and <I>ospf_iface</I> structures are connected. <I>ospf_proto</I> is
+also connected to <I>top_hash_graph</I> which is a dynamic hashing structure that
+describes the link-state database. It allows fast search, addition and
+deletion. Each LSA is kept in two pieces: header and body. Both of them are
 kept in the endianity of the CPU.
-<P>In OSPFv2 specification, it is implied that there is one IP prefix
-for each physical network/interface (unless it is an ptp link). But
-in modern systems, there might be more independent IP prefixes
-associated with an interface.  To handle this situation, we have
-one <I>ospf_iface</I> for each active IP prefix (instead for each active
-iface); This behaves like virtual interface for the purpose of OSPF.
-If we receive packet, we associate it with a proper virtual interface
-mainly according to its source address.
-<P>OSPF keeps one socket per <I>ospf_iface</I>. This allows us (compared to
-one socket approach) to evade problems with a limit of multicast
-groups per socket and with sending multicast packets to appropriate
-interface in a portable way. The socket is associated with
-underlying physical iface and should not receive packets received
-on other ifaces (unfortunately, this is not true on
-BSD). Generally, one packet can be received by more sockets (for
-example, if there are more <I>ospf_iface</I> on one physical iface),
-therefore we explicitly filter received packets according to
-src/dst IP address and received iface.
-<P>Vlinks are implemented using particularly degenerate form of
-<I>ospf_iface</I>, which has several exceptions: it does not have its
-iface or socket (it copies these from 'parent' <I>ospf_iface</I>) and it
-is present in iface list even when down (it is not freed in
-<B>ospf_iface_down()</B>).
+<P>In OSPFv2 specification, it is implied that there is one IP prefix for each
+physical network/interface (unless it is an ptp link). But in modern systems,
+there might be more independent IP prefixes associated with an interface.  To
+handle this situation, we have one <I>ospf_iface</I> for each active IP prefix
+(instead for each active iface); This behaves like virtual interface for the
+purpose of OSPF.  If we receive packet, we associate it with a proper virtual
+interface mainly according to its source address.
+<P>OSPF keeps one socket per <I>ospf_iface</I>. This allows us (compared to one socket
+approach) to evade problems with a limit of multicast groups per socket and
+with sending multicast packets to appropriate interface in a portable way.
+The socket is associated with underlying physical iface and should not
+receive packets received on other ifaces (unfortunately, this is not true on
+BSD). Generally, one packet can be received by more sockets (for example, if
+there are more <I>ospf_iface</I> on one physical iface), therefore we explicitly
+filter received packets according to src/dst IP address and received iface.
+<P>Vlinks are implemented using particularly degenerate form of <I>ospf_iface</I>,
+which has several exceptions: it does not have its iface or socket (it copies
+these from 'parent' <I>ospf_iface</I>) and it is present in iface list even when
+down (it is not freed in <B>ospf_iface_down()</B>).
 <P>The heart beat of ospf is <B>ospf_disp()</B>. It is called at regular intervals
-(<I>proto_ospf</I>-&gt;tick). It is responsible for aging and flushing of LSAs in
-the database, for routing table calculaction and it call <B>area_disp()</B> of every
-ospf_area.
-<P>The function <B>area_disp()</B> is
-responsible for late originating of router LSA and network LSA
-and for cleanup before routing table calculation process in
-the area.
-To every <I>ospf_iface</I>, we connect one or more
-<I>ospf_neighbor</I>'s -- a structure containing many timers and queues
-for building adjacency and for exchange of routing messages.
-<P>BIRD's OSPF implementation respects RFC2328 in every detail, but
-some of internal algorithms do differ. The RFC recommends making a snapshot
-of the link-state database when a new adjacency is forming and sending
-the database description packets based on the information in this 
-snapshot. The database can be quite large in some networks, so
-rather we walk through a <I>slist</I> structure which allows us to
-continue even if the actual LSA we were working with is deleted. New
-LSAs are added at the tail of this <I>slist</I>.
-<P>We also don't keep a separate OSPF routing table, because the core
-helps us by being able to recognize when a route is updated
-to an identical one and it suppresses the update automatically.
-Due to this, we can flush all the routes we've recalculated and
-also those we've deleted to the core's routing table and the
-core will take care of the rest. This simplifies the process
+(<I>ospf_proto</I>-&gt;tick). It is responsible for aging and flushing of LSAs in the
+database, updating topology information in LSAs and for routing table
+calculation.
+<P>To every <I>ospf_iface</I>, we connect one or more <I>ospf_neighbor</I>'s -- a structure
+containing many timers and queues for building adjacency and for exchange of
+routing messages.
+<P>BIRD's OSPF implementation respects RFC2328 in every detail, but some of
+internal algorithms do differ. The RFC recommends making a snapshot of the
+link-state database when a new adjacency is forming and sending the database
+description packets based on the information in this snapshot. The database
+can be quite large in some networks, so rather we walk through a <I>slist</I>
+structure which allows us to continue even if the actual LSA we were working
+with is deleted. New LSAs are added at the tail of this <I>slist</I>.
+<P>We also do not keep a separate OSPF routing table, because the core helps us
+by being able to recognize when a route is updated to an identical one and it
+suppresses the update automatically. Due to this, we can flush all the routes
+we have recalculated and also those we have deleted to the core's routing
+table and the core will take care of the rest. This simplifies the process
 and conserves memory.
+<P>Supported standards:
+- RFC 2328 - main OSPFv2 standard
+- RFC 5340 - main OSPFv3 standard
+- RFC 3101 - OSPFv2 NSSA areas
+- RFC 6549 - OSPFv2 multi-instance extensions
+- RFC 6987 - OSPF stub router advertisement
 <P>
 <P><HR><H3>Function</H3>
-<P><I>void</I>
-<B>area_disp</B>
-(<I>struct ospf_area *</I> <B>oa</B>) --     invokes origination of
-<P>
-<H3>Arguments</H3>
-<P>
-<DL>
-<DT><I>struct ospf_area *</I> <B>oa</B><DD><P>ospf area
-</DL>
-<H3>Open Shortest Path First (OSPF)</H3>
-<P>router LSA and routing table cleanup
-<H3>Description</H3>
-<P>It invokes aging and when <B>ospf_area</B>-&gt;origrt is set to 1, start
-function for origination of router, network LSAs.
-
-
-<HR><H3>Function</H3>
 <P><I>void</I>
 <B>ospf_disp</B>
 (<I>timer *</I> <B>timer</B>) --     invokes routing table calculation, aging and also <B>area_disp()</B>
@@ -597,20 +621,20 @@ function for origination of router, network LSAs.
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>timer *</I> <B>timer</B><DD><P>timer usually called every <B>proto_ospf</B>-&gt;tick second, <B>timer</B>-&gt;data
-point to <B>proto_ospf</B>
+<DT><I>timer *</I> <B>timer</B><DD><P>timer usually called every <B>ospf_proto</B>-&gt;tick second, <B>timer</B>-&gt;data
+point to <B>ospf_proto</B>
 </DL>
 
 
 <HR><H3>Function</H3>
 <P><I>int</I>
 <B>ospf_import_control</B>
-(<I>struct proto *</I> <B>p</B>, <I>rte **</I> <B>new</B>, <I>ea_list **</I> <B>attrs</B>, <I>struct linpool *</I> <B>pool</B>) --     accept or reject new route from nest's routing table
+(<I>struct proto *</I> <B>P</B>, <I>rte **</I> <B>new</B>, <I>ea_list **</I> <B>attrs</B>, <I>struct linpool *</I> <B>pool</B>) --     accept or reject new route from nest's routing table
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>struct proto *</I> <B>p</B><DD><P>current instance of protocol
+<DT><I>struct proto *</I> <B>P</B><DD><P>OSPF protocol instance
 <DT><I>rte **</I> <B>new</B><DD><P>the new route
 <DT><I>ea_list **</I> <B>attrs</B><DD><P>list of attributes
 <DT><I>struct linpool *</I> <B>pool</B><DD><P>pool for allocation of attributes
@@ -623,12 +647,12 @@ import to the filters.
 <HR><H3>Function</H3>
 <P><I>int</I>
 <B>ospf_shutdown</B>
-(<I>struct proto *</I> <B>p</B>) --     Finish of OSPF instance
+(<I>struct proto *</I> <B>P</B>) --     Finish of OSPF instance
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>struct proto *</I> <B>p</B><DD><P>current instance of protocol
+<DT><I>struct proto *</I> <B>P</B><DD><P>OSPF protocol instance
 </DL>
 <H3>Description</H3>
 <P>RFC does not define any action that should be taken before router
@@ -640,12 +664,12 @@ their neighbor state machine with event <I>NEIGHBOR_1WAY</I>.
 <HR><H3>Function</H3>
 <P><I>int</I>
 <B>ospf_reconfigure</B>
-(<I>struct proto *</I> <B>p</B>, <I>struct proto_config *</I> <B>c</B>) --     reconfiguration hook
+(<I>struct proto *</I> <B>P</B>, <I>struct proto_config *</I> <B>c</B>) --     reconfiguration hook
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>struct proto *</I> <B>p</B><DD><P>current instance of protocol (with old configuration)
+<DT><I>struct proto *</I> <B>P</B><DD><P>current instance of protocol (with old configuration)
 <DT><I>struct proto_config *</I> <B>c</B><DD><P>new configuration requested by user
 </DL>
 <H3>Description</H3>
@@ -656,83 +680,165 @@ nonbroadcast network, cost of interface, etc.
 
 
 <HR><H3>Function</H3>
-<P><I>void</I>
-<B>originate_rt_lsa</B>
-(<I>struct ospf_area *</I> <B>oa</B>) --  build new instance of router LSA
+<P><I>struct top_hash_entry *</I>
+<B>ospf_install_lsa</B>
+(<I>struct ospf_proto *</I> <B>p</B>, <I>struct ospf_lsa_header *</I> <B>lsa</B>, <I>u32</I> <B>type</B>, <I>u32</I> <B>domain</B>, <I>void *</I> <B>body</B>) --  install new LSA into database
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>struct ospf_area *</I> <B>oa</B><DD><P>ospf_area which is LSA built to
+<DT><I>struct ospf_proto *</I> <B>p</B><DD><P>OSPF protocol instance
+<DT><I>struct ospf_lsa_header *</I> <B>lsa</B><DD><P>LSA header
+<DT><I>u32</I> <B>type</B><DD><P>type of LSA
+<DT><I>u32</I> <B>domain</B><DD><P>domain of LSA
+<DT><I>void *</I> <B>body</B><DD><P>pointer to LSA body
 </DL>
 <H3>Description</H3>
-<P>It builds router LSA walking through all OSPF interfaces in
-specified OSPF area. This function is mostly called from
-<B>area_disp()</B>. Builds new LSA, increases sequence number (if old
-instance exists) and sets age of LSA to zero.
+<P>This function ensures installing new LSA received in LS update into LSA
+database. Old instance is replaced. Several actions are taken to detect if
+new routing table calculation is necessary. This is described in 13.2 of RFC
+2328. This function is for received LSA only, locally originated LSAs are
+installed by <B>ospf_originate_lsa()</B>.
+<P>The LSA body in <B>body</B> is expected to be mb_allocated by the caller and its
+ownership is transferred to the LSA entry structure.
 
 
 <HR><H3>Function</H3>
 <P><I>void</I>
-<B>originate_net_lsa</B>
-(<I>struct ospf_iface *</I> <B>ifa</B>) --  originates of deletes network LSA
+<B>ospf_advance_lsa</B>
+(<I>struct ospf_proto *</I> <B>p</B>, <I>struct top_hash_entry *</I> <B>en</B>, <I>struct ospf_lsa_header *</I> <B>lsa</B>, <I>u32</I> <B>type</B>, <I>u32</I> <B>domain</B>, <I>void *</I> <B>body</B>) --  handle received unexpected self-originated LSA
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>struct ospf_iface *</I> <B>ifa</B><DD><P>interface which is LSA originated for
+<DT><I>struct ospf_proto *</I> <B>p</B><DD><P>OSPF protocol instance
+<DT><I>struct top_hash_entry *</I> <B>en</B><DD><P>current LSA entry or NULL
+<DT><I>struct ospf_lsa_header *</I> <B>lsa</B><DD><P>new LSA header
+<DT><I>u32</I> <B>type</B><DD><P>type of LSA
+<DT><I>u32</I> <B>domain</B><DD><P>domain of LSA
+<DT><I>void *</I> <B>body</B><DD><P>pointer to LSA body
 </DL>
 <H3>Description</H3>
-<P>Interface counts number of adjacent neighbors. If this number is
-lower than one or interface is not in state <I>OSPF_IS_DR</I> it deletes
-and premature ages instance of network LSA for specified interface.
-In other case, new instance of network LSA is originated.
+<P>This function handles received unexpected self-originated LSA (<B>lsa</B>, <B>body</B>)
+by either advancing sequence number of the local LSA instance (<B>en</B>) and
+propagating it, or installing the received LSA and immediately flushing it
+(if there is no local LSA; i.e., <B>en</B> is NULL or MaxAge).
+<P>The LSA body in <B>body</B> is expected to be mb_allocated by the caller and its
+ownership is transferred to the LSA entry structure or it is freed.
+
+
+<HR><H3>Function</H3>
+<P><I>struct top_hash_entry *</I>
+<B>ospf_originate_lsa</B>
+(<I>struct ospf_proto *</I> <B>p</B>, <I>struct ospf_new_lsa *</I> <B>lsa</B>) --  originate new LSA
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct ospf_proto *</I> <B>p</B><DD><P>OSPF protocol instance
+<DT><I>struct ospf_new_lsa *</I> <B>lsa</B><DD><P>New LSA specification
+</DL>
+<H3>Description</H3>
+<P>This function prepares a new LSA, installs it into the LSA database and
+floods it. If the new LSA cannot be originated now (because the old instance
+was originated within MinLSInterval, or because the LSA seqnum is currently
+wrapping), the origination is instead scheduled for later. If the new LSA is
+equivalent to the current LSA, the origination is skipped. In all cases, the
+corresponding LSA entry is returned. The new LSA is based on the LSA
+specification (<B>lsa</B>) and the LSA body from lsab buffer of <B>p</B>, which is
+emptied after the call. The opposite of this function is <B>ospf_flush_lsa()</B>.
 
 
 <HR><H3>Function</H3>
 <P><I>void</I>
-<B>originate_ext_lsa</B>
-(<I>struct ospf_area *</I> <B>oa</B>, <I>struct fib_node *</I> <B>fn</B>, <I>int</I> <B>src</B>, <I>u32</I> <B>metric</B>, <I>ip_addr</I> <B>fwaddr</B>, <I>u32</I> <B>tag</B>, <I>int</I> <B>pbit</B>) --  new route received from nest and filters
+<B>ospf_flush_lsa</B>
+(<I>struct ospf_proto *</I> <B>p</B>, <I>struct top_hash_entry *</I> <B>en</B>) --  flush LSA from OSPF domain
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
+<DT><I>struct ospf_proto *</I> <B>p</B><DD><P>OSPF protocol instance
+<DT><I>struct top_hash_entry *</I> <B>en</B><DD><P>LSA entry to flush
+</DL>
+<H3>Description</H3>
+<P>This function flushes <B>en</B> from the OSPF domain by setting its age to
+<I>LSA_MAXAGE</I> and flooding it. That also triggers subsequent events in LSA
+lifecycle leading to removal of the LSA from the LSA database (e.g. the LSA
+content is freed when flushing is acknowledged by neighbors). The function
+does nothing if the LSA is already being flushed. LSA entries are not
+immediately removed when being flushed, the caller may assume that <B>en</B> still
+exists after the call. The function is the opposite of <B>ospf_originate_lsa()</B>
+and is supposed to do the right thing even in cases of postponed
+origination.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>ospf_update_lsadb</B>
+(<I>struct ospf_proto *</I> <B>p</B>) --  update LSA database
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct ospf_proto *</I> <B>p</B><DD><P>OSPF protocol instance
+</DL>
+<H3>Description</H3>
+<P>This function is periodicaly invoked from <B>ospf_disp()</B>. It does some periodic
+or postponed processing related to LSA entries. It originates postponed LSAs
+scheduled by <B>ospf_originate_lsa()</B>, It continues in flushing processes started
+by <B>ospf_flush_lsa()</B>. It also periodically refreshs locally originated LSAs --
+when the current instance is older <I>LSREFRESHTIME</I>, a new instance is originated.
+Finally, it also ages stored LSAs and flushes ones that reached <I>LSA_MAXAGE</I>.
+<P>The RFC 2328 says that a router should periodically check checksums of all
+stored LSAs to detect hardware problems. This is not implemented.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>ospf_originate_ext_lsa</B>
+(<I>struct ospf_proto *</I> <B>p</B>, <I>struct ospf_area *</I> <B>oa</B>, <I>ort *</I> <B>nf</B>, <I>u8</I> <B>mode</B>, <I>u32</I> <B>metric</B>, <I>u32</I> <B>ebit</B>, <I>ip_addr</I> <B>fwaddr</B>, <I>u32</I> <B>tag</B>, <I>int</I> <B>pbit</B>) --  new route received from nest and filters
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct ospf_proto *</I> <B>p</B><DD><P>OSPF protocol instance
 <DT><I>struct ospf_area *</I> <B>oa</B><DD><P>ospf_area for which LSA is originated
-<DT><I>struct fib_node *</I> <B>fn</B><DD><P>network prefix and mask
-<DT><I>int</I> <B>src</B><DD><P>the source of origination of the LSA (EXT_EXPORT/EXT_NSSA)
+<DT><I>ort *</I> <B>nf</B><DD><P>network prefix and mask
+<DT><I>u8</I> <B>mode</B><DD><P>the mode of the LSA (LSA_M_EXPORT or LSA_M_RTCALC)
 <DT><I>u32</I> <B>metric</B><DD><P>the metric of a route
+<DT><I>u32</I> <B>ebit</B><DD><P>E-bit for route metric (bool)
 <DT><I>ip_addr</I> <B>fwaddr</B><DD><P>the forwarding address
 <DT><I>u32</I> <B>tag</B><DD><P>the route tag
-<DT><I>int</I> <B>pbit</B><DD><P>P-bit for NSSA LSAs, ignored for external LSAs
+<DT><I>int</I> <B>pbit</B><DD><P>P-bit for NSSA LSAs (bool), ignored for external LSAs
 </DL>
 <H3>Description</H3>
 <P>If I receive a message that new route is installed, I try to originate an
 external LSA. If <B>oa</B> is an NSSA area, NSSA-LSA is originated instead.
 <B>oa</B> should not be a stub area. <B>src</B> does not specify whether the LSA
-is external or NSSA, but it specifies the source of origination - 
+is external or NSSA, but it specifies the source of origination -
 the export from <B>ospf_rt_notify()</B>, or the NSSA-EXT translation.
-<P>The function also sets flag ebit. If it's the first time, the new router lsa
-origination is necessary.
 
 
 <HR><H3>Function</H3>
 <P><I>struct top_graph *</I>
 <B>ospf_top_new</B>
-(<I>pool *</I> <B>pool</B>) --  allocated new topology database
+(<I>struct ospf_proto *</I> <B>p</B>, <I>pool *</I> <B>pool</B>) --  allocated new topology database
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>pool *</I> <B>pool</B><DD><P>-- undescribed --
+<DT><I>struct ospf_proto *</I> <B>p</B><DD><P>OSPF protocol instance
+<DT><I>pool *</I> <B>pool</B><DD><P>pool for allocation
 </DL>
 <H3>Description</H3>
-<P>this dynamically hashed structure is often used for keeping lsas. mainly
-its used in <B>ospf_area</B> structure.
+<P>This dynamically hashed structure is used for keeping LSAs. Mainly it is used
+for the LSA database of the OSPF protocol, but also for LSA retransmission
+and request lists of OSPF neighbors.
 
 
 <HR><H3>Function</H3>
 <P><I>void</I>
-<B>neigh_chstate</B>
+<B>ospf_neigh_chstate</B>
 (<I>struct ospf_neighbor *</I> <B>n</B>, <I>u8</I> <B>state</B>) --  handles changes related to new or lod state of neighbor
 <P>
 <H3>Arguments</H3>
@@ -768,7 +874,7 @@ sending hello packets. These are sent to IPs listed in
 
 <HR><H3>Function</H3>
 <P><I>void</I>
-<B>bdr_election</B>
+<B>ospf_dr_election</B>
 (<I>struct ospf_iface *</I> <B>ifa</B>) --  (Backup) Designed Router election
 <P>
 <H3>Arguments</H3>
@@ -778,9 +884,11 @@ sending hello packets. These are sent to IPs listed in
 </DL>
 <H3>Description</H3>
 <P>When the wait timer fires, it is time to elect (Backup) Designated Router.
-Structure describing me is added to this list so every electing router
-has the same list. Backup Designated Router is elected before Designated
-Router. This process is described in 9.4 of RFC 2328.
+Structure describing me is added to this list so every electing router has
+the same list. Backup Designated Router is elected before Designated
+Router. This process is described in 9.4 of RFC 2328. The function is
+supposed to be called only from <B>ospf_iface_sm()</B> as a part of the interface
+state machine.
 
 
 <HR><H3>Function</H3>
@@ -822,12 +930,12 @@ link.
 <HR><H3>Function</H3>
 <P><I>int</I>
 <B>ospf_rx_hook</B>
-(<I>sock *</I> <B>sk</B>, <I>int</I> <B>size</B>)
+(<I>sock *</I> <B>sk</B>, <I>int</I> <B>len</B>)
 <H3>Arguments</H3>
 <P>
 <DL>
 <DT><I>sock *</I> <B>sk</B><DD><P>socket we received the packet.
-<DT><I>int</I> <B>size</B><DD><P>size of the packet
+<DT><I>int</I> <B>len</B><DD><P>-- undescribed --
 </DL>
 <H3>Description</H3>
 <P>This is the entry point for messages from neighbors. Many checks (like
@@ -836,34 +944,16 @@ non generic functions.
 
 
 <HR><H3>Function</H3>
-<P><I>void</I>
-<B>ospf_age</B>
-(<I>struct proto_ospf *</I> <B>po</B>)
-<H3>Arguments</H3>
-<P>
-<DL>
-<DT><I>struct proto_ospf *</I> <B>po</B><DD><P>ospf protocol
-</DL>
-<H3>Description</H3>
-<P>This function is periodicaly invoked from <B>ospf_disp()</B>. It computes the new
-age of all LSAs and old (<B>age</B> is higher than <I>LSA_MAXAGE</I>) LSAs are flushed
-whenever possible. If an LSA originated by the router itself is older
-than <I>LSREFRESHTIME</I> a new instance is originated.
-<P>The RFC says that a router should check the checksum of every LSA to detect
-hardware problems. BIRD does not do this to minimalize CPU utilization.
-<P>If routing table calculation is scheduled, it also invalidates the old routing
-table calculation results.
-
-
-<HR><H3>Function</H3>
 <P><I>int</I>
 <B>lsa_validate</B>
-(<I>struct ospf_lsa_header *</I> <B>lsa</B>, <I>void *</I> <B>body</B>) --  check whether given LSA is valid
+(<I>struct ospf_lsa_header *</I> <B>lsa</B>, <I>u32</I> <B>lsa_type</B>, <I>int</I> <B>ospf2</B>, <I>void *</I> <B>body</B>) --  check whether given LSA is valid
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
 <DT><I>struct ospf_lsa_header *</I> <B>lsa</B><DD><P>LSA header
+<DT><I>u32</I> <B>lsa_type</B><DD><P>-- undescribed --
+<DT><I>int</I> <B>ospf2</B><DD><P>-- undescribed --
 <DT><I>void *</I> <B>body</B><DD><P>pointer to LSA body
 </DL>
 <H3>Description</H3>
@@ -872,34 +962,15 @@ consistency). Returns true if valid.
 
 
 <HR><H3>Function</H3>
-<P><I>struct top_hash_entry *</I>
-<B>lsa_install_new</B>
-(<I>struct proto_ospf *</I> <B>po</B>, <I>struct ospf_lsa_header *</I> <B>lsa</B>, <I>u32</I> <B>domain</B>, <I>void *</I> <B>body</B>) --  install new LSA into database
-<P>
-<H3>Arguments</H3>
-<P>
-<DL>
-<DT><I>struct proto_ospf *</I> <B>po</B><DD><P>OSPF protocol
-<DT><I>struct ospf_lsa_header *</I> <B>lsa</B><DD><P>LSA header
-<DT><I>u32</I> <B>domain</B><DD><P>domain of LSA
-<DT><I>void *</I> <B>body</B><DD><P>pointer to LSA body
-</DL>
-<H3>Description</H3>
-<P>This function ensures installing new LSA into LSA database. Old instance is
-replaced. Several actions are taken to detect if new routing table
-calculation is necessary. This is described in 13.2 of RFC 2328.
-
-
-<HR><H3>Function</H3>
 <P><I>void</I>
-<B>ospf_dbdes_send</B>
-(<I>struct ospf_neighbor *</I> <B>n</B>, <I>int</I> <B>next</B>) --  transmit database description packet
+<B>ospf_send_dbdes</B>
+(<I>struct ospf_proto *</I> <B>p</B>, <I>struct ospf_neighbor *</I> <B>n</B>) --  transmit database description packet
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
+<DT><I>struct ospf_proto *</I> <B>p</B><DD><P>-- undescribed --
 <DT><I>struct ospf_neighbor *</I> <B>n</B><DD><P>neighbor
-<DT><I>int</I> <B>next</B><DD><P>whether to send a next packet in a sequence (1) or to retransmit the old one (0)
 </DL>
 <H3>Description</H3>
 <P>Sending of a database description packet is described in 10.8 of RFC 2328.
@@ -912,12 +983,12 @@ of the buffer.
 <HR><H3>Function</H3>
 <P><I>void</I>
 <B>ospf_rt_spf</B>
-(<I>struct proto_ospf *</I> <B>po</B>) --  calculate internal routes
+(<I>struct ospf_proto *</I> <B>p</B>) --  calculate internal routes
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>struct proto_ospf *</I> <B>po</B><DD><P>OSPF protocol
+<DT><I>struct ospf_proto *</I> <B>p</B><DD><P>OSPF protocol instance
 </DL>
 <H3>Description</H3>
 <P>Calculation of internal paths in an area is described in 16.1 of RFC 2328.

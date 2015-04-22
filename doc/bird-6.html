@@ -232,7 +232,7 @@ MD5 password authentication
 extended communities
 (RFC 4360
 <A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc4360.txt">ftp://ftp.rfc-editor.org/in-notes/rfc4360.txt</A>),
-route reflectors 
+route reflectors
 (RFC 4456
 <A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc4456.txt">ftp://ftp.rfc-editor.org/in-notes/rfc4456.txt</A>),
 graceful restart
@@ -241,7 +241,7 @@ graceful restart
 multiprotocol extensions
 (RFC 4760
 <A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc4760.txt">ftp://ftp.rfc-editor.org/in-notes/rfc4760.txt</A>),
-4B AS numbers 
+4B AS numbers
 (RFC 4893
 <A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc4893.txt">ftp://ftp.rfc-editor.org/in-notes/rfc4893.txt</A>),
 and 4B AS numbers in extended communities
@@ -298,9 +298,18 @@ to get consistent behavior.) Optional <CODE>ip</CODE> argument specifies a sourc
 address, equivalent to the <CODE>source address</CODE> option (see below). This
 parameter is mandatory.
 <P>
-<DT><CODE>neighbor <I>ip</I> [port <I>number</I>] as <I>number</I></CODE><DD><P>Define neighboring router this instance will be talking to and what AS
-it's located in. In case the neighbor is in the same AS as we are, we
-automatically switch to iBGP. This parameter is mandatory.
+<DT><CODE>neighbor [<I>ip</I>] [port <I>number</I>] [as <I>number</I>]</CODE><DD><P>Define neighboring router this instance will be talking to and what AS
+it is located in. In case the neighbor is in the same AS as we are, we
+automatically switch to iBGP. Optionally, the remote port may also be
+specified. The parameter may be used multiple times with different
+sub-options (e.g., both <CODE>neighbor 10.0.0.1 as 65000;</CODE> and
+<CODE>neighbor 10.0.0.1; neighbor as 65000;</CODE> are valid). This parameter is
+mandatory.
+<P>
+<DT><CODE>interface <I>string</I></CODE><DD><P>Define interface we should use for link-local BGP IPv6 sessions.
+Interface can also be specified as a part of <CODE>neighbor address</CODE>
+(e.g., <CODE>neighbor fe80::1234%eth0 as 65000;</CODE>). It is an error to use
+this parameter for non link-local sessions.
 <P>
 <DT><CODE>direct</CODE><DD><P>Specify that the neighbor is directly connected. The IP address of the
 neighbor must be from a directly reachable IP range (i.e. associated
@@ -360,6 +369,12 @@ incompatible with
 <P>
 <DT><CODE>igp table <I>name</I></CODE><DD><P>Specifies a table that is used as an IGP routing table. Default: the
 same as the table BGP is connected to.
+<P>
+<DT><CODE>check link <I>switch</I></CODE><DD><P>BGP could use hardware link state into consideration.  If enabled,
+BIRD tracks the link state of the associated interface and when link
+disappears (e.g. an ethernet cable is unplugged), the BGP session is
+immediately shut down. Note that this option cannot be used with
+multihop BGP. Default: disabled.
 <P>
 <DT><CODE>bfd <I>switch</I></CODE><DD><P>BGP could use BFD protocol as an advisory mechanism for neighbor
 liveness and failure detection. If enabled, BIRD setups a BFD session
@@ -430,13 +445,17 @@ routes. When the option is used without the argument, the check is
 completely disabled and you should ensure loop-free behavior by some
 other means. Default: 0 (no local AS number allowed).
 <P>
-<DT><CODE>enable route refresh <I>switch</I></CODE><DD><P>When BGP speaker changes its import filter, it has to re-examine all
-routes received from its neighbor against the new filter. As these
-routes might not be available, there is a BGP protocol extension Route
-Refresh (specified in RFC 2918) that allows BGP speaker to request
-re-advertisement of all routes from its neighbor. This option specifies
-whether BIRD advertises this capability and accepts such requests. Even
-when disabled, BIRD can send route refresh requests. Default: on.
+<DT><CODE>enable route refresh <I>switch</I></CODE><DD><P>After the initial route exchange, BGP protocol uses incremental updates
+to keep BGP speakers synchronized. Sometimes (e.g., if BGP speaker
+changes its import filter, or if there is suspicion of inconsistency) it
+is necessary to do a new complete route exchange. BGP protocol extension
+Route Refresh (RFC 2918) allows BGP speaker to request re-advertisement
+of all routes from its neighbor. BGP protocol extension Enhanced Route
+Refresh (RFC 7313) specifies explicit begin and end for such exchanges,
+therefore the receiver can remove stale routes that were not advertised
+during the exchange. This option specifies whether BIRD advertises these
+capabilities and supports related procedures. Note that even when
+disabled, BIRD can send route refresh requests. Default: on.
 <P>
 <DT><CODE>graceful restart <I>switch</I>|aware</CODE><DD><P>When a BGP speaker restarts or crashes, neighbors will discard all
 received paths from the speaker, which disrupts packet forwarding even
@@ -507,11 +526,11 @@ open messages and agree on the real value. Default: 240 seconds.
 <DT><CODE>keepalive time <I>number</I></CODE><DD><P>Delay in seconds between sending of two consecutive Keepalive messages.
 Default: One third of the hold time.
 <P>
+<DT><CODE>connect delay time <I>number</I></CODE><DD><P>Delay in seconds between protocol startup and the first attempt to
+connect. Default: 5 seconds.
+<P>
 <DT><CODE>connect retry time <I>number</I></CODE><DD><P>Time in seconds to wait before retrying a failed attempt to connect.
 Default: 120 seconds.
-<P>
-<DT><CODE>start delay time <I>number</I></CODE><DD><P>Delay in seconds between protocol startup and the first attempt to
-connect. Default: 5 seconds.
 <P>
 <DT><CODE>error wait time <I>number</I>,<I>number</I></CODE><DD><P>Minimum and maximum delay in seconds between a protocol failure (either
 local or reported by the peer) and automatic restart. Doesn't apply
@@ -929,6 +948,7 @@ networks.
 <PRE>
 protocol ospf &lt;name&gt; {
         rfc1583compat &lt;switch&gt;;
+        instance id &lt;num&gt;;
         stub router &lt;switch&gt;;
         tick &lt;num&gt;;
         ecmp &lt;switch&gt; [limit &lt;num&gt;];
@@ -973,6 +993,7 @@ protocol ospf &lt;name&gt; {
                         tx length &lt;num&gt;;
                         type [broadcast|bcast|pointopoint|ptp|
                                 nonbroadcast|nbma|pointomultipoint|ptmp];
+                        link lsa suppression &lt;switch&gt;;
                         strict nonbroadcast &lt;switch&gt;;
                         real broadcast &lt;switch&gt;;
                         ptp netmask &lt;switch&gt;;
@@ -1016,14 +1037,22 @@ RFC 1583
 <A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc1583.txt">ftp://ftp.rfc-editor.org/in-notes/rfc1583.txt</A>.
 Default value is no.
 <P>
+<DT><CODE>instance id <I>num</I></CODE><DD><P>When multiple OSPF protocol instances are active on the same links, they
+should use different instance IDs to distinguish their packets. Although
+it could be done on per-interface basis, it is often preferred to set
+one instance ID to whole OSPF domain/topology (e.g., when multiple
+instances are used to represent separate logical topologies on the same
+physical network). This option specifies the default instance ID for all
+interfaces of the OSPF instance. Note that this option, if used, must
+precede interface definitions. Default value is 0.
+<P>
 <DT><CODE>stub router <I>switch</I></CODE><DD><P>This option configures the router to be a stub router, i.e., a router
 that participates in the OSPF topology but does not allow transit
 traffic. In OSPFv2, this is implemented by advertising maximum metric
-for outgoing links, as suggested by
-RFC 3137 
-<A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc3137.txt">ftp://ftp.rfc-editor.org/in-notes/rfc3137.txt</A>.
-In OSPFv3, the stub router behavior is announced by clearing the R-bit
-in the router LSA. Default value is no.
+for outgoing links. In OSPFv3, the stub router behavior is announced by
+clearing the R-bit in the router LSA. See RFC 6987
+<A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc6987.txt">ftp://ftp.rfc-editor.org/in-notes/rfc6987.txt</A> for
+details. Default value is no.
 <P>
 <DT><CODE>tick <I>num</I></CODE><DD><P>The routing table calculation and clean-up of areas' databases is not
 performed when a single link state change arrives. To lower the CPU
@@ -1114,16 +1143,19 @@ used, for example, to aggregate generated stub networks.
 See 
 <A HREF="bird-3.html#dsc-iface">interface</A> common option for detailed
 description. In OSPFv2, extended interface clauses are used, because
-OSPFv2 handles each network prefix as a separate virtual interface. In
-OSPFv3, you can specify instance ID for that interface description, so
-it is possible to have several instances of that interface with
-different options or even in different areas.
+each network prefix is handled as a separate virtual interface.
+<P>You can specify alternative instance ID for the interface definition,
+therefore it is possible to have several instances of that interface
+with different options or even in different areas. For OSPFv2,
+instance ID support is an extension (RFC 6549
+<A HREF="ftp://ftp.rfc-editor.org/in-notes/rfc6549.txt">ftp://ftp.rfc-editor.org/in-notes/rfc6549.txt</A>) and is
+supposed to be set per-protocol. For OSPFv3, it is an integral feature.
 <P>
 <DT><CODE>virtual link <I>id</I> [instance <I>num</I>]</CODE><DD><P>Virtual link to router with the router id. Virtual link acts as a
 point-to-point interface belonging to backbone. The actual area is used
-as transport area. This item cannot be in the backbone. In OSPFv3, you
-could also use several virtual links to one destination with different
-instance IDs.
+as a transport area. This item cannot be in the backbone. Like with
+<CODE>interface</CODE> option, you could also use several virtual links to one
+destination with different instance IDs.
 <P>
 <DT><CODE>cost <I>num</I></CODE><DD><P>Specifies output cost (metric) of an interface. Default value is 10.
 <P>
@@ -1147,7 +1179,7 @@ in this election. Routers with priority 0 are not eligible. Default
 value is 1.
 <P>
 <DT><CODE>wait <I>num</I></CODE><DD><P>After start, router waits for the specified number of seconds between
-starting election and building adjacency. Default value is 40.
+starting election and building adjacency. Default value is 4*<I>hello</I>.
 <P>
 <DT><CODE>dead count <I>num</I></CODE><DD><P>When the router does not receive any messages from a neighbor in
 <I>dead count</I>*<I>hello</I> seconds, it will consider the neighbor down.
@@ -1205,8 +1237,14 @@ useful if not every pair of routers on the NBMA network has direct
 communication, or if the NBMA network is used as an (possibly
 unnumbered) PtP link.
 <P>
+<DT><CODE>link lsa suppression <I>switch</I></CODE><DD><P>In OSPFv3, link LSAs are generated for each link, announcing link-local
+IPv6 address of the router to its local neighbors. These are useless on
+PtP or PtMP networks and this option allows to suppress the link LSA
+origination for such interfaces. The option is ignored on other than PtP
+or PtMP interfaces. Default value is no.
+<P>
 <DT><CODE>strict nonbroadcast <I>switch</I></CODE><DD><P>If set, don't send hello to any undefined neighbor. This switch is
-ignored on other than NBMA or PtMP networks. Default value is no.
+ignored on other than NBMA or PtMP interfaces. Default value is no.
 <P>
 <DT><CODE>real broadcast <I>switch</I></CODE><DD><P>In <CODE>type broadcast</CODE> or <CODE>type ptp</CODE> network configuration, OSPF
 packets are sent as IP multicast packets. This option changes the

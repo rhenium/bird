@@ -247,7 +247,7 @@ krt_send_route(struct krt_proto *p, int cmd, rte *e)
 
 #ifdef IPV6
   /* Embed interface ID to link-local address */
-  if (ipa_has_link_scope(gw))
+  if (ipa_is_link_local(gw))
     _I0(gw) = 0xfe800000 | (i->index & 0x0000ffff);
 #endif
 
@@ -382,7 +382,7 @@ krt_read_route(struct ks_msg *msg, struct krt_proto *p, int scan)
   if ((c < 0) || !(c & IADDR_HOST) || ((c & IADDR_SCOPE_MASK) <= SCOPE_LINK))
     SKIP("strange class/scope\n");
 
-  int pxlen = (flags & RTF_HOST) ? MAX_PREFIX_LENGTH : ipa_mklen(imask);
+  int pxlen = (flags & RTF_HOST) ? MAX_PREFIX_LENGTH : ipa_masklen(imask);
   if (pxlen < 0)
     { log(L_ERR "%s (%I) - netmask %I", errmsg, idst, imask); return; }
 
@@ -468,7 +468,7 @@ krt_read_route(struct ks_msg *msg, struct krt_proto *p, int scan)
 
 #ifdef IPV6
     /* Clean up embedded interface ID returned in link-local address */
-    if (ipa_has_link_scope(a.gw))
+    if (ipa_is_link_local(a.gw))
       _I0(a.gw) = 0xfe800000;
 #endif
 
@@ -653,7 +653,7 @@ krt_read_addr(struct ks_msg *msg, int scan)
   ibrd  = ipa_from_sa(&brd);
 
 
-  if ((masklen = ipa_mklen(imask)) < 0)
+  if ((masklen = ipa_masklen(imask)) < 0)
   {
     log(L_ERR "KIF: Invalid masklen %I for %s", imask, iface->name);
     return;
@@ -662,10 +662,10 @@ krt_read_addr(struct ks_msg *msg, int scan)
 #ifdef IPV6
   /* Clean up embedded interface ID returned in link-local address */
 
-  if (ipa_has_link_scope(iaddr))
+  if (ipa_is_link_local(iaddr))
     _I0(iaddr) = 0xfe800000;
 
-  if (ipa_has_link_scope(ibrd))
+  if (ipa_is_link_local(ibrd))
     _I0(ibrd) = 0xfe800000;
 #endif
 

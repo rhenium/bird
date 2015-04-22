@@ -61,7 +61,6 @@ static struct keyword *kw_hash[KW_HASH_SIZE];
 static int kw_hash_inited;
 
 #define SYM_HASH_SIZE 128
-#define SYM_MAX_LEN 32
 
 struct sym_scope {
   struct sym_scope *next;		/* Next on scope stack */
@@ -124,22 +123,24 @@ include   ^{WHITE}*include{WHITE}*\".*\"{WHITE}*;
 }
 
 {DIGIT}+\.{DIGIT}+\.{DIGIT}+\.{DIGIT}+ {
+  ip4_addr a;
+  if (!ip4_pton(yytext, &a))
+    cf_error("Invalid IPv4 address %s", yytext);
+
 #ifdef IPV6
-  if (ipv4_pton_u32(yytext, &cf_lval.i32))
-    return RTRID;
-  cf_error("Invalid IPv4 address %s", yytext);
+  cf_lval.i32 = ip4_to_u32(a);
+  return RTRID;
 #else
-  if (ip_pton(yytext, &cf_lval.a))
-    return IPA;
-  cf_error("Invalid IP address %s", yytext);
+  cf_lval.a = ipa_from_ip4(a);
+  return IPA;
 #endif
 }
 
 ({XIGIT}*::|({XIGIT}*:){3,})({XIGIT}*|{DIGIT}+\.{DIGIT}+\.{DIGIT}+\.{DIGIT}+) {
 #ifdef IPV6
-  if (ip_pton(yytext, &cf_lval.a))
+  if (ipa_pton(yytext, &cf_lval.a))
     return IPA;
-  cf_error("Invalid IP address %s", yytext);
+  cf_error("Invalid IPv6 address %s", yytext);
 #else
   cf_error("This is an IPv4 router, therefore IPv6 addresses are not supported");
 #endif

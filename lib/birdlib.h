@@ -33,6 +33,16 @@
 #define ABS(a)   ((a)>=0 ? (a) : -(a))
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof(*(a)))
 
+
+/* Bitfield macros */
+
+/* b is u32 array (or ptr), l is size of it in bits (multiple of 32), p is 0..(l-1) */
+#define BIT32_VAL(p)		(((u32) 1) << ((p) % 32))
+#define BIT32_TEST(b,p)		((b)[(p)/32] & BIT32_VAL(p))
+#define BIT32_SET(b,p)		((b)[(p)/32] |= BIT32_VAL(p))
+#define BIT32_CLR(b,p)		((b)[(p)/32] &= ~BIT32_VAL(p))
+#define BIT32_ZERO(b,l)		memset((b), 0, (l)/8)
+
 #ifndef NULL
 #define NULL ((void *) 0)
 #endif
@@ -122,10 +132,10 @@ typedef struct buffer {
 
 #define log log_msg
 void log_commit(int class, buffer *buf);
-void log_msg(char *msg, ...);
-void log_rl(struct tbf *rl, char *msg, ...);
-void die(char *msg, ...) NORET;
-void bug(char *msg, ...) NORET;
+void log_msg(const char *msg, ...);
+void log_rl(struct tbf *rl, const char *msg, ...);
+void die(const char *msg, ...) NORET;
+void bug(const char *msg, ...) NORET;
 
 #define L_DEBUG "\001"			/* Debugging messages */
 #define L_TRACE "\002"			/* Protocol tracing */
@@ -137,7 +147,7 @@ void bug(char *msg, ...) NORET;
 #define L_FATAL "\010"			/* Fatal errors */
 #define L_BUG "\011"			/* BIRD bugs */
 
-void debug(char *msg, ...);		/* Printf to debug output */
+void debug(const char *msg, ...);		/* Printf to debug output */
 
 /* Debugging */
 
