@@ -22,17 +22,21 @@
  
  prog.sgml:
  	$(srcdir)/tools/progdoc $(srcdir_abs)
-@@ -25,6 +25,10 @@ prog.sgml:
- 	latex $<
- 	latex $<
+@@ -22,8 +22,12 @@ prog.sgml:
+ 	./sgml2html $<
  
-+%.pdf: %.tex
-+	pdflatex $<
-+	pdflatex $<
+ %.dvi: %.tex
+-	latex $<
+-	latex $<
++	TEXINPUTS=.:tex: latex $<
++	TEXINPUTS=.:tex: latex $<
 +
++%.pdf: %.tex
++	TEXINPUTS=.:tex: pdflatex $<
++	TEXINPUTS=.:tex: pdflatex $<
+ 
  %.ps: %.dvi
  	dvips -D600 -ta4 -o $@ $<
- 
 @@ -43,4 +47,4 @@ clean:
  	rm -f prog.sgml
  
