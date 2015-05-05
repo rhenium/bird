@@ -74,4 +74,4 @@ override_dh_installman: bird.8
 
 override_dh_clean:
 	dh_clean
-	-rm bird.8 birdc.8 bird6.8 birdc6.8
+	-rm -f bird.8 birdc.8 bird6.8 birdc6.8
