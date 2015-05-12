@@ -1,3 +1,9 @@
+bird (1.5.0-2) unstable; urgency=medium
+
+  * Fix extra bird.conf/ directory in /usr/share/bird/
+
+ -- Ondřej Surý <ondrej@debian.org>  Tue, 12 May 2015 12:05:33 +0200
+
 bird (1.5.0-2~exp1) experimental; urgency=medium
 
   * Add TEXINPUTS=.:tex: to latex invocation to fix documentation build
