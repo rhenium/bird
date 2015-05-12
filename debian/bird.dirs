@@ -1,2 +1,4 @@
 usr/sbin
 usr/lib/bird/
+usr/share/bird/
+usr/share/doc/bird/examples/

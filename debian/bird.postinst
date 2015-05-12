@@ -6,13 +6,18 @@ dpkg-maintscript-helper mv_conffile /etc/bird.conf /etc/bird/bird.conf 1.3.11-5~
 dpkg-maintscript-helper mv_conffile /etc/bird6.conf /etc/bird/bird6.conf 1.3.11-5~ -- "$@"
 
 if [ "$1" = "configure" ]; then
+
     if ! getent passwd bird > /dev/null; then
         adduser --quiet --system --group --no-create-home --home /run/bird bird
     fi
 
-    dpkg-statoverride --list /etc/bird/bird.conf > /dev/null || dpkg-statoverride --update --add bird bird 0640 /etc/bird/bird.conf
-    dpkg-statoverride --list /etc/bird/bird6.conf > /dev/null || dpkg-statoverride --update --add bird bird 0640 /etc/bird/bird6.conf
     dpkg-statoverride --list /etc/bird > /dev/null || dpkg-statoverride --update --add bird bird 0750 /etc/bird
+
+    for conf in bird.conf bird6.conf; do
+	ucf /usr/share/bird/$conf /etc/bird/$conf
+	ucfr bird /etc/bird/$conf
+        dpkg-statoverride --list /etc/bird/$conf > /dev/null || dpkg-statoverride --update --add bird bird 0640 /etc/bird/$conf
+    done
 fi
 
 #DEBHELPER#
