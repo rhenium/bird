@@ -1,10 +1,10 @@
-etc/bird/bird.conf /usr/share/doc/bird/examples/
-usr/sbin/bird
-usr/sbin/birdc
-etc/bird/bird6.conf /usr/share/doc/bird/examples/
-usr/sbin/bird6
-usr/sbin/birdc6
-etc/bird/envvars
-usr/lib/bird/prepare-environment
 debian/bird.conf /usr/share/bird/bird.conf
 debian/bird6.conf /usr/share/bird/bird6.conf
+etc/bird/bird.conf /usr/share/doc/bird/examples/
+etc/bird/bird6.conf /usr/share/doc/bird/examples/
+etc/bird/envvars
+usr/lib/bird/prepare-environment
+usr/sbin/bird
+usr/sbin/bird6
+usr/sbin/birdc
+usr/sbin/birdc6

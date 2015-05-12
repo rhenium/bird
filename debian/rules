@@ -22,42 +22,32 @@ LDFLAGS += -g -O2 -fno-strict-aliasing -fno-strict-overflow -fPIC -Wl,-z,defs -W
 override_dh_auto_configure:
 	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" dh_auto_configure -Bbuild-ipv4 -- $(COMMON_FLAGS) --disable-ipv6 --with-protocols=all
 	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" dh_auto_configure -Bbuild-ipv6 -- $(COMMON_FLAGS) --enable-ipv6 --with-protocols=all
-	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" dh_auto_configure -Bbuild-ipv4-bgp -- $(COMMON_FLAGS) --disable-ipv6 --with-protocols=bgp,pipe,static
-	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" dh_auto_configure -Bbuild-ipv6-bgp -- $(COMMON_FLAGS) --enable-ipv6 --with-protocols=bgp,pipe,static
 
 override_dh_auto_build:
 	dh_auto_build -Bbuild-ipv4
 	dh_auto_build -Bbuild-ipv6
-	dh_auto_build -Bbuild-ipv4-bgp
-	dh_auto_build -Bbuild-ipv6-bgp
 	# Build the upstream documentation
 	dh_auto_build -Ddoc
 
 override_dh_auto_clean:
 	dh_auto_clean -Bbuild-ipv4
 	dh_auto_clean -Bbuild-ipv6
-	dh_auto_clean -Bbuild-ipv4-bgp
-	dh_auto_clean -Bbuild-ipv6-bgp
 
 override_dh_auto_install:
 	dh_auto_install -Bbuild-ipv4
 	dh_auto_install -Bbuild-ipv6
-	dh_auto_install -Bbuild-ipv4-bgp --destdir=debian/bgp
-	dh_auto_install -Bbuild-ipv6-bgp --destdir=debian/bgp
 
 override_dh_install:
-	for d in tmp bgp; do \
+	for d in tmp; do \
 	  install -d -m 755 debian/$$d/etc/bird; \
 	  install -m 644 debian/envvars debian/$$d/etc/bird/envvars; \
 	  install -d -m 755 debian/$$d/usr/lib/bird; \
 	  install -m 755 debian/prepare-environment debian/$$d/usr/lib/bird/prepare-environment; \
 	done
 	dh_install -pbird --sourcedir=debian/tmp
-	dh_install -pbird-bgp --sourcedir=debian/bgp
 
 override_dh_strip:
 	dh_strip -pbird --dbg-package=bird-dbg
-	dh_strip -pbird-bgp --dbg-package=bird-bgp-dbg
 
 override_dh_installinit:
 	dh_installinit --name=bird
