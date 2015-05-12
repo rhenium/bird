@@ -38,12 +38,13 @@ override_dh_auto_install:
 	dh_auto_install -Bbuild-ipv6
 
 override_dh_install:
-	for d in tmp; do \
-	  install -d -m 755 debian/$$d/etc/bird; \
-	  install -m 644 debian/envvars debian/$$d/etc/bird/envvars; \
-	  install -d -m 755 debian/$$d/usr/lib/bird; \
-	  install -m 755 debian/prepare-environment debian/$$d/usr/lib/bird/prepare-environment; \
-	done
+	install -d -m 755 debian/tmp/etc/bird
+	install -m 644 debian/envvars debian/tmp/etc/bird/
+	install -d -m 755 debian/tmp/usr/lib/bird
+	install -m 755 debian/prepare-environment debian/tmp/usr/lib/bird/
+	install -d -m 755 debian/tmp/usr/share/bird
+	install -m 644 debian/bird.conf debian/tmp/usr/share/bird/
+	install -m 644 debian/bird6.conf debian/tmp/usr/share/bird/
 	dh_install -pbird --sourcedir=debian/tmp
 
 override_dh_strip:

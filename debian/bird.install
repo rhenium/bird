@@ -1,5 +1,3 @@
-../../debian/bird.conf /usr/share/bird/bird.conf
-../../debian/bird6.conf /usr/share/bird/bird6.conf
 etc/bird/bird.conf /usr/share/doc/bird/examples/
 etc/bird/bird6.conf /usr/share/doc/bird/examples/
 etc/bird/envvars
