@@ -1,3 +1,12 @@
+bird (1.5.0-2~exp1) experimental; urgency=medium
+
+  * Add TEXINPUTS=.:tex: to latex invocation to fix documentation build
+  * Change conffile handling to use ucf (Closes: #731243)
+  * Cleanup bird-bgp and make it a transitional package
+  * Delete upstart scripts
+
+ -- Ondřej Surý <ondrej@debian.org>  Tue, 12 May 2015 10:12:10 +0200
+
 bird (1.5.0-1) unstable; urgency=medium
 
   * New upstream version 1.5.0
