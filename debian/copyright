@@ -12,8 +12,7 @@ License: GPL-2+
 
 Files: ./lib/md5.c
 Copyright: 1993 Colin Plumb
-License:
-  This code is in the public domain; do with it what you wish.
+License: public-domain
 
 Files: lib/heap.h
 Copyright: 2001 Martin Mares <mj@ucw.cz>
@@ -55,3 +54,6 @@ License: LGPL-2+
  .
  On Debian GNU/Linux systems, the complete text of the GNU Lesser
  General Public License can be found in `/usr/share/common-licenses/LGPL-2'.
+
+License: public-domain
+  This code is in the public domain; do with it what you wish.

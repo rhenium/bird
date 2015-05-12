@@ -23,6 +23,7 @@ Homepage: http://bird.network.cz/
 Package: bird
 Architecture: kfreebsd-any linux-any
 Depends: adduser,
+	 ucf,
          ${misc:Depends},
          ${shlibs:Depends}
 Conflicts: routed,
@@ -61,6 +62,7 @@ Package: bird-doc
 Architecture: all
 Section: doc
 Priority: optional
+Depends: ${misc:Depends}
 Description: Internet Routing Daemon - documentatio
  BIRD is an Internet routing daemon with full support for all the major
  routing protocols. It allows redistribution between protocols with a
