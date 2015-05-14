@@ -1,3 +1,14 @@
+bird (1.5.0-3) unstable; urgency=medium
+
+  * Use IPv4 router id in IPv6 example to unbreak default config
+  * Use UCF_FORCE_CONFFOLD to force ucf to always use user version of bird
+    conffile (Closes: 784852)
+  * Remove dpkg-maintscript-helper scripts also from bird.postinst
+  * Add old md5sum for bird.conf(s) to prevent dialogues when upgrading
+    from jessie and 1.5.0-1
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 14 May 2015 08:03:06 +0200
+
 bird (1.5.0-2) unstable; urgency=medium
 
   * Fix extra bird.conf/ directory in /usr/share/bird/
