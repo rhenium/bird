@@ -15,7 +15,7 @@ if test "$1" = "purge"; then
             ucf --purge /etc/bird/$conf
 	fi
 	if which ucfr >/dev/null; then
-            ucfr --purge foo /etc/bird/$conf
+            ucfr --purge bird /etc/bird/$conf
 	fi
     done
 
