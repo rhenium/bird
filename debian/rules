@@ -45,6 +45,10 @@ override_dh_install:
 	install -d -m 755 debian/tmp/usr/share/bird
 	install -m 644 debian/bird.conf debian/tmp/usr/share/bird/
 	install -m 644 debian/bird6.conf debian/tmp/usr/share/bird/
+	install -d -m 755 debian/tmp/usr/share/bird/bird.conf.md5sum.d/
+	install -d -m 755 debian/tmp/usr/share/bird/bird6.conf.md5sum.d/
+	install -m 644 debian/bird.conf.md5sum.d/* debian/tmp/usr/share/bird/bird.conf.md5sum.d/
+	install -m 644 debian/bird6.conf.md5sum.d/* debian/tmp/usr/share/bird/bird6.conf.md5sum.d/
 	dh_install -pbird --sourcedir=debian/tmp
 
 override_dh_strip:

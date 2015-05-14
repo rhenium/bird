@@ -6,5 +6,4 @@ usr/sbin/bird
 usr/sbin/bird6
 usr/sbin/birdc
 usr/sbin/birdc6
-usr/share/bird/bird.conf
-usr/share/bird/bird6.conf
+usr/share/bird/*.conf*
