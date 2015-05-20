@@ -16,7 +16,7 @@ Build-Depends: autotools-dev,
                xsltproc
 Maintainer: Ondřej Surý <ondrej@debian.org>
 Standards-Version: 3.9.6
-Vcs-Browser: http://anonscm.debian.org/?p=users/ondrej/bird.git
+Vcs-Browser: https://anonscm.debian.org/cgit/users/ondrej/bird.git/
 Vcs-Git: git://anonscm.debian.org/users/ondrej/bird.git
 Homepage: http://bird.network.cz/
 
