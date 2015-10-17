@@ -63,7 +63,7 @@ Architecture: all
 Section: doc
 Priority: optional
 Depends: ${misc:Depends}
-Description: Internet Routing Daemon - documentatio
+Description: Internet Routing Daemon - documentation
  BIRD is an Internet routing daemon with full support for all the major
  routing protocols. It allows redistribution between protocols with a
  powerful route filtering syntax and an easy-to-use configuration
