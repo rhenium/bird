@@ -1,3 +1,11 @@
+bird (1.5.0-5) unstable; urgency=medium
+
+  * Fix Vcs-Browser URL
+  * Fix typo in bird-doc package (Closes: #802029)
+  * Return the upstart scripts back for now
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 03 Mar 2016 19:22:27 +0100
+
 bird (1.5.0-4) unstable; urgency=medium
 
   * Fix foo->bird typo in postrm
