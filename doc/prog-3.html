@@ -27,18 +27,18 @@ accompanied by a linear pool from which all information associated
 with the config and pointed to by the <I>config</I> structure is allocated.
 <P>There can exist up to four different configurations at one time: an active
 one (pointed to by <B>config</B>), configuration we are just switching from
-(<B>old_config</B>), one queued for the next reconfiguration (<B>future_config</B>;
-if there is one and the user wants to reconfigure once again, we just
-free the previous queued config and replace it with the new one) and
-finally a config being parsed (<B>new_config</B>). The stored <B>old_config</B> 
-is also used for undo reconfiguration, which works in a similar way.
-Reconfiguration could also have timeout (using <B>config_timer</B>) and undo
-is automatically called if the new configuration is not confirmed later.
-<P>Loading of new configuration is very simple: just call <B>config_alloc()</B>
-to get a new <I>config</I> structure, then use <B>config_parse()</B> to parse a
-configuration file and fill all fields of the structure
-and finally ask the config manager to switch to the new
-config by calling <B>config_commit()</B>.
+(<B>old_config</B>), one queued for the next reconfiguration (<B>future_config</B>; if
+there is one and the user wants to reconfigure once again, we just free the
+previous queued config and replace it with the new one) and finally a config
+being parsed (<B>new_config</B>). The stored <B>old_config</B> is also used for undo
+reconfiguration, which works in a similar way. Reconfiguration could also
+have timeout (using <B>config_timer</B>) and undo is automatically called if the
+new configuration is not confirmed later. The new config (<B>new_config</B>) and
+associated linear pool (<B>cfg_mem</B>) is non-NULL only during parsing.
+<P>Loading of new configuration is very simple: just call <B>config_alloc()</B> to get
+a new <I>config</I> structure, then use <B>config_parse()</B> to parse a configuration
+file and fill all fields of the structure and finally ask the config manager
+to switch to the new config by calling <B>config_commit()</B>.
 <P>CLI commands are parsed in a very similar way -- there is also a stripped-down
 <I>config</I> structure associated with them and they are lex-ed and parsed by the
 same functions, only a special fake token is prepended before the command
@@ -260,7 +260,26 @@ analyzer is terminated by <B>cf_error()</B>.
 <HR><H3>Function</H3>
 <P><I>struct symbol *</I>
 <B>cf_find_symbol</B>
-(<I>byte *</I> <B>c</B>) --     find a symbol by name
+(<I>struct config *</I> <B>cfg</B>, <I>byte *</I> <B>c</B>) --     find a symbol by name
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct config *</I> <B>cfg</B><DD><P>specificed config
+<DT><I>byte *</I> <B>c</B><DD><P>symbol name
+</DL>
+<H3>Description</H3>
+<P>This functions searches the symbol table in the config <B>cfg</B> for a symbol of
+given name. First it examines the current scope, then the second recent one
+and so on until it either finds the symbol and returns a pointer to its
+<I>symbol</I> structure or reaches the end of the scope chain and returns <I>NULL</I> to
+signify no match.
+
+
+<HR><H3>Function</H3>
+<P><I>struct symbol *</I>
+<B>cf_get_symbol</B>
+(<I>byte *</I> <B>c</B>) --     get a symbol by name
 <P>
 <H3>Arguments</H3>
 <P>
@@ -268,11 +287,10 @@ analyzer is terminated by <B>cf_error()</B>.
 <DT><I>byte *</I> <B>c</B><DD><P>symbol name
 </DL>
 <H3>Description</H3>
-<P>This functions searches the symbol table for a symbol of given
-name. First it examines the current scope, then the second recent
-one and so on until it either finds the symbol and returns a pointer
-to its <I>symbol</I> structure or reaches the end of the scope chain
-and returns <I>NULL</I> to signify no match.
+<P>This functions searches the symbol table of the currently parsed config
+(<B>new_config</B>) for a symbol of given name. It returns either the already
+existing symbol or a newly allocated undefined (<I>SYM_VOID</I>) symbol if no
+existing symbol is found.
 
 
 <HR><H3>Function</H3>

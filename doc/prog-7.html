@@ -427,22 +427,7 @@ node <B>after</B>.
 <DT><I>node *</I> <B>n</B><DD><P>node to be removed
 </DL>
 <H3>Description</H3>
-<P>Removes a node <B>n</B> from the list it's linked in.
-
-
-<HR><H3>Function</H3>
-<P><I>LIST_INLINE void</I>
-<B>rem2_node</B>
-(<I>node *</I> <B>n</B>) --     remove a node from a list, with cleanup
-<P>
-<H3>Arguments</H3>
-<P>
-<DL>
-<DT><I>node *</I> <B>n</B><DD><P>node to be removed
-</DL>
-<H3>Description</H3>
-<P>Removes a node <B>n</B> from the list it's linked in and resets its pointers to NULL.
-Useful if you want to distinguish between linked and unlinked nodes.
+<P>Removes a node <B>n</B> from the list it's linked in. Afterwards, node <B>n</B> is cleared.
 
 
 <HR><H3>Function</H3>
@@ -502,13 +487,13 @@ the list <B>to</B> in constant time.
 <P><HR><H3>Function</H3>
 <P><I>int</I>
 <B>ipsum_verify</B>
-(<I>void *</I> <B>frag</B>, <I>unsigned</I> <B>len</B>, <I>...</I> <B>...</B>) --     verify an IP checksum
+(<I>void *</I> <B>frag</B>, <I>uint</I> <B>len</B>, <I>...</I> <B>...</B>) --     verify an IP checksum
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
 <DT><I>void *</I> <B>frag</B><DD><P>first packet fragment
-<DT><I>unsigned</I> <B>len</B><DD><P>length in bytes
+<DT><I>uint</I> <B>len</B><DD><P>length in bytes
 <DT><I>...</I> <B>...</B><DD><P>variable arguments
 </DL>
 <H3>Description</H3>
@@ -524,13 +509,13 @@ up checksum calculation as much as possible.
 <HR><H3>Function</H3>
 <P><I>u16</I>
 <B>ipsum_calculate</B>
-(<I>void *</I> <B>frag</B>, <I>unsigned</I> <B>len</B>, <I>...</I> <B>...</B>) --     compute an IP checksum
+(<I>void *</I> <B>frag</B>, <I>uint</I> <B>len</B>, <I>...</I> <B>...</B>) --     compute an IP checksum
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
 <DT><I>void *</I> <B>frag</B><DD><P>first packet fragment
-<DT><I>unsigned</I> <B>len</B><DD><P>length in bytes
+<DT><I>uint</I> <B>len</B><DD><P>length in bytes
 <DT><I>...</I> <B>...</B><DD><P>variable arguments
 </DL>
 <H3>Description</H3>
@@ -543,12 +528,12 @@ up checksum calculation as much as possible.
 <HR><H3>Function</H3>
 <P><I>u32</I>
 <B>u32_mkmask</B>
-(<I>unsigned</I> <B>n</B>) --     create a bit mask
+(<I>uint</I> <B>n</B>) --     create a bit mask
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>unsigned</I> <B>n</B><DD><P>number of bits
+<DT><I>uint</I> <B>n</B><DD><P>number of bits
 </DL>
 <H3>Description</H3>
 <P><B>u32_mkmask()</B> returns an unsigned 32-bit integer which binary
@@ -629,6 +614,7 @@ available space to avoid buffer overflows and it allows some more
 width is automatically replaced by standard IP address width which
 depends on whether we use IPv4 or IPv6; <CODE>%#I</CODE> gives hexadecimal format),
 <CODE><I>R</I></CODE> for Router / Network ID (u32 value printed as IPv4 address)
+<CODE><I>lR</I></CODE> for 64bit Router / Network ID (u64 value printed as eight :-separated octets)
 and <CODE><I>m</I></CODE> resp. <CODE><I>M</I></CODE> for error messages (uses <B>strerror()</B> to translate <B>errno</B> code to
 message text). On the other hand, it doesn't support floating
 point numbers.
@@ -694,12 +680,12 @@ sure the buffer won't overflow.
 <HR><H3>Function</H3>
 <P><I>void *</I>
 <B>xmalloc</B>
-(<I>unsigned</I> <B>size</B>) --     malloc with checking
+(<I>uint</I> <B>size</B>) --     malloc with checking
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>unsigned</I> <B>size</B><DD><P>block size
+<DT><I>uint</I> <B>size</B><DD><P>block size
 </DL>
 <H3>Description</H3>
 <P>This function is equivalent to <B>malloc()</B> except that in case of
@@ -711,13 +697,13 @@ a <I>NULL</I> pointer.
 <HR><H3>Function</H3>
 <P><I>void *</I>
 <B>xrealloc</B>
-(<I>void *</I> <B>ptr</B>, <I>unsigned</I> <B>size</B>) --     realloc with checking
+(<I>void *</I> <B>ptr</B>, <I>uint</I> <B>size</B>) --     realloc with checking
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
 <DT><I>void *</I> <B>ptr</B><DD><P>original memory block
-<DT><I>unsigned</I> <B>size</B><DD><P>block size
+<DT><I>uint</I> <B>size</B><DD><P>block size
 </DL>
 <H3>Description</H3>
 <P>This function is equivalent to <B>realloc()</B> except that in case of

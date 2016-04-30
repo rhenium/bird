@@ -238,9 +238,11 @@ type. Enumeration types are incompatible with each other.
 literals of this type. There are several special operators on bgppaths:
 <P><CODE><I>P</I>.first</CODE> returns the first ASN (the neighbor ASN) in path <I>P</I>.
 <P><CODE><I>P</I>.last</CODE> returns the last ASN (the source ASN) in path <I>P</I>.
+<P><CODE><I>P</I>.last_nonaggregated</CODE> returns the last ASN in the non-aggregated part of the path <I>P</I>.
 <P>Both <CODE>first</CODE> and <CODE>last</CODE> return zero if there is no appropriate
 ASN, for example if the path contains an AS set element as the first (or
-the last) part.
+the last) part. If the path ends with an AS set, <CODE>last_nonaggregated</CODE>
+may be used to get last ASN before any AS set.
 <P><CODE><I>P</I>.len</CODE> returns the length of path <I>P</I>.
 <P><CODE>prepend(<I>P</I>,<I>A</I>)</CODE> prepends ASN <I>A</I> to path <I>P</I> and
 returns the result.

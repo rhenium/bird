@@ -41,6 +41,9 @@ This argument can be omitted if there exists only a single instance.
 <DT><CODE>show status</CODE><DD><P>Show router status, that is BIRD version, uptime and time from last
 reconfiguration.
 <P>
+<DT><CODE>show interfaces [summary]</CODE><DD><P>Show the list of interfaces. For each interface, print its type, state,
+MTU and addresses assigned.
+<P>
 <DT><CODE>show protocols [all]</CODE><DD><P>Show list of protocol instances along with tables they are connected to
 and protocol status, possibly giving verbose information, if <CODE>all</CODE> is
 specified.
@@ -62,12 +65,13 @@ database. It is just a stripped-down version of 'show ospf state'.
 <DT><CODE>show ospf lsadb [global | area <I>id</I> | link] [type <I>num</I>] [lsid <I>id</I>] [self | router <I>id</I>] [<I>name</I>] </CODE><DD><P>Show contents of an OSPF LSA database. Options could be used to filter
 entries.
 <P>
+<DT><CODE>show rip interfaces [<I>name</I>] ["<I>interface</I>"]</CODE><DD><P>Show detailed information about RIP interfaces.
+<P>
+<DT><CODE>show rip neighbors [<I>name</I>] ["<I>interface</I>"]</CODE><DD><P>Show a list of RIP neighbors and associated state.
+<P>
 <DT><CODE>show static [<I>name</I>]</CODE><DD><P>Show detailed information about static routes.
 <P>
 <DT><CODE>show bfd sessions [<I>name</I>]</CODE><DD><P>Show information about BFD sessions.
-<P>
-<DT><CODE>show interfaces [summary]</CODE><DD><P>Show the list of interfaces. For each interface, print its type, state,
-MTU and addresses assigned.
 <P>
 <DT><CODE>show symbols [table|filter|function|protocol|template|roa|<I>symbol</I>]</CODE><DD><P>Show the list of symbols defined in the configuration (names of
 protocols, routing tables etc.).

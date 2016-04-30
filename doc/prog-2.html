@@ -211,9 +211,35 @@ the protocol.
 
 
 <HR><H3>Function</H3>
+<P><I>rte *</I>
+<B>rte_cow_rta</B>
+(<I>rte *</I> <B>r</B>, <I>linpool *</I> <B>lp</B>) --     get a private writable copy of <I>rte</I> with writable <I>rta</I>
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>rte *</I> <B>r</B><DD><P>a route entry to be copied
+<DT><I>linpool *</I> <B>lp</B><DD><P>a linpool from which to allocate <I>rta</I>
+</DL>
+<H3>Description</H3>
+<P><B>rte_cow_rta()</B> takes a <I>rte</I> and prepares it and associated <I>rta</I> for
+modification. There are three possibilities: First, both <I>rte</I> and <I>rta</I> are
+private copies, in that case they are returned unchanged.  Second, <I>rte</I> is
+private copy, but <I>rta</I> is cached, in that case <I>rta</I> is duplicated using
+<B>rta_do_cow()</B>. Third, both <I>rte</I> is shared and <I>rta</I> is cached, in that case
+both structures are duplicated by <B>rte_do_cow()</B> and <B>rta_do_cow()</B>.
+<P>Note that in the second case, cached <I>rta</I> loses one reference, while private
+copy created by <B>rta_do_cow()</B> is a shallow copy sharing indirect data (eattrs,
+nexthops, ...) with it. To work properly, original shared <I>rta</I> should have
+another reference during the life of created private copy.
+<H3>Result</H3>
+<P>a pointer to the new writable <I>rte</I> with writable <I>rta</I>.
+
+
+<HR><H3>Function</H3>
 <P><I>void</I>
 <B>rte_announce</B>
-(<I>rtable *</I> <B>tab</B>, <I>unsigned</I> <B>type</B>, <I>net *</I> <B>net</B>, <I>rte *</I> <B>new</B>, <I>rte *</I> <B>old</B>, <I>rte *</I> <B>before_old</B>, <I>ea_list *</I> <B>tmpa</B>) --     announce a routing table change
+(<I>rtable *</I> <B>tab</B>, <I>unsigned</I> <B>type</B>, <I>net *</I> <B>net</B>, <I>rte *</I> <B>new</B>, <I>rte *</I> <B>old</B>, <I>rte *</I> <B>new_best</B>, <I>rte *</I> <B>old_best</B>, <I>rte *</I> <B>before_old</B>) --     announce a routing table change
 <P>
 <H3>Arguments</H3>
 <P>
@@ -223,8 +249,9 @@ the protocol.
 <DT><I>net *</I> <B>net</B><DD><P>network in question
 <DT><I>rte *</I> <B>new</B><DD><P>the new route to be announced
 <DT><I>rte *</I> <B>old</B><DD><P>the previous route for the same network
+<DT><I>rte *</I> <B>new_best</B><DD><P>-- undescribed --
+<DT><I>rte *</I> <B>old_best</B><DD><P>-- undescribed --
 <DT><I>rte *</I> <B>before_old</B><DD><P>-- undescribed --
-<DT><I>ea_list *</I> <B>tmpa</B><DD><P>a list of temporary attributes belonging to the new route
 </DL>
 <H3>Description</H3>
 <P>This function gets a routing table update and announces it
@@ -421,11 +448,6 @@ prune state (<B>prune_state</B>) and also the pruning iterator (<B>prune_fit</B>
 <P>The prune loop scans routing tables and removes routes belonging to flushing
 protocols, discarded routes and also stale network entries. Returns 1 when
 all such routes are pruned. It is a part of the protocol flushing loop.
-<P>The prune loop runs in two steps. In the first step it prunes just the routes
-with flushing senders (in explicitly marked tables) so the route removal is
-propagated as usual. In the second step, all remaining relevant routes are
-removed. Ideally, there shouldn't be any, but it happens when pipe filters
-are changed.
 
 
 <HR><H3>Function</H3>
@@ -607,6 +629,35 @@ and they are provided with a use count to allow sharing.
 <P>Routing tables always contain only cached <I>rta</I>'s.
 <P>
 <P><HR><H3>Function</H3>
+<P><I>struct mpnh *</I>
+<B>mpnh_merge</B>
+(<I>struct mpnh *</I> <B>x</B>, <I>struct mpnh *</I> <B>y</B>, <I>int</I> <B>rx</B>, <I>int</I> <B>ry</B>, <I>int</I> <B>max</B>, <I>linpool *</I> <B>lp</B>) --     merge nexthop lists
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct mpnh *</I> <B>x</B><DD><P>list 1
+<DT><I>struct mpnh *</I> <B>y</B><DD><P>list 2
+<DT><I>int</I> <B>rx</B><DD><P>reusability of list <B>x</B>
+<DT><I>int</I> <B>ry</B><DD><P>reusability of list <B>y</B>
+<DT><I>int</I> <B>max</B><DD><P>max number of nexthops
+<DT><I>linpool *</I> <B>lp</B><DD><P>linpool for allocating nexthops
+</DL>
+<H3>Description</H3>
+<P>The <B>mpnh_merge()</B> function takes two nexthop lists <B>x</B> and <B>y</B> and merges them,
+eliminating possible duplicates. The input lists must be sorted and the
+result is sorted too. The number of nexthops in result is limited by <B>max</B>.
+New nodes are allocated from linpool <B>lp</B>.
+<P>The arguments <B>rx</B> and <B>ry</B> specify whether corresponding input lists may be
+consumed by the function (i.e. their nodes reused in the resulting list), in
+that case the caller should not access these lists after that. To eliminate
+issues with deallocation of these lists, the caller should use some form of
+bulk deallocation (e.g. stack or linpool) to free these nodes when the
+resulting list is no longer needed. When reusability is not set, the
+corresponding lists are not modified nor linked from the resulting list.
+
+
+<HR><H3>Function</H3>
 <P><I>eattr *</I>
 <B>ea_find</B>
 (<I>ea_list *</I> <B>e</B>, <I>unsigned</I> <B>id</B>) --     find an extended attribute
@@ -621,6 +672,30 @@ and they are provided with a use count to allow sharing.
 <P>Given an extended attribute list, <B>ea_find()</B> searches for a first
 occurrence of an attribute with specified ID, returning either a pointer
 to its <I>eattr</I> structure or <I>NULL</I> if no such attribute exists.
+
+
+<HR><H3>Function</H3>
+<P><I>eattr *</I>
+<B>ea_walk</B>
+(<I>struct ea_walk_state *</I> <B>s</B>, <I>uint</I> <B>id</B>, <I>uint</I> <B>max</B>) --     walk through extended attributes
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct ea_walk_state *</I> <B>s</B><DD><P>walk state structure
+<DT><I>uint</I> <B>id</B><DD><P>start of attribute ID interval
+<DT><I>uint</I> <B>max</B><DD><P>length of attribute ID interval
+</DL>
+<H3>Description</H3>
+<P>Given an extended attribute list, <B>ea_walk()</B> walks through the list looking
+for first occurrences of attributes with ID in specified interval from <B>id</B> to
+(<B>id</B> + <B>max</B> - 1), returning pointers to found <I>eattr</I> structures, storing its
+walk state in <B>s</B> for subsequent calls.
+The function <B>ea_walk()</B> is supposed to be called in a loop, with initially
+zeroed walk state structure <B>s</B> with filled the initial extended attribute
+list, returning one found attribute in each call or <I>NULL</I> when no other
+attribute exists. The extended attribute list or the arguments should not be
+modified between calls. The maximum value of <B>max</B> is 128.
 
 
 <HR><H3>Function</H3>
@@ -744,7 +819,7 @@ the debug output.
 
 
 <HR><H3>Function</H3>
-<P><I>unsigned int</I>
+<P><I>uint</I>
 <B>ea_hash</B>
 (<I>ea_list *</I> <B>e</B>) --     calculate an <I>ea_list</I> hash key
 <P>

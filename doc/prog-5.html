@@ -14,7 +14,147 @@
 <HR>
 <H2><A NAME="s5">5.</A> <A HREF="prog.html#toc5">Protocols</A></H2>
 
-<H2><A NAME="ss5.1">5.1</A> <A HREF="prog.html#toc5.1">Bidirectional Forwarding Detection</A>
+<H2><A NAME="ss5.1">5.1</A> <A HREF="prog.html#toc5.1">The Babel protocol</A>
+</H2>
+
+<P>
+<P>Babel (RFC6126) is a loop-avoiding distance-vector routing protocol that is
+robust and efficient both in ordinary wired networks and in wireless mesh
+networks.
+<P>The Babel protocol keeps state for each neighbour in a <I>babel_neighbor</I>
+struct, tracking received Hello and I Heard You (IHU) messages. A
+<I>babel_interface</I> struct keeps hello and update times for each interface, and
+a separate hello seqno is maintained for each interface.
+<P>For each prefix, Babel keeps track of both the possible routes (with next hop
+and router IDs), as well as the feasibility distance for each prefix and
+router id. The prefix itself is tracked in a <I>babel_entry</I> struct, while the
+possible routes for the prefix are tracked as <I>babel_route</I> entries and the
+feasibility distance is maintained through <I>babel_source</I> structures.
+<P>The main route selection is done in <B>babel_select_route()</B>. This is called when
+an entry is updated by receiving updates from the network or when modified by
+internal timers. It performs feasibility checks on the available routes for
+the prefix and selects the one with the lowest metric to be announced to the
+core.
+<P>
+<P><HR><H3>Function</H3>
+<P><I>void</I>
+<B>babel_announce_rte</B>
+(<I>struct babel_proto *</I> <B>p</B>, <I>struct babel_entry *</I> <B>e</B>) --     announce selected route to the core
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct babel_proto *</I> <B>p</B><DD><P>Babel protocol instance
+<DT><I>struct babel_entry *</I> <B>e</B><DD><P>Babel route entry to announce
+</DL>
+<H3>Description</H3>
+<P>This function announces a Babel entry to the core if it has a selected
+incoming path, and retracts it otherwise. If the selected entry has infinite
+metric, the route is announced as unreachable.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>babel_select_route</B>
+(<I>struct babel_entry *</I> <B>e</B>) --     select best route for given route entry
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct babel_entry *</I> <B>e</B><DD><P>Babel entry to select the best route for
+</DL>
+<H3>Description</H3>
+<P>Select the best feasible route for a given prefix among the routes received
+from peers, and propagate it to the nest. This just selects the feasible
+route with the lowest metric.
+<P>If no feasible route is available for a prefix that previously had a route
+selected, a seqno request is sent to try to get a valid route. In the
+meantime, the route is marked as infeasible in the nest (to blackhole packets
+going to it, as per the RFC).
+<P>If no feasible route is available, and no previous route is selected, the
+route is removed from the nest entirely.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>babel_send_update</B>
+(<I>struct babel_iface *</I> <B>ifa</B>, <I>bird_clock_t</I> <B>changed</B>) --     send route table updates
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct babel_iface *</I> <B>ifa</B><DD><P>Interface to transmit on
+<DT><I>bird_clock_t</I> <B>changed</B><DD><P>Only send entries changed since this time
+</DL>
+<H3>Description</H3>
+<P>This function produces update TLVs for all entries changed since the time
+indicated by the <I>changed</I> parameter and queues them for transmission on the
+selected interface. During the process, the feasibility distance for each
+transmitted entry is updated.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>babel_handle_update</B>
+(<I>union babel_msg *</I> <B>m</B>, <I>struct babel_iface *</I> <B>ifa</B>) --     handle incoming route updates
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>union babel_msg *</I> <B>m</B><DD><P>Incoming update TLV
+<DT><I>struct babel_iface *</I> <B>ifa</B><DD><P>Interface the update was received on
+</DL>
+<H3>Description</H3>
+<P>This function is called as a handler for update TLVs and handles the updating
+and maintenance of route entries in Babel's internal routing cache. The
+handling follows the actions described in the Babel RFC, and at the end of
+each update handling, <B>babel_select_route()</B> is called on the affected entry to
+optionally update the selected routes and propagate them to the core.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>babel_iface_timer</B>
+(<I>timer *</I> <B>t</B>) --     Babel interface timer handler
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>timer *</I> <B>t</B><DD><P>Timer
+</DL>
+<H3>Description</H3>
+<P>This function is called by the per-interface timer and triggers sending of
+periodic Hello's and both triggered and periodic updates. Periodic Hello's
+and updates are simply handled by setting the next_{hello,regular} variables
+on the interface, and triggering an update (and resetting the variable)
+whenever 'now' exceeds that value.
+<P>For triggered updates, <B>babel_trigger_iface_update()</B> will set the
+want_triggered field on the interface to a timestamp value. If this is set
+(and the next_triggered time has passed; this is a rate limiting mechanism),
+<B>babel_send_update()</B> will be called with this timestamp as the second
+parameter. This causes updates to be send consisting of only the routes that
+have changed since the time saved in want_triggered.
+<P>Mostly when an update is triggered, the route being modified will be set to
+the value of 'now' at the time of the trigger; the &gt;= comparison for
+selecting which routes to send in the update will make sure this is included.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>babel_timer</B>
+(<I>timer *</I> <B>t</B>) --     global timer hook
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>timer *</I> <B>t</B><DD><P>Timer
+</DL>
+<H3>Description</H3>
+<P>This function is called by the global protocol instance timer and handles
+expiration of routes and neighbours as well as pruning of the seqno request
+cache.
+
+<H2><A NAME="ss5.2">5.2</A> <A HREF="prog.html#toc5.2">Bidirectional Forwarding Detection</A>
 </H2>
 
 <P>
@@ -51,7 +191,7 @@ created and removed based on interface notification events, but according to
 the needs of BFD sessions. When a new session is created, it requests a
 proper BFD interface by function <B>bfd_get_iface()</B>, which either finds an
 existing one in <I>iface_list</I> (from <I>bfd_proto</I>) or allocates a new one. When a
-session is removed, an associated iface is dicharged by <B>bfd_free_iface()</B>.
+session is removed, an associated iface is discharged by <B>bfd_free_iface()</B>.
 <P>BFD requests are the external API for the other protocols. When a protocol
 wants a BFD session, it calls <B>bfd_request_session()</B>, which creates a
 structure <I>bfd_request</I> containing approprite information and an notify hook.
@@ -102,7 +242,7 @@ thread and accessing some some private fields of <I>bfd_session</I> from
 - RFC 5883 - BFD for multihop paths
 <P>
 <P>
-<H2><A NAME="ss5.2">5.2</A> <A HREF="prog.html#toc5.2">Border Gateway Protocol</A>
+<H2><A NAME="ss5.3">5.3</A> <A HREF="prog.html#toc5.3">Border Gateway Protocol</A>
 </H2>
 
 <P>
@@ -496,7 +636,7 @@ checks their headers and framing and passes complete packets to
 
 
 <HR><H3>Function</H3>
-<P><I>unsigned int</I>
+<P><I>uint</I>
 <B>bgp_encode_attrs</B>
 (<I>struct bgp_proto *</I> <B>p</B>, <I>byte *</I> <B>w</B>, <I>ea_list *</I> <B>attrs</B>, <I>int</I> <B>remains</B>) --  encode BGP attributes
 <P>
@@ -518,14 +658,14 @@ and converts it to its BGP representation (a part of an Update message).
 <HR><H3>Function</H3>
 <P><I>struct rta *</I>
 <B>bgp_decode_attrs</B>
-(<I>struct bgp_conn *</I> <B>conn</B>, <I>byte *</I> <B>attr</B>, <I>unsigned int</I> <B>len</B>, <I>struct linpool *</I> <B>pool</B>, <I>int</I> <B>mandatory</B>) --  check and decode BGP attributes
+(<I>struct bgp_conn *</I> <B>conn</B>, <I>byte *</I> <B>attr</B>, <I>uint</I> <B>len</B>, <I>struct linpool *</I> <B>pool</B>, <I>int</I> <B>mandatory</B>) --  check and decode BGP attributes
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
 <DT><I>struct bgp_conn *</I> <B>conn</B><DD><P>connection
 <DT><I>byte *</I> <B>attr</B><DD><P>start of attribute block
-<DT><I>unsigned int</I> <B>len</B><DD><P>length of attribute block
+<DT><I>uint</I> <B>len</B><DD><P>length of attribute block
 <DT><I>struct linpool *</I> <B>pool</B><DD><P>linear pool to make all the allocations in
 <DT><I>int</I> <B>mandatory</B><DD><P>1 iff presence of mandatory attributes has to be checked
 </DL>
@@ -534,7 +674,7 @@ and converts it to its BGP representation (a part of an Update message).
 its consistency and converts it to a list of BIRD route attributes represented
 by a <I>rta</I>.
 
-<H2><A NAME="ss5.3">5.3</A> <A HREF="prog.html#toc5.3">Open Shortest Path First (OSPF)</A>
+<H2><A NAME="ss5.4">5.4</A> <A HREF="prog.html#toc5.4">Open Shortest Path First (OSPF)</A>
 </H2>
 
 <P>
@@ -995,7 +1135,7 @@ of the buffer.
 It's based on Dijkstra's shortest path tree algorithms.
 This function is invoked from <B>ospf_disp()</B>.
 
-<H2><A NAME="ss5.4">5.4</A> <A HREF="prog.html#toc5.4">Pipe</A>
+<H2><A NAME="ss5.5">5.5</A> <A HREF="prog.html#toc5.5">Pipe</A>
 </H2>
 
 <P>
@@ -1018,65 +1158,187 @@ are used as export filters in ahooks 2 and 1. Route limits are
 handled similarly, but on the import side of ahooks.
 <P>
 <P>
-<H2><A NAME="ss5.5">5.5</A> <A HREF="prog.html#toc5.5">Routing Information Protocol</A>
+<H2><A NAME="ss5.6">5.6</A> <A HREF="prog.html#toc5.6">Routing Information Protocol (RIP)</A>
 </H2>
 
 <P>
-<P>RIP is a pretty simple protocol, so about a half of its code is interface
-with the core.
-<P>We maintain our own linked list of <I>rip_entry</I> structures -- it serves
-as our small routing table. RIP never adds to this linked list upon
-packet reception; instead, it lets the core know about data from the packet
-and waits for the core to call <B>rip_rt_notify()</B>.
-<P>Within <B>rip_tx()</B>, the list is
-walked and a packet is generated using <B>rip_tx_prepare()</B>. This gets
-tricky because we may need to send more than one packet to one
-destination. Struct <I>rip_connection</I> is used to hold context information such as how
-many of <I>rip_entry</I>'s we have already sent and it's also used to protect
-against two concurrent sends to one destination. Each <I>rip_interface</I> has
-at most one <I>rip_connection</I>.
-<P>We are not going to honor requests for sending part of
-routing table. That would need to turn split horizon off etc.  
-<P>About triggered updates, RFC says: when a triggered update was sent,
-don't send a new one for something between 1 and 5 seconds (and send one
-after that). We do something else: each 5 seconds,
-we look for any changed routes and broadcast them.
+<P>The RIP protocol is implemented in two files: <CODE>rip.c</CODE> containing the protocol
+logic, route management and the protocol glue with BIRD core, and <CODE>packets.c</CODE>
+handling RIP packet processing, RX, TX and protocol sockets.
+<P>Each instance of RIP is described by a structure <I>rip_proto</I>, which contains
+an internal RIP routing table, a list of protocol interfaces and the main
+timer responsible for RIP routing table cleanup.
+<P>RIP internal routing table contains incoming and outgoing routes. For each
+network (represented by structure <I>rip_entry</I>) there is one outgoing route
+stored directly in <I>rip_entry</I> and an one-way linked list of incoming routes
+(structures <I>rip_rte</I>). The list contains incoming routes from different RIP
+neighbors, but only routes with the lowest metric are stored (i.e., all
+stored incoming routes have the same metric).
+<P>Note that RIP itself does not select outgoing route, that is done by the core
+routing table. When a new incoming route is received, it is propagated to the
+RIP table by <B>rip_update_rte()</B> and possibly stored in the list of incoming
+routes. Then the change may be propagated to the core by <B>rip_announce_rte()</B>.
+The core selects the best route and propagate it to RIP by <B>rip_rt_notify()</B>,
+which updates outgoing route part of <I>rip_entry</I> and possibly triggers route
+propagation by <B>rip_trigger_update()</B>.
+<P>RIP interfaces are represented by structures <I>rip_iface</I>. A RIP interface
+contains a per-interface socket, a list of associated neighbors, interface
+configuration, and state information related to scheduled interface events
+and running update sessions. RIP interfaces are added and removed based on
+core interface notifications.
+<P>There are two RIP interface events - regular updates and triggered updates.
+Both are managed from the RIP interface timer (<B>rip_iface_timer()</B>). Regular
+updates are called at fixed interval and propagate the whole routing table,
+while triggered updates are scheduled by <B>rip_trigger_update()</B> due to some
+routing table change and propagate only the routes modified since the time
+they were scheduled. There are also unicast-destined requested updates, but
+these are sent directly as a reaction to received RIP request message. The
+update session is started by <B>rip_send_table()</B>. There may be at most one
+active update session per interface, as the associated state (including the
+fib iterator) is stored directly in <I>rip_iface</I> structure.
+<P>RIP neighbors are represented by structures <I>rip_neighbor</I>. Compared to
+neighbor handling in other routing protocols, RIP does not have explicit
+neighbor discovery and adjacency maintenance, which makes the <I>rip_neighbor</I>
+related code a bit peculiar. RIP neighbors are interlinked with core neighbor
+structures (<I>neighbor</I>) and use core neighbor notifications to ensure that RIP
+neighbors are timely removed. RIP neighbors are added based on received route
+notifications and removed based on core neighbor and RIP interface events.
+<P>RIP neighbors are linked by RIP routes and use counter to track the number of
+associated routes, but when these RIP routes timeout, associated RIP neighbor
+is still alive (with zero counter). When RIP neighbor is removed but still
+has some associated routes, it is not freed, just changed to detached state
+(core neighbors and RIP ifaces are unlinked), then during the main timer
+cleanup phase the associated routes are removed and the <I>rip_neighbor</I>
+structure is finally freed.
+<P>Supported standards:
+- RFC 1058 - RIPv1
+- RFC 2453 - RIPv2
+- RFC 2080 - RIPng
+- RFC 4822 - RIP cryptographic authentication
 <P>
 <P><HR><H3>Function</H3>
 <P><I>void</I>
+<B>rip_announce_rte</B>
+(<I>struct rip_proto *</I> <B>p</B>, <I>struct rip_entry *</I> <B>en</B>) --     announce route from RIP routing table to the core
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct rip_proto *</I> <B>p</B><DD><P>RIP instance
+<DT><I>struct rip_entry *</I> <B>en</B><DD><P>related network
+</DL>
+<H3>Description</H3>
+<P>The function takes a list of incoming routes from <B>en</B>, prepare appropriate
+<I>rte</I> for the core and propagate it by <B>rte_update()</B>.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>rip_update_rte</B>
+(<I>struct rip_proto *</I> <B>p</B>, <I>ip_addr *</I> <B>prefix</B>, <I>int</I> <B>pxlen</B>, <I>struct rip_rte *</I> <B>new</B>) --     enter a route update to RIP routing table
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct rip_proto *</I> <B>p</B><DD><P>RIP instance
+<DT><I>ip_addr *</I> <B>prefix</B><DD><P>network prefix
+<DT><I>int</I> <B>pxlen</B><DD><P>network prefix length
+<DT><I>struct rip_rte *</I> <B>new</B><DD><P>a <I>rip_rte</I> representing the new route
+</DL>
+<H3>Description</H3>
+<P>The function is called by the RIP packet processing code whenever it receives
+a reachable route. The appropriate routing table entry is found and the list
+of incoming routes is updated. Eventually, the change is also propagated to
+the core by <B>rip_announce_rte()</B>. Note that for unreachable routes,
+<B>rip_withdraw_rte()</B> should be called instead of <B>rip_update_rte()</B>.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>rip_withdraw_rte</B>
+(<I>struct rip_proto *</I> <B>p</B>, <I>ip_addr *</I> <B>prefix</B>, <I>int</I> <B>pxlen</B>, <I>struct rip_neighbor *</I> <B>from</B>) --     enter a route withdraw to RIP routing table
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct rip_proto *</I> <B>p</B><DD><P>RIP instance
+<DT><I>ip_addr *</I> <B>prefix</B><DD><P>network prefix
+<DT><I>int</I> <B>pxlen</B><DD><P>network prefix length
+<DT><I>struct rip_neighbor *</I> <B>from</B><DD><P>a <I>rip_neighbor</I> propagating the withdraw
+</DL>
+<H3>Description</H3>
+<P>The function is called by the RIP packet processing code whenever it receives
+an unreachable route. The incoming route for given network from nbr <B>from</B> is
+removed. Eventually, the change is also propagated by <B>rip_announce_rte()</B>.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
 <B>rip_timer</B>
-(<I>timer *</I> <B>t</B>)
+(<I>timer *</I> <B>t</B>) --     RIP main timer hook
+<P>
 <H3>Arguments</H3>
 <P>
 <DL>
 <DT><I>timer *</I> <B>t</B><DD><P>timer
 </DL>
 <H3>Description</H3>
-<P>Broadcast routing tables periodically (using rip_tx) and kill
-routes that are too old. RIP keeps a list of its own entries present
-in the core table by a linked list (functions <B>rip_rte_insert()</B> and
-<B>rip_rte_delete()</B> are responsible for that), it walks this list in the timer
-and in case an entry is too old, it is discarded.
+<P>The RIP main timer is responsible for routing table maintenance. Invalid or
+expired routes (<I>rip_rte</I>) are removed and garbage collection of stale routing
+table entries (<I>rip_entry</I>) is done. Changes are propagated to core tables,
+route reload is also done here. Note that garbage collection uses a maximal
+GC time, while interfaces maintain an illusion of per-interface GC times in
+<B>rip_send_response()</B>.
+<P>Keeping incoming routes and the selected outgoing route are two independent
+functions, therefore after garbage collection some entries now considered
+invalid (RIP_ENTRY_DUMMY) still may have non-empty list of incoming routes,
+while some valid entries (representing an outgoing route) may have that list
+empty.
+<P>The main timer is not scheduled periodically but it uses the time of the
+current next event and the minimal interval of any possible event to compute
+the time of the next run.
 
 
 <HR><H3>Function</H3>
-<P><I>struct rip_interface *</I>
-<B>new_iface</B>
-(<I>struct proto *</I> <B>p</B>, <I>struct iface *</I> <B>new</B>, <I>unsigned long</I> <B>flags</B>, <I>struct iface_patt *</I> <B>patt</B>)
+<P><I>void</I>
+<B>rip_iface_timer</B>
+(<I>timer *</I> <B>t</B>) --     RIP interface timer hook
+<P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>struct proto *</I> <B>p</B><DD><P>myself
-<DT><I>struct iface *</I> <B>new</B><DD><P>interface to be created or <I>NULL</I> if we are creating a magic
-socket. The magic socket is used for listening and also for
-sending requested responses.
-<DT><I>unsigned long</I> <B>flags</B><DD><P>interface flags
-<DT><I>struct iface_patt *</I> <B>patt</B><DD><P>pattern this interface matched, used for access to config options
+<DT><I>timer *</I> <B>t</B><DD><P>timer
 </DL>
 <H3>Description</H3>
-<P>Create an interface structure and start listening on the interface.
+<P>RIP interface timers are responsible for scheduling both regular and
+triggered updates. Fixed, delay-independent period is used for regular
+updates, while minimal separating interval is enforced for triggered updates.
+The function also ensures that a new update is not started when the old one
+is still running.
 
-<H2><A NAME="ss5.6">5.6</A> <A HREF="prog.html#toc5.6">Router Advertisements</A>
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>rip_send_table</B>
+(<I>struct rip_proto *</I> <B>p</B>, <I>struct rip_iface *</I> <B>ifa</B>, <I>ip_addr</I> <B>addr</B>, <I>bird_clock_t</I> <B>changed</B>) --  RIP interface timer hook
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct rip_proto *</I> <B>p</B><DD><P>RIP instance
+<DT><I>struct rip_iface *</I> <B>ifa</B><DD><P>RIP interface
+<DT><I>ip_addr</I> <B>addr</B><DD><P>destination IP address
+<DT><I>bird_clock_t</I> <B>changed</B><DD><P>time limit for triggered updates
+</DL>
+<H3>Description</H3>
+<P>The function activates an update session and starts sending routing update
+packets (using <B>rip_send_response()</B>). The session may be finished during the
+call or may continue in <B>rip_tx_hook()</B> until all appropriate routes are
+transmitted. Note that there may be at most one active update session per
+interface, the function will terminate the old active session before
+activating the new one.
+
+<H2><A NAME="ss5.7">5.7</A> <A HREF="prog.html#toc5.7">Router Advertisements</A>
 </H2>
 
 <P>
@@ -1107,7 +1369,7 @@ the specified trigger prefix was changed.
 - RFC 4191 (partial) - Default Router Preference
 <P>
 <P>
-<H2><A NAME="ss5.7">5.7</A> <A HREF="prog.html#toc5.7">Static</A>
+<H2><A NAME="ss5.8">5.8</A> <A HREF="prog.html#toc5.8">Static</A>
 </H2>
 
 <P>
@@ -1134,7 +1396,7 @@ difference between the lists of static routes and it just inserts the
 newly added routes and removes the obsolete ones.
 <P>
 <P>
-<H2><A NAME="ss5.8">5.8</A> <A HREF="prog.html#toc5.8">Direct</A>
+<H2><A NAME="ss5.9">5.9</A> <A HREF="prog.html#toc5.9">Direct</A>
 </H2>
 
 <P>
