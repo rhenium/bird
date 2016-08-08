@@ -41,24 +41,6 @@ Description: Internet Routing Daemon
  .
  This package supports IPv4 and IPv6 versions of OSPF, RIP and BGP.
 
-Package: bird-dbg
-Architecture: kfreebsd-any linux-any
-Depends: bird (= ${binary:Version}),
-         ${misc:Depends}
-Breaks: bird-bgp-dbg (<< 1.5.0-2~)
-Replaces: bird-bgp-dbg (<< 1.5.0-2~)
-Provides: bird-bgp-dbg
-Recommends: gdb
-Section: debug
-Priority: extra
-Description: Internet Routing Daemon - debug symbols
- BIRD is an Internet routing daemon with full support for all the major
- routing protocols. It allows redistribution between protocols with a
- powerful route filtering syntax and an easy-to-use configuration
- interface.
- .
- This package provides the symbols needed for debugging BIRD with gdb.
-
 Package: bird-doc
 Architecture: all
 Section: doc
@@ -85,17 +67,3 @@ Description: Internet Routing Daemon [transitional package]
  interface.
  .
  This package is transitional and can be safely removed.
-
-Package: bird-bgp-dbg
-Architecture: all
-Depends: bird-dbg (>= ${source:Version}~),
-         ${misc:Depends}
-Section: oldlibs
-Priority: extra
-Description: Internet Routing Daemon - debug symbols [transitional package]
- BIRD is an Internet routing daemon with full support for all the major
- routing protocols. It allows redistribution between protocols with a
- powerful route filtering syntax and an easy-to-use configuration
- interface.
- .
- This package is transitional only and can be safely removed.

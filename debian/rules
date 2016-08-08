@@ -66,7 +66,7 @@ override_dh_install:
 	dh_install -pbird --sourcedir=debian/tmp
 
 override_dh_strip:
-	dh_strip -pbird --dbg-package=bird-dbg
+	dh_strip -O--dbgsym-migration='bird-dbg (<< 1.6.0-2~), bird-bgp-dbg (<< 1.6.0-2~)'
 
 override_dh_installinit:
 	dh_installinit --name=bird
