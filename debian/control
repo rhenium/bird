@@ -4,6 +4,7 @@ Priority: extra
 Build-Depends: autotools-dev,
                bison,
                debhelper (>= 9~),
+               dh-systemd (>= 1.3) [linux-any] | base-files (<< 7.2ubuntu5~) [linux-any],
                docbook-xsl,
                dpkg-dev (>= 1.16.1.1~),
                flex,

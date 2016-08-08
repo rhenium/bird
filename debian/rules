@@ -7,7 +7,7 @@
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 DPKG_EXPORT_BUILDFLAGS = 1
-include /usr/share/dpkg/buildflags.mk
+include /usr/share/dpkg/default.mk
 
 COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc/bird --mandir=\$${prefix}/share/man \
 	--infodir=\$${prefix}/share/info --localstatedir=/var --with-runtimedir=/run/bird \
@@ -16,8 +16,22 @@ COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc/bird --mandir=\$${prefix}/share/ma
 CFLAGS += -g -O2 -fno-strict-aliasing -fno-strict-overflow -fPIC
 LDFLAGS += -g -O2 -fno-strict-aliasing -fno-strict-overflow -fPIC -Wl,-z,defs -Wl,--as-needed
 
+ifeq (linux,$(DEB_HOST_ARCH_OS))
+  DH_SYSTEMD        := --with systemd
+else
+  DH_SYSTEMD        :=
+endif
+
+# Disable systemd on Ubuntu 12.04 LTS
+ifeq (Ubuntu,$(DEB_VENDOR))
+  ifeq (precise,$(DEB_DISTRIBUTION))
+  DH_SYSTEMD        :=
+  endif
+endif
+
+
 %:
-	dh $@ --with autotools_dev
+	dh $@ --with autotools_dev $(DH_SYSTEMD)
 
 override_dh_auto_configure:
 	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" dh_auto_configure -Bbuild-ipv4 -- $(COMMON_FLAGS) --disable-ipv6 --with-protocols=all
