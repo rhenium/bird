@@ -84,3 +84,10 @@ override_dh_installman: bird.8
 override_dh_clean:
 	dh_clean
 	-rm -f bird.8 birdc.8 bird6.8 birdc6.8
+
+override_dh_systemd_enable:
+	dh_systemd_enable --name=bird
+	dh_systemd_enable --name=bird6
+
+override_dh_systemd_start:
+	dh_systemd_start --restart-after-upgrade
