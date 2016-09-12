@@ -1,3 +1,9 @@
+bird (1.6.0-3) unstable; urgency=medium
+
+  * Add explicit dh_systemd_enable call in d/rules
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 12 Sep 2016 17:52:37 +0200
+
 bird (1.6.0-2) unstable; urgency=medium
 
   * Enable dh_systemd_* where available
