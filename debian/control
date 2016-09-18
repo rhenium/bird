@@ -13,7 +13,7 @@ Build-Depends: autotools-dev,
                linuxdoc-tools-latex,
                m4,
                quilt,
-               sp,
+               opensp,
                xsltproc
 Maintainer: Ondřej Surý <ondrej@debian.org>
 Standards-Version: 3.9.6
