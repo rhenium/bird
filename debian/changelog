@@ -1,3 +1,9 @@
+bird (1.6.0-4) unstable; urgency=medium
+
+  * Use opensp instead of sp (Closes: #837870)
+
+ -- Ondřej Surý <ondrej@debian.org>  Sun, 18 Sep 2016 12:12:12 +0200
+
 bird (1.6.0-3) unstable; urgency=medium
 
   * Add explicit dh_systemd_enable call in d/rules
