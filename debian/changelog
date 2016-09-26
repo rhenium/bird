@@ -1,3 +1,9 @@
+bird (1.6.1-1) unstable; urgency=medium
+
+  * Imported Upstream version 1.6.1
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 26 Sep 2016 11:40:33 +0200
+
 bird (1.6.0-4) unstable; urgency=medium
 
   * Use opensp instead of sp (Closes: #837870)
