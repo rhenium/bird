@@ -50,7 +50,7 @@ static linpool *rte_update_pool;
 
 static list routing_tables;
 
-static void rt_format_via(rte *e, byte *via);
+static byte *rt_format_via(rte *e);
 static void rt_free_hostcache(rtable *tab);
 static void rt_notify_hostcache(rtable *tab, net *net);
 static void rt_update_hostcache(rtable *tab);
@@ -227,10 +227,7 @@ rte_mergable(rte *pri, rte *sec)
 static void
 rte_trace(struct proto *p, rte *e, int dir, char *msg)
 {
-  byte via[STD_ADDRESS_P_LENGTH+32];
-
-  rt_format_via(e, via);
-  log(L_TRACE "%s %c %s %I/%d %s", p->name, dir, msg, e->net->n.prefix, e->net->n.pxlen, via);
+  log(L_TRACE "%s %c %s %I/%d %s", p->name, dir, msg, e->net->n.prefix, e->net->n.pxlen, rt_format_via(e));
 }
 
 static inline void
@@ -248,7 +245,7 @@ rte_trace_out(uint flag, struct proto *p, rte *e, char *msg)
 }
 
 static rte *
-export_filter(struct announce_hook *ah, rte *rt0, rte **rt_free, ea_list **tmpa, int silent)
+export_filter_(struct announce_hook *ah, rte *rt0, rte **rt_free, ea_list **tmpa, linpool *pool, int silent)
 {
   struct proto *p = ah->proto;
   struct filter *filter = ah->out_filter;
@@ -263,9 +260,9 @@ export_filter(struct announce_hook *ah, rte *rt0, rte **rt_free, ea_list **tmpa,
   if (!tmpa)
     tmpa = &tmpb;
 
-  *tmpa = make_tmp_attrs(rt, rte_update_pool);
+  *tmpa = make_tmp_attrs(rt, pool);
 
-  v = p->import_control ? p->import_control(p, &rt, tmpa, rte_update_pool) : 0;
+  v = p->import_control ? p->import_control(p, &rt, tmpa, pool) : 0;
   if (v < 0)
     {
       if (silent)
@@ -284,7 +281,7 @@ export_filter(struct announce_hook *ah, rte *rt0, rte **rt_free, ea_list **tmpa,
     }
 
   v = filter && ((filter == FILTER_REJECT) ||
-		 (f_run(filter, &rt, tmpa, rte_update_pool, FF_FORCE_TMPATTR) > F_ACCEPT));
+		 (f_run(filter, &rt, tmpa, pool, FF_FORCE_TMPATTR) > F_ACCEPT));
   if (v)
     {
       if (silent)
@@ -305,6 +302,12 @@ export_filter(struct announce_hook *ah, rte *rt0, rte **rt_free, ea_list **tmpa,
   if (rt != rt0)
     rte_free(rt);
   return NULL;
+}
+
+static inline rte *
+export_filter(struct announce_hook *ah, rte *rt0, rte **rt_free, ea_list **tmpa, int silent)
+{
+  return export_filter_(ah, rt0, rt_free, tmpa, rte_update_pool, silent);
 }
 
 static void
@@ -589,7 +592,7 @@ rt_notify_accepted(struct announce_hook *ah, net *net, rte *new_changed, rte *ol
 
 
 static struct mpnh *
-mpnh_merge_rta(struct mpnh *nhs, rta *a, int max)
+mpnh_merge_rta(struct mpnh *nhs, rta *a, linpool *pool, int max)
 {
   struct mpnh nh = { .gw = a->gw, .iface = a->iface };
   struct mpnh *nh2 = (a->dest == RTD_MULTIPATH) ? a->nexthops : &nh;
@@ -597,7 +600,7 @@ mpnh_merge_rta(struct mpnh *nhs, rta *a, int max)
 }
 
 rte *
-rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, ea_list **tmpa, int silent)
+rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, ea_list **tmpa, linpool *pool, int silent)
 {
   // struct proto *p = ah->proto;
   struct mpnh *nhs = NULL;
@@ -609,7 +612,7 @@ rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, ea_list **tm
   if (!rte_is_valid(best0))
     return NULL;
 
-  best = export_filter(ah, best0, rt_free, tmpa, silent);
+  best = export_filter_(ah, best0, rt_free, tmpa, pool, silent);
 
   if (!best || !rte_is_reachable(best))
     return best;
@@ -619,13 +622,13 @@ rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, ea_list **tm
     if (!rte_mergable(best0, rt0))
       continue;
 
-    rt = export_filter(ah, rt0, &tmp, NULL, 1);
+    rt = export_filter_(ah, rt0, &tmp, NULL, pool, 1);
 
     if (!rt)
       continue;
 
     if (rte_is_reachable(rt))
-      nhs = mpnh_merge_rta(nhs, rt->attrs, ah->proto->merge_limit);
+      nhs = mpnh_merge_rta(nhs, rt->attrs, pool, ah->proto->merge_limit);
 
     if (tmp)
       rte_free(tmp);
@@ -633,11 +636,11 @@ rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, ea_list **tm
 
   if (nhs)
   {
-    nhs = mpnh_merge_rta(nhs, best->attrs, ah->proto->merge_limit);
+    nhs = mpnh_merge_rta(nhs, best->attrs, pool, ah->proto->merge_limit);
 
     if (nhs->next)
     {
-      best = rte_cow_rta(best, rte_update_pool);
+      best = rte_cow_rta(best, pool);
       best->attrs->dest = RTD_MULTIPATH;
       best->attrs->nexthops = nhs;
     }
@@ -688,7 +691,7 @@ rt_notify_merged(struct announce_hook *ah, net *net, rte *new_changed, rte *old_
 
   /* Prepare new merged route */
   if (new_best)
-    new_best = rt_export_merged(ah, net, &new_best_free, &tmpa, 0);
+    new_best = rt_export_merged(ah, net, &new_best_free, &tmpa, rte_update_pool, 0);
 
   /* Prepare old merged route (without proper merged next hops) */
   /* There are some issues with running filter on old route - see rt_notify_basic() */
@@ -717,16 +720,20 @@ rt_notify_merged(struct announce_hook *ah, net *net, rte *new_changed, rte *old_
  * @net: network in question
  * @new: the new route to be announced
  * @old: the previous route for the same network
+ * @new_best: the new best route for the same network
+ * @old_best: the previous best route for the same network
+ * @before_old: The previous route before @old for the same network.
+ * 		If @before_old is NULL @old was the first.
  *
  * This function gets a routing table update and announces it
  * to all protocols that acccepts given type of route announcement
  * and are connected to the same table by their announcement hooks.
  *
- * Route announcement of type RA_OPTIMAL si generated when optimal
+ * Route announcement of type %RA_OPTIMAL si generated when optimal
  * route (in routing table @tab) changes. In that case @old stores the
  * old optimal route.
  *
- * Route announcement of type RA_ANY si generated when any route (in
+ * Route announcement of type %RA_ANY si generated when any route (in
  * routing table @tab) changes In that case @old stores the old route
  * from the same protocol.
  *
@@ -799,6 +806,13 @@ rte_validate(rte *e)
   if ((c < 0) || !(c & IADDR_HOST) || ((c & IADDR_SCOPE_MASK) <= SCOPE_LINK))
     {
       log(L_WARN "Ignoring bogus route %I/%d received via %s",
+	  n->n.prefix, n->n.pxlen, e->sender->proto->name);
+      return 0;
+    }
+
+  if ((e->attrs->dest == RTD_MULTIPATH) && !mpnh_is_sorted(e->attrs->nexthops))
+    {
+      log(L_WARN "Ignoring unsorted multipath route %I/%d received via %s",
 	  n->n.prefix, n->n.pxlen, e->sender->proto->name);
       return 0;
     }
@@ -1616,6 +1630,7 @@ again:
 
 /**
  * rt_prune_table - prune a routing table
+ * @tab: a routing table for pruning
  *
  * This function scans the routing table @tab and removes routes belonging to
  * flushing protocols, discarded routes and also stale network entries, in a
@@ -1775,7 +1790,7 @@ rt_next_hop_update_net(rtable *tab, net *n)
   /* FIXME: Better announcement of merged routes */
   rte_announce_i(tab, RA_MERGED, n, new, old_best, new, old_best);
 
-   if (free_old_best)
+  if (free_old_best)
     rte_free_quick(old_best);
 
   return count;
@@ -2359,10 +2374,13 @@ rta_set_recursive_next_hop(rtable *dep, rta *a, rtable *tab, ip_addr *gw, ip_add
  *  CLI commands
  */
 
-static void
-rt_format_via(rte *e, byte *via)
+static byte *
+rt_format_via(rte *e)
 {
   rta *a = e->attrs;
+
+  /* Max text length w/o IP addr and interface name is 16 */
+  static byte via[STD_ADDRESS_P_LENGTH+sizeof(a->iface->name)+16];
 
   switch (a->dest)
     {
@@ -2374,12 +2392,13 @@ rt_format_via(rte *e, byte *via)
     case RTD_MULTIPATH:	bsprintf(via, "multipath"); break;
     default:		bsprintf(via, "???");
     }
+  return via;
 }
 
 static void
 rt_show_rte(struct cli *c, byte *ia, rte *e, struct rt_show_data *d, ea_list *tmpa)
 {
-  byte via[STD_ADDRESS_P_LENGTH+32], from[STD_ADDRESS_P_LENGTH+8];
+  byte from[STD_ADDRESS_P_LENGTH+8];
   byte tm[TM_DATETIME_BUFFER_SIZE], info[256];
   rta *a = e->attrs;
   int primary = (e->net->routes == e);
@@ -2387,7 +2406,6 @@ rt_show_rte(struct cli *c, byte *ia, rte *e, struct rt_show_data *d, ea_list *tm
   void (*get_route_info)(struct rte *, byte *buf, struct ea_list *attrs);
   struct mpnh *nh;
 
-  rt_format_via(e, via);
   tm_format_datetime(tm, &config->tf_route, e->lastmod);
   if (ipa_nonzero(a->from) && !ipa_equal(a->from, a->gw))
     bsprintf(from, " from %I", a->from);
@@ -2408,7 +2426,7 @@ rt_show_rte(struct cli *c, byte *ia, rte *e, struct rt_show_data *d, ea_list *tm
     get_route_info(e, info, tmpa);
   else
     bsprintf(info, " (%d)", e->pref);
-  cli_printf(c, -1007, "%-18s %s [%s %s%s]%s%s", ia, via, a->src->proto->name,
+  cli_printf(c, -1007, "%-18s %s [%s %s%s]%s%s", ia, rt_format_via(e), a->src->proto->name,
 	     tm, from, primary ? (sync_error ? " !" : " *") : "", info);
   for (nh = a->nexthops; nh; nh = nh->next)
     cli_printf(c, -1007, "\tvia %I on %s weight %d", nh->gw, nh->iface->name, nh->weight + 1);
@@ -2458,7 +2476,7 @@ rt_show_net(struct cli *c, net *n, struct rt_show_data *d)
       if ((d->export_mode == RSEM_EXPORT) && (d->export_protocol->accept_ra_types == RA_MERGED))
         {
 	  rte *rt_free;
-	  e = rt_export_merged(a, n, &rt_free, &tmpa, 1);
+	  e = rt_export_merged(a, n, &rt_free, &tmpa, rte_update_pool, 1);
 	  pass = 1;
 
 	  if (!e)

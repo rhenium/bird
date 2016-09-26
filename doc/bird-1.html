@@ -167,7 +167,7 @@ privileges (capabilities CAP_NET_*). Note that the control socket is created
 before the privileges are dropped, but the config file is read after that. The
 privilege restriction is not implemented in BSD port of BIRD.
 <P>
-<P>A nonprivileged user (as an argument to <CODE>-u</CODE> options) may be the user
+<P>An unprivileged user (as an argument to <CODE>-u</CODE> options) may be the user
 <CODE>nobody</CODE>, but it is suggested to use a new dedicated user account (like
 <CODE>bird</CODE>). The similar considerations apply for the group option, but there is
 one more condition -- the users in the same group can use birdc to

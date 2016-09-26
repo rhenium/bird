@@ -302,6 +302,34 @@ mpnh_merge(struct mpnh *x, struct mpnh *y, int rx, int ry, int max, linpool *lp)
   return root;
 }
 
+void
+mpnh_insert(struct mpnh **n, struct mpnh *x)
+{
+  for (; *n; n = &((*n)->next))
+  {
+    int cmp = mpnh_compare_node(*n, x);
+
+    if (cmp < 0)
+      continue;
+    else if (cmp > 0)
+      break;
+    else
+      return;
+  }
+
+  x->next = *n;
+  *n = x;
+}
+
+int
+mpnh_is_sorted(struct mpnh *x)
+{
+  for (; x && x->next; x = x->next)
+    if (mpnh_compare_node(x, x->next) >= 0)
+      return 0;
+
+  return 1;
+}
 
 static struct mpnh *
 mpnh_copy(struct mpnh *o)
@@ -405,7 +433,7 @@ ea_find(ea_list *e, unsigned id)
  * for first occurrences of attributes with ID in specified interval from @id to
  * (@id + @max - 1), returning pointers to found &eattr structures, storing its
  * walk state in @s for subsequent calls.
-
+ *
  * The function ea_walk() is supposed to be called in a loop, with initially
  * zeroed walk state structure @s with filled the initial extended attribute
  * list, returning one found attribute in each call or %NULL when no other
@@ -1160,7 +1188,7 @@ rta_dump(rta *a)
   static char *rts[] = { "RTS_DUMMY", "RTS_STATIC", "RTS_INHERIT", "RTS_DEVICE",
 			 "RTS_STAT_DEV", "RTS_REDIR", "RTS_RIP",
 			 "RTS_OSPF", "RTS_OSPF_IA", "RTS_OSPF_EXT1",
-                         "RTS_OSPF_EXT2", "RTS_BGP" };
+                         "RTS_OSPF_EXT2", "RTS_BGP", "RTS_PIPE", "RTS_BABEL" };
   static char *rtc[] = { "", " BC", " MC", " AC" };
   static char *rtd[] = { "", " DEV", " HOLE", " UNREACH", " PROHIBIT" };
 
