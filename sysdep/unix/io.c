@@ -448,6 +448,7 @@ tm_format_reltime(char *x, struct tm *tm, bird_clock_t delta)
 /**
  * tm_format_datetime - convert date and time to textual representation
  * @x: destination buffer of size %TM_DATETIME_BUFFER_SIZE
+ * @fmt_spec: specification of resulting textual representation of the time
  * @t: time
  *
  * This function formats the given relative time value @t to a textual
@@ -1211,7 +1212,7 @@ sk_setup(sock *s)
   if (s->iface)
   {
 #ifdef SO_BINDTODEVICE
-    struct ifreq ifr;
+    struct ifreq ifr = {};
     strcpy(ifr.ifr_name, s->iface->name);
     if (setsockopt(s->fd, SOL_SOCKET, SO_BINDTODEVICE, &ifr, sizeof(ifr)) < 0)
       ERR("SO_BINDTODEVICE");
@@ -1853,6 +1854,20 @@ sk_write(sock *s)
 }
 
 void
+sk_err(sock *s, int revents)
+{
+  int se = 0, sse = sizeof(se);
+  if (revents & POLLERR)
+    if (getsockopt(s->fd, SOL_SOCKET, SO_ERROR, &se, &sse) < 0)
+    {
+      log(L_ERR "IO: Socket error: SO_ERROR: %m");
+      se = 0;
+    }
+
+  s->err_hook(s, se);
+}
+
+void
 sk_dump_all(void)
 {
   node *n;
@@ -2162,7 +2177,7 @@ io_loop(void)
 	      int steps;
 
 	      steps = MAX_STEPS;
-	      if (s->fast_rx && (pfd[s->index].revents & (POLLIN | POLLHUP | POLLERR)) && s->rx_hook)
+	      if (s->fast_rx && (pfd[s->index].revents & POLLIN) && s->rx_hook)
 		do
 		  {
 		    steps--;
@@ -2184,6 +2199,7 @@ io_loop(void)
 		      goto next;
 		  }
 		while (e && steps);
+
 	      current_sock = sk_next(s);
 	    next: ;
 	    }
@@ -2207,17 +2223,25 @@ io_loop(void)
 		  goto next2;
 		}
 
-	      if (!s->fast_rx && (pfd[s->index].revents & (POLLIN | POLLHUP | POLLERR)) && s->rx_hook)
+	      if (!s->fast_rx && (pfd[s->index].revents & POLLIN) && s->rx_hook)
 		{
 		  count++;
 		  io_log_event(s->rx_hook, s->data);
 		  sk_read(s, pfd[s->index].revents);
 		  if (s != current_sock)
-		      goto next2;
+		    goto next2;
 		}
+
+	      if (pfd[s->index].revents & (POLLHUP | POLLERR))
+		{
+		  sk_err(s, pfd[s->index].revents);
+		  goto next2;
+		}
+
 	      current_sock = sk_next(s);
 	    next2: ;
 	    }
+
 
 	  stored_sock = current_sock;
 	}

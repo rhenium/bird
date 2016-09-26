@@ -104,6 +104,37 @@ hardware drivers or platforms do not implement this feature. Default:
 yes.
 </DL>
 <P>
+<H3>Attributes</H3>
+
+<P>Babel defines just one attribute: the internal babel metric of the route. It
+is exposed as the <CODE>babel_metric</CODE> attribute and has range from 1 to infinity
+(65535).
+<P>
+<H3>Example</H3>
+
+<P>
+<HR>
+<PRE>
+protocol babel {
+        interface "eth*" {
+                type wired;
+        };
+        interface "wlan0", "wlan1" {
+                type wireless;
+                hello interval 1;
+                rxcost 512;
+        };
+        interface "tap0";
+
+        # This matches the default of babeld: redistribute all addresses
+        # configured on local interfaces, plus re-distribute all routes received
+        # from other babel peers.
+
+        export where (source = RTS_DEVICE) || (source = RTS_BABEL);
+}
+</PRE>
+<HR>
+<P>
 <P>
 <H2><A NAME="sect-bfd"></A> <A NAME="ss6.2">6.2</A> <A HREF="bird.html#toc6.2"></A>
 BFD</H2>
@@ -212,7 +243,7 @@ protocols (like OSPF or BGP). This option allows to explicitly add
 a BFD session to the specified neighbor regardless of such requests.
 <P>The session is identified by the IP address of the neighbor, with
 optional specification of used interface and local IP. By default
-the neighbor must be directly connected, unless the the session is
+the neighbor must be directly connected, unless the session is
 configured as multihop. Note that local IP must be specified for
 multihop sessions.
 </DL>
@@ -249,7 +280,7 @@ packets after which the session is declared down. Note that rates and
 multipliers could be different in each direction of a BFD session.
 Default: 5.
 <P>
-<DT><CODE>passive <I>switch</I></CODE><DD><P>Generally, both BFD session endpoinds try to establish the session by
+<DT><CODE>passive <I>switch</I></CODE><DD><P>Generally, both BFD session endpoints try to establish the session by
 sending control packets to the other side. This option allows to enable
 passive mode, which means that the router does not send BFD packets
 until it has received one from the other side. Default: disabled.
@@ -948,6 +979,17 @@ from accidental overwriting or erasing.
 protocol work with. Available only on systems supporting multiple
 routing tables.
 <P>
+<DT><CODE>metric <I>number</I></CODE><DD><P>(Linux)
+Use specified value as a kernel metric (priority) for all routes sent to
+the kernel. When multiple routes for the same network are in the kernel
+routing table, the Linux kernel chooses one with lower metric. Also,
+routes with different metrics do not clash with each other, therefore
+using dedicated metric value is a reliable way to avoid overwriting
+routes from other sources (e.g. kernel device routes). Metric 0 has a
+special meaning of undefined metric, in which either OS default is used,
+or per-route metric can be set using <CODE>krt_metric</CODE> attribute. Default:
+0 (undefined).
+<P>
 <DT><CODE>graceful restart <I>switch</I></CODE><DD><P>Participate in graceful restart recovery. If this option is enabled and
 a graceful restart recovery is active, the Kernel protocol will defer
 synchronization of routing tables until the end of the recovery. Note
@@ -977,8 +1019,11 @@ system-dependent. On Linux, it is a value of the protocol field of the
 route. See /etc/iproute2/rt_protos for common values. On BSD, it is
 based on STATIC and PROTOx flags. The attribute is read-only.
 <P>
-<DT><CODE>int <CODE>krt_metric</CODE></CODE><DD><P>The kernel metric of the route. When multiple same routes are in a
+<DT><CODE>int <CODE>krt_metric</CODE></CODE><DD><P>(Linux)
+The kernel metric of the route. When multiple same routes are in a
 kernel routing table, the Linux kernel chooses one with lower metric.
+Note that preferred way to set kernel metric is to use protocol option
+<CODE>metric</CODE>, unless per-route metric values are needed.
 <P>
 <DT><CODE>ip <CODE>krt_prefsrc</CODE></CODE><DD><P>(Linux)
 The preferred source address. Used in source address selection for
@@ -986,6 +1031,15 @@ outgoing packets. Has to be one of the IP addresses of the router.
 <P>
 <DT><CODE>int <CODE>krt_realm</CODE></CODE><DD><P>(Linux)
 The realm of the route. Can be used for traffic classification.
+<P>
+<DT><CODE>int <CODE>krt_scope</CODE></CODE><DD><P>(Linux IPv4)
+The scope of the route. Valid values are 0-254, although Linux kernel
+may reject some values depending on route type and nexthop. It is
+supposed to represent `indirectness' of the route, where nexthops of
+routes are resolved through routes with a higher scope, but in current
+kernels anything below <I>link</I> (253) is treated as <I>global</I> (0).
+When not present, global scope is implied for all routes except device
+routes, where link scope is used by default.
 </DL>
 <P>
 <P>In Linux, there is also a plenty of obscure route attributes mostly focused
@@ -1323,7 +1377,7 @@ starting election and building adjacency. Default value is 4*<I>hello</I>.
 <P>
 <DT><CODE>dead <I>num</I></CODE><DD><P>When the router does not receive any messages from a neighbor in
 <I>dead</I> seconds, it will consider the neighbor down. If both directives
-<CODE>dead count</CODE> and <CODE>dead</CODE> are used, <CODE>dead</CODE> has precendence.
+<CODE>dead count</CODE> and <CODE>dead</CODE> are used, <CODE>dead</CODE> has precedence.
 <P>
 <DT><CODE>secondary <I>switch</I></CODE><DD><P>On BSD systems, older versions of BIRD supported OSPFv2 only for the
 primary IP address of an interface, other IP ranges on the interface

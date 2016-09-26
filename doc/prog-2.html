@@ -249,18 +249,19 @@ another reference during the life of created private copy.
 <DT><I>net *</I> <B>net</B><DD><P>network in question
 <DT><I>rte *</I> <B>new</B><DD><P>the new route to be announced
 <DT><I>rte *</I> <B>old</B><DD><P>the previous route for the same network
-<DT><I>rte *</I> <B>new_best</B><DD><P>-- undescribed --
-<DT><I>rte *</I> <B>old_best</B><DD><P>-- undescribed --
-<DT><I>rte *</I> <B>before_old</B><DD><P>-- undescribed --
+<DT><I>rte *</I> <B>new_best</B><DD><P>the new best route for the same network
+<DT><I>rte *</I> <B>old_best</B><DD><P>the previous best route for the same network
+<DT><I>rte *</I> <B>before_old</B><DD><P>The previous route before <B>old</B> for the same network.
+If <B>before_old</B> is NULL <B>old</B> was the first.
 </DL>
 <H3>Description</H3>
 <P>This function gets a routing table update and announces it
 to all protocols that acccepts given type of route announcement
 and are connected to the same table by their announcement hooks.
-<P>Route announcement of type RA_OPTIMAL si generated when optimal
+<P>Route announcement of type <I>RA_OPTIMAL</I> si generated when optimal
 route (in routing table <B>tab</B>) changes. In that case <B>old</B> stores the
 old optimal route.
-<P>Route announcement of type RA_ANY si generated when any route (in
+<P>Route announcement of type <I>RA_ANY</I> si generated when any route (in
 routing table <B>tab</B>) changes In that case <B>old</B> stores the old route
 from the same protocol.
 <P>For each appropriate protocol, we first call its <B>import_control()</B>
@@ -424,10 +425,9 @@ routing table module.
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>rtable *</I> <B>tab</B><DD><P>-- undescribed --
+<DT><I>rtable *</I> <B>tab</B><DD><P>a routing table for pruning
 </DL>
 <H3>Description</H3>
-<P>
 <P>This function scans the routing table <B>tab</B> and removes routes belonging to
 flushing protocols, discarded routes and also stale network entries, in a
 similar fashion like <B>rt_prune_loop()</B>. Returns 1 when all such routes are
@@ -691,7 +691,7 @@ to its <I>eattr</I> structure or <I>NULL</I> if no such attribute exists.
 for first occurrences of attributes with ID in specified interval from <B>id</B> to
 (<B>id</B> + <B>max</B> - 1), returning pointers to found <I>eattr</I> structures, storing its
 walk state in <B>s</B> for subsequent calls.
-The function <B>ea_walk()</B> is supposed to be called in a loop, with initially
+<P>The function <B>ea_walk()</B> is supposed to be called in a loop, with initially
 zeroed walk state structure <B>s</B> with filled the initial extended attribute
 list, returning one found attribute in each call or <I>NULL</I> when no other
 attribute exists. The extended attribute list or the arguments should not be
@@ -1258,7 +1258,6 @@ function have to be called after <B>protos_commit()</B>.
 <DT><I>struct timer *t</I> <B>UNUSED</B><DD><P>-- undescribed --
 </DL>
 <H3>Description</H3>
-<P>
 <P>When there are no locks on graceful restart, the functions finalizes the
 graceful restart recovery. Protocols postponing route export until the end of
 the recovery are awakened and the export to them is enabled. All other
@@ -1605,7 +1604,7 @@ representation of metrics of a route belonging to this protocol.
 <DL>
 <DT><I>eattr *</I> <B>a</B><DD><P>an extended attribute
 <DT><I>byte *</I> <B>buf</B><DD><P>buffer to be filled with attribute information
-<DT><I>int</I> <B>buflen</B><DD><P>-- undescribed --
+<DT><I>int</I> <B>buflen</B><DD><P>a length of the <B>buf</B> parameter
 </DL>
 <H3>Description</H3>
 <P>The <B>get_attr()</B> hook is called by the core to obtain a user friendly
@@ -2174,7 +2173,7 @@ notified.
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>struct ifa *</I> <B>a</B><DD><P>-- undescribed --
+<DT><I>struct ifa *</I> <B>a</B><DD><P>interface address in question
 </DL>
 <H3>Description</H3>
 <P>Tell the neighbor cache that an address was added or removed.

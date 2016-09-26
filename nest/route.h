@@ -276,7 +276,7 @@ void rte_update2(struct announce_hook *ah, net *net, rte *new, struct rte_src *s
 static inline void rte_update(struct proto *p, net *net, rte *new) { rte_update2(p->main_ahook, net, new, p->main_source); }
 void rte_discard(rtable *tab, rte *old);
 int rt_examine(rtable *t, ip_addr prefix, int pxlen, struct proto *p, struct filter *filter);
-rte *rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, struct ea_list **tmpa, int silent);
+rte *rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, struct ea_list **tmpa, linpool *pool, int silent);
 void rt_refresh_begin(rtable *t, struct announce_hook *ah);
 void rt_refresh_end(rtable *t, struct announce_hook *ah);
 void rte_dump(rte *);
@@ -506,6 +506,8 @@ int mpnh__same(struct mpnh *x, struct mpnh *y); /* Compare multipath nexthops */
 static inline int mpnh_same(struct mpnh *x, struct mpnh *y)
 { return (x == y) || mpnh__same(x, y); }
 struct mpnh *mpnh_merge(struct mpnh *x, struct mpnh *y, int rx, int ry, int max, linpool *lp);
+void mpnh_insert(struct mpnh **n, struct mpnh *y);
+int mpnh_is_sorted(struct mpnh *x);
 
 void rta_init(void);
 rta *rta_lookup(rta *);			/* Get rta equivalent to this one, uc++ */

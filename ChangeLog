@@ -1,3 +1,437 @@
+commit 79e2293ab2abbd92bb3326a95759a4ca32d9af81
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Sep 22 13:34:56 2016 +0200
+
+    NEWS and version update
+
+commit 768d5e1058693d2bfb7c3bcbe04306097c3246a0
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Tue Sep 20 15:13:01 2016 +0200
+
+    Add !~ operator to filter grammar
+
+commit 75ac3d199d1fd5b199dd753915234b8634c272e5
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Sep 21 12:07:59 2016 +0200
+
+    Remove cvsignore
+    
+    We have gitignore
+
+commit 6e75d0d27fe85f12a22928e5729465823704281e
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Mon Sep 19 12:29:56 2016 +0200
+
+    KRT: Add krt_scope attribute
+    
+    Add a new route attribute, krt_scope, to expose the Linux kernel route
+    scope. Constants from /etc/iproute2/rt_scopes (prefixed by "ips_") are
+    expected to be used with the attribute. Both import and export are
+    supported.
+    
+    Also, the patch fixes device route export to the kernel, by setting link
+    scope automatically.
+
+commit 292f7858e60b0dffd8c06f6818d90ccf3b34e0b2
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Thu Sep 8 16:27:40 2016 +0200
+
+    Main: Improve BIRD help messages
+
+commit 6273fcf072fc5789ebabf4f1acd6fc6c9fa143ee
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Wed Sep 7 14:58:51 2016 +0200
+
+    Add stdlib.h to client/commands.c
+
+commit 0f5054f6850c7419933a6337a34263f565663ee3
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Thu Sep 8 13:45:36 2016 +0200
+
+    BFD: Fix invalid read from pollfd array
+    
+    It is possible that sockets_add() are called between sockets_prepare()
+    and sockets_fire() during poll loop in birdloop_main(), so we need to
+    use loop->poll_fd.used instead of loop->sock_num to find the last field.
+
+commit a290da25a16b7c79d4a7a87f522b4068bca04979
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Tue Sep 6 17:08:45 2016 +0200
+
+    rt-table: Fix kernel protocol export filter memory bug
+    
+    Kernel protocol calls rt_export_merged(), which used @rte_update_pool for
+    temporary allocations, supposing it is called from other functions from
+    rt-table.c that handles locking and flushing of the linpool. Therefore,
+    linpool was not flushed properly and memory leaked.
+    
+    Add linpool argument to rt_export_merged() and use @krt_filter_lp when
+    called from kernel protocol.
+    
+    Thanks to Justin Cattle and Alexander Frolkin for the bugreport.
+    
+    (Commit squashed and updated by Ondrej Zajicek)
+
+commit bc00f058154bb4a630d24d64a55b5f181d235c63
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Tue Sep 6 17:18:15 2016 +0200
+
+    Filter: Prefer xmalloc/xfree to malloc/free
+
+commit 4adcb9df1bf551cc5fd1145c09af1843fdc4fe85
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Sep 15 14:59:06 2016 +0200
+
+    KRT: Add kernel metric protocol option
+    
+    Kernel routes with different metrics do not clash with each other,
+    therefore using dedicated metric value is a reliable way to avoid
+    overwriting routes from other sources (e.g. kernel device routes).
+    
+    Although kernel route metric could already be set as a route attribute by
+    filters, that is not consistent with the way how Linux kernel handles
+    route metric - not just a route attribute, but a part of a route key.
+
+commit 2feaa6931bfe39eba696b33b0c8aac13d313b223
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Sep 14 11:40:15 2016 +0200
+
+    KRT: Support for IPv6 ECMP
+    
+    Linux represents IPv6 ECMP routes as a sequence of unipath routes with
+    the same prefix. We have to translate between our representation (one
+    route with multipath next hop) and the Linux representation in both
+    directions.
+    
+    Proper learning of alien IPv6 ECMP routes still not supported.
+    
+    Thanks to Mikhail Sennikovskii for the original patch.
+
+commit 84cac51a51fc29349077e8cecadf1aed11f9b824
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Aug 30 17:17:27 2016 +0200
+
+    Nest: Keep multipath next hops sorted
+
+commit a1839f3c61af66814a8c52b9ad28e59aab4ede0e
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Aug 31 14:02:41 2016 +0200
+
+    KRT: Fix trivial error
+
+commit f9f2e280ea4fa1af19d8ce9e54abeb495694c0d5
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Aug 30 12:43:46 2016 +0200
+
+    KRT: Forbid path merging on BSD
+    
+    We support ECMP routes only on Linux. Exported routes are checked in
+    krt_capable(), but a route generated during path merging avoids this
+    check.
+
+commit 768d013267bd2a52bab70ba6d413f49365fb31e3
+Merge: 678c97f d107ef7
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Aug 23 17:35:26 2016 +0200
+
+    Merge remote-tracking branch 'origin/misc-fixes'
+
+commit 678c97f21ef15c98546f41647f3244799a37db1f
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Aug 23 17:33:00 2016 +0200
+
+    Minor README update
+
+commit d107ef78df2564cba75af1a6dcc9894c4468b207
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Tue Aug 16 13:02:32 2016 +0200
+
+    Whitespace fixes
+
+commit dbac8793bd88279fd8956ce42db7bd2230965948
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Tue Aug 16 10:42:12 2016 +0200
+
+    Add link to INSTALL in README file
+
+commit 9b3d2464cd6dafdd3021f4513f24d19d56d42d3d
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Tue Aug 16 10:15:58 2016 +0200
+
+    Rewrote README file
+    
+    * Made structure with headlines,
+    * reordered,
+    * kicked out 'What is missing' part,
+    * Updated content by home page site and user docs
+
+commit 671ddd5b05cf35b2ab7b80f1d13641c875f22e77
+Author: Ondřej Surý <ondrej@sury.org>
+Date:   Tue Aug 16 09:25:50 2016 +0200
+
+    Add .gitignore to ignore generated files
+
+commit 33d22f0e9e79c387c492d1cf16bdb723ca1d588a
+Author: Ondřej Surý <ondrej@sury.org>
+Date:   Tue Aug 16 09:24:12 2016 +0200
+
+    whitespace fixes
+
+commit 61e6725335fbba86175ec770c1e94c5f60e76d5c
+Author: Ondřej Surý <ondrej@sury.org>
+Date:   Tue Aug 16 09:23:55 2016 +0200
+
+    Include <stdint.h> in cf-lex.l to avoid UINTx_MAX redefinition
+
+commit 0ea2afe67150661328c93679587740fbd8928b2a
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Mon Aug 15 16:16:36 2016 +0200
+
+    Adds mailing list address at the top of README file
+
+commit 13a31a4001e02ea7c84d26cbeaaa9fea816736f7
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Jul 20 15:55:45 2016 +0200
+
+    Babel: Immediately update hello interval on interface reconfigure
+    
+    An interface reconfiguration may change both the hello and update
+    intervals. An update interval change is immediately put into effect,
+    while a hello interval change is not. This also updates the hello
+    interval immediately (if the new interval is shorter than the old one),
+    and sends a hello to notify peers of the change.
+    
+    Signed-off-by: Toke Høiland-Jørgensen <toke@toke.dk>
+
+commit a08a81c6b40dcf07e786b67e5015fc91a44333ca
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Jul 20 15:31:25 2016 +0200
+
+    Netlink: Fix build with older headers missing IFA_FLAGS
+
+commit e37d2e3e708db78f9b8f15eb34bb266cfae7bb42
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Jul 20 15:06:57 2016 +0200
+
+    Netlink: Ignore tentative addresses
+    
+    Ignore tentative IPv6 addresses and wait until finish of Duplicate
+    Address Detection (We got notification when an address is no longer
+    tentative) to avoid problems when protocols try to use interfaces
+    with tentative link-local addresses.
+    
+    Based on patch from Jan Moskyto Matejka
+
+commit 0a21c21112eff1286a0a2a7f7afc812f8d16cfa2
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Jul 19 15:40:57 2016 +0200
+
+    Doc: Fix password ID option description
+    
+    Thanks to Alexander Velkov for noticing it
+
+commit c6ed5a0f9925476714d6b351c61dbce704a4f09d
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Jul 19 14:38:36 2016 +0200
+
+    Babel: Do not maintain feasibility distance for our own routes
+    
+    We do not need to maintain feasibility distances for our own router
+    ID (we ignore the updates anyway). Not doing so makes the routes be
+    garbage collected sooner when export filters change.
+    
+    Signed-off-by: Toke Høiland-Jørgensen <toke@toke.dk>
+
+commit 0f673666017bfc9c05c9495ae53bc323b9dc6660
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Jul 19 14:28:53 2016 +0200
+
+    Babel: Do not keep an infeasible route as selected
+    
+    When a route becomes infeasible it should not be kept as selected; this
+    is forbidden by section 3.6 of the RFC and prevents subsequent updates
+    from the same router ID from replacing it.
+    
+    Signed-off-by: Toke Høiland-Jørgensen <toke@toke.dk>
+
+commit 5d6ca220850c615126ea6820f8c05528269feec6
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Jul 19 14:23:41 2016 +0200
+
+    Babel: Send wildcard retractions on shutdown and startup
+    
+    This makes BIRD send a wildcard retraction on all interfaces before
+    shutting down and right after starting up. This helps ensure that
+    neighbours will discard the announced routes as soon as possible,
+    rather than only after the normal timeout procedures.
+    
+    Signed-off-by: Toke Høiland-Jørgensen <toke@toke.dk>
+
+commit ecae2f43f37df642e5098201a0472802e6a70e78
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Jul 19 13:33:02 2016 +0200
+
+    Babel: Rework handling of retractions
+    
+    An update with wildcard AE and infinite metric should be treated as a
+    global retraction of all prefixes announced by that neighbour, per
+    section 4.4.9 of the RFC. In addition, router ID and seqno in retraction
+    updates should be ignored. This reworks the handling of retractions and
+    adjusts the parser to handle all this correctly.
+    
+    Signed-off-by: Toke Høiland-Jørgensen <toke@toke.dk>
+
+commit 12640c149976e1eca54d9c22c593d07a27c49d42
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Jul 19 12:16:51 2016 +0200
+
+    Babel: Documentation updates
+    
+    This updates the documentation to correctly mention Babel when protocols
+    are listed, and adds examples and route attribute documentation to the
+    Babel section of the docs.
+    
+    Signed-off-by: Toke Høiland-Jørgensen <toke@toke.dk>
+
+commit 321ff8c4049ec6c2fa198858b4a7f1814ce05e39
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Jul 19 11:57:20 2016 +0200
+
+    Babel: Make sure intervals do not overflow
+    
+    Intervals are carried as 16-bit centisecond values, but kept internally
+    in 16-bit second values, which causes a potential for overflow. This adds
+    some checks to make sure this does not happen.
+    
+    Signed-off-by: Toke Høiland-Jørgensen <toke@toke.dk>
+
+commit 6887f409f0766c60dd8c3d3fdf01a1d989c090a5
+Author: Ondrej Filip <feela@network.cz>
+Date:   Sun Jul 17 14:54:52 2016 +0200
+
+    Prepare for longer interface names - clean up of the code.
+
+commit ea0cb652e91d871e7808e93aa15ef34fc453c4fc
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Mon Jul 11 20:41:32 2016 +0200
+
+    BGP: Fix extended messages
+    
+    Change attribute length limit to handle extended (64 kB) messages.
+    
+    Do not mix updates and withdraws (RFC 7606).
+
+commit f0b822a831d0f0f593bbedf0a7f15b94c3ca1d43
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Mon Jul 11 20:22:55 2016 +0200
+
+    Log: Fix error handling of debug file open
+    
+    Logging is not yet initialized, we have to use fprintf() here.
+    
+    Thanks to Pavel Tvrdik for noticing and debugging it.
+
+commit f1f39bb9d8e2260fe181240dd8194b06bdcfb54f
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Fri Jul 1 11:03:13 2016 +0200
+
+    Filter: Fixes reconfiguration with last_nonaggregated operator
+
+commit 775a5a81958e66a69663803dd2e731e3800da9e7
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Jun 29 14:11:03 2016 +0200
+
+    BGP: Skip empty path segments in received AS_PATH
+    
+    Although RFC 4271 does not forbid empty path segments, they are useless
+    and some implementations consider them invalid. It is clarified in RFC 7606,
+    specifying that AS_PATH with empty segment is considered malformed.
+
+commit 8f01879c5629bd714dfeec968337cfcd4dbe6a87
+Author: Pavel Tvrdík <pawel.tvrdik@gmail.com>
+Date:   Tue Mar 29 10:37:31 2016 +0200
+
+    cppcheck: fix va_end() functions
+
+commit 122deb6d5b14f46f3cfb25bf3f5726005d6a3b3e
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Jun 9 00:30:41 2016 +0200
+
+    Filters: Fixes pm_same() w.r.t. ASN ranges and ASN expressions
+    
+    This is necessary for proper detection of filter changes during
+    reconfigurations.
+
+commit a0fe1944d12771d60986a352552e5f4b306e5f7f
+Author: Ondrej Filip <feela@network.cz>
+Date:   Wed Jun 8 16:22:44 2016 +0200
+
+    Add AS# ranges to bgpmask.
+
+commit 90dc0f08434323535f84d64e113dae84675c46b2
+Author: Ondrej Filip <feela@network.cz>
+Date:   Sat Jun 4 12:38:06 2016 +0200
+
+    Small typo in documentation example, submitted by Felix Eckhofer.
+
+commit 9dbcb11cb50167e959536e5a564ee9aafae509c6
+Author: Jan Moskyto Matejka <mq@ucw.cz>
+Date:   Mon May 30 14:28:22 2016 +0200
+
+    Unix IO: Tried to fix strange behavior after POLLHUP or POLLERR.
+
+commit 3f2c7600fa2e35b1028c755aa06092b5991e1a8e
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu May 12 21:29:04 2016 +0200
+
+    We don't need bvsnprintf() in BIRD client
+
+commit 8e433d6a529a883d566dc1d5a4afe0f1e2750baf
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Thu May 12 15:49:44 2016 +0200
+
+    Prog Doc: Complete several missing parameters
+
+commit fff7498d6a54d4bcce4bd56db7ef3fb28be35578
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Thu May 12 13:37:23 2016 +0200
+
+    User Doc: Fix several typing error
+
+commit 31e9e10144a6994773a04d94903fa3bdde6de91e
+Author: Stijn Tintel <stijn@linux-ipv6.be>
+Date:   Tue May 10 16:45:35 2016 +0300
+
+    netlink: update struct msghdr
+    
+    The netlink code assumes an order for the members of struct msghdr.
+    This breaks recvmsg and sendmsg with musl libc on mips64. Fix this by
+    using designated initializers instead.
+    
+    Signed-off-by: Stijn Tintel <stijn@linux-ipv6.be>
+
+commit f7a99acb4eac23223f51ce83b8081cc9695fef1e
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Tue May 3 09:32:49 2016 +0200
+
+    Initialize variable ifr in sk_setup()
+    
+    ==00:00:00:02.831 2468== Syscall param socketcall.setsockopt(optval) points to uninitialised byte(s)
+    ==00:00:00:02.831 2468==    at 0x513BDEA: setsockopt (in /usr/lib/libc-2.23.so)
+    ==00:00:00:02.831 2468==    by 0x45C7AF: sk_setup (io.c:1216)
+    ==00:00:00:02.831 2468==    by 0x45CDFF: sk_open (io.c:1417)
+    ==00:00:00:02.831 2468==    by 0x44B562: rip_open_socket (packets.c:740)
+    ==00:00:00:02.831 2468==    by 0x4481A7: rip_iface_locked (rip.c:616)
+    ==00:00:00:02.831 2468==    by 0x4133E4: olock_run_event (locks.c:177)
+    ==00:00:00:02.831 2468==    by 0x45A6DE: ev_run (event.c:85)
+    ==00:00:00:02.831 2468==    by 0x45A7AD: ev_run_list (event.c:142)
+    ==00:00:00:02.831 2468==    by 0x45E0FC: io_loop (io.c:2066)
+    ==00:00:00:02.831 2468==    by 0x463B56: main (main.c:845)
+    ==00:00:00:02.831 2468==  Address 0xffefffd24 is on thread 1's stack
+    ==00:00:00:02.831 2468==  in frame #1, created by sk_setup (io.c:1188)
+    ==00:00:00:02.831 2468==  Uninitialised value was created by a stack allocation
+    ==00:00:00:02.831 2468==    at 0x45C6BB: sk_setup (io.c:1188)
+
 commit 1e3810f9f8e251d82a8157b39df9be196315c43e
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Fri Apr 29 13:25:46 2016 +0200

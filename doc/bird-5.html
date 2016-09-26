@@ -136,9 +136,9 @@ filters. You can pass them between functions, assign them to variables
 of type <CODE>string</CODE>, print such variables, use standard string
 comparison operations (e.g. <CODE>=, !=, &lt;, &gt;, &lt;=, &gt;=</CODE>), but
 you can't concatenate two strings. String literals are written as
-<CODE>"This is a string constant"</CODE>. Additionaly matching <CODE>~</CODE>
-operator could be used to match a string value against a shell pattern
-(represented also as a string).
+<CODE>"This is a string constant"</CODE>. Additionally matching (<CODE>~,
+!~</CODE>) operators could be used to match a string value against
+a shell pattern (represented also as a string).
 <P>
 <DT><CODE>ip</CODE><DD><P>This type can hold a single IP address. Depending on the compile-time
 configuration of BIRD you are using, it is either an IPv4 or IPv6
@@ -153,7 +153,7 @@ length. Prefix literals are written as <CODE><I>ipaddress</I>/<I>pxlen</I></CODE
 or <CODE><I>ipaddress</I>/<I>netmask</I></CODE>. There are two special
 operators on prefixes: <CODE>.ip</CODE> which extracts the IP address from the
 pair, and <CODE>.len</CODE>, which separates prefix length from the pair.
-So <CODE>1.2.0.0/16.pxlen = 16</CODE> is true.
+So <CODE>1.2.0.0/16.len = 16</CODE> is true.
 <P>
 <DT><CODE>ec</CODE><DD><P>This is a specialized type used to represent BGP extended community
 values. It is essentially a 64bit value, literals of this type are
@@ -265,8 +265,10 @@ as used by UNIX shells. Autonomous system numbers match themselves,
 is 4 3 2 1, then: <CODE>bgp_path ~ [= * 4 3 * =]</CODE> is true,
 but <CODE>bgp_path ~ [= * 4 5 * =]</CODE> is false. BGP mask
 expressions can also contain integer expressions enclosed in parenthesis
-and integer variables, for example <CODE>[= * 4 (1+2) a =]</CODE>. There is
-also old syntax that uses / .. / instead of [= .. =] and ? instead of *.
+and integer variables, for example <CODE>[= * 4 (1+2) a =]</CODE>. You can
+also use ranges, for example <CODE>[= * 3..5 2 100..200 * =]</CODE>.
+There is also old (deprecated) syntax that uses / .. / instead of [= .. =]
+and ? instead of *.
 <P>
 <DT><CODE>clist</CODE><DD><P>Clist is similar to a set, except that unlike other sets, it can be
 modified. The type is used for community list (a set of pairs) and for
@@ -293,9 +295,9 @@ example <CODE>bgp_community</CODE>). Similarly for <CODE>delete</CODE> and <CODE
 <P>
 <DT><CODE>eclist</CODE><DD><P>Eclist is a data type used for BGP extended community lists. Eclists
 are very similar to clists, but they are sets of ECs instead of pairs.
-The same operations (like <CODE>add</CODE>, <CODE>delete</CODE>, or <CODE>~</CODE>
-membership operator) can be used to modify or test eclists, with ECs
-instead of pairs as arguments.
+The same operations (like <CODE>add</CODE>, <CODE>delete</CODE> or <CODE>~</CODE> and
+<CODE>!~</CODE> membership operators) can be used to modify or test
+eclists, with ECs instead of pairs as arguments.
 </DL>
 <P>
 <P>
@@ -305,19 +307,19 @@ instead of pairs as arguments.
 <P>The filter language supports common integer operators <CODE>(+,-,*,/)</CODE>,
 parentheses <CODE>(a*(b+c))</CODE>, comparison <CODE>(a=b, a!=b, a&lt;b, a&gt;=b)</CODE>.
 Logical operations include unary not (<CODE>!</CODE>), and (<CODE>&amp;&amp;</CODE>) and or
-(<CODE>||</CODE>). Special operators include <CODE>~</CODE> for "is element
-of a set" operation - it can be used on element and set of elements of the same
-type (returning true if element is contained in the given set), or on two
-strings (returning true if first string matches a shell-like pattern stored in
-second string) or on IP and prefix (returning true if IP is within the range
-defined by that prefix), or on prefix and prefix (returning true if first prefix
-is more specific than second one) or on bgppath and bgpmask (returning true if
-the path matches the mask) or on number and bgppath (returning true if the
-number is in the path) or on bgppath and int (number) set (returning true if any
-ASN from the path is in the set) or on pair/quad and clist (returning true if
-the pair/quad is element of the clist) or on clist and pair/quad set (returning
-true if there is an element of the clist that is also a member of the pair/quad
-set).
+(<CODE>||</CODE>). Special operators include (<CODE>~</CODE>,
+<CODE>!~</CODE>) for "is (not) element of a set" operation - it can be used on
+element and set of elements of the same type (returning true if element is
+contained in the given set), or on two strings (returning true if first string
+matches a shell-like pattern stored in second string) or on IP and prefix
+(returning true if IP is within the range defined by that prefix), or on prefix
+and prefix (returning true if first prefix is more specific than second one) or
+on bgppath and bgpmask (returning true if the path matches the mask) or on
+number and bgppath (returning true if the number is in the path) or on bgppath
+and int (number) set (returning true if any ASN from the path is in the set) or
+on pair/quad and clist (returning true if the pair/quad is element of the
+clist) or on clist and pair/quad set (returning true if there is an element of
+the clist that is also a member of the pair/quad set).
 <P>
 <P>There is one operator related to ROA infrastructure - <CODE>roa_check()</CODE>. It
 examines a ROA table and does RFC 6483 route origin validation for a given
@@ -403,7 +405,7 @@ Read-only.
 <CODE>RTS_DUMMY</CODE>, <CODE>RTS_STATIC</CODE>, <CODE>RTS_INHERIT</CODE>, <CODE>RTS_DEVICE</CODE>,
 <CODE>RTS_STATIC_DEVICE</CODE>, <CODE>RTS_REDIRECT</CODE>, <CODE>RTS_RIP</CODE>, <CODE>RTS_OSPF</CODE>,
 <CODE>RTS_OSPF_IA</CODE>, <CODE>RTS_OSPF_EXT1</CODE>, <CODE>RTS_OSPF_EXT2</CODE>, <CODE>RTS_BGP</CODE>,
-<CODE>RTS_PIPE</CODE>.
+<CODE>RTS_PIPE</CODE>, <CODE>RTS_BABEL</CODE>.
 <P>
 <DT><CODE><I>enum</I> cast</CODE><DD><P>Route type (Currently <CODE>RTC_UNICAST</CODE> for normal routes,
 <CODE>RTC_BROADCAST</CODE>, <CODE>RTC_MULTICAST</CODE>, <CODE>RTC_ANYCAST</CODE> will be used in

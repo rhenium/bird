@@ -154,6 +154,87 @@ selecting which routes to send in the update will make sure this is included.
 expiration of routes and neighbours as well as pruning of the seqno request
 cache.
 
+
+<HR><H3>Function</H3>
+<P><I>int</I>
+<B>babel_write_queue</B>
+(<I>struct babel_iface *</I> <B>ifa</B>, <I>list *</I> <B>queue</B>) --  Write a TLV queue to a transmission buffer
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct babel_iface *</I> <B>ifa</B><DD><P>Interface holding the transmission buffer
+<DT><I>list *</I> <B>queue</B><DD><P>TLV queue to write (containing internal-format TLVs)
+</DL>
+<H3>Description</H3>
+<P>This function writes a packet to the interface transmission buffer with as
+many TLVs from the <I>queue</I> as will fit in the buffer. It returns the number of
+bytes written (NOT counting the packet header). The function is called by
+<B>babel_send_queue()</B> and <B>babel_send_unicast()</B> to construct packets for
+transmission, and uses per-TLV helper functions to convert the
+internal-format TLVs to their wire representations.
+<P>The TLVs in the queue are freed after they are written to the buffer.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>babel_send_unicast</B>
+(<I>union babel_msg *</I> <B>msg</B>, <I>struct babel_iface *</I> <B>ifa</B>, <I>ip_addr</I> <B>dest</B>) --  send a single TLV via unicast to a destination
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>union babel_msg *</I> <B>msg</B><DD><P>TLV to send
+<DT><I>struct babel_iface *</I> <B>ifa</B><DD><P>Interface to send via
+<DT><I>ip_addr</I> <B>dest</B><DD><P>Destination of the TLV
+</DL>
+<H3>Description</H3>
+<P>This function is used to send a single TLV via unicast to a designated
+receiver. This is used for replying to certain incoming requests, and for
+sending unicast requests to refresh routes before they expire.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>babel_enqueue</B>
+(<I>union babel_msg *</I> <B>msg</B>, <I>struct babel_iface *</I> <B>ifa</B>) --  enqueue a TLV for transmission on an interface
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>union babel_msg *</I> <B>msg</B><DD><P>TLV to enqueue (in internal TLV format)
+<DT><I>struct babel_iface *</I> <B>ifa</B><DD><P>Interface to enqueue to
+</DL>
+<H3>Description</H3>
+<P>This function is called to enqueue a TLV for subsequent transmission on an
+interface. The transmission event is triggered whenever a TLV is enqueued;
+this ensures that TLVs will be transmitted in a timely manner, but that TLVs
+which are enqueued in rapid succession can be transmitted together in one
+packet.
+
+
+<HR><H3>Function</H3>
+<P><I>void</I>
+<B>babel_process_packet</B>
+(<I>struct babel_pkt_header *</I> <B>pkt</B>, <I>int</I> <B>len</B>, <I>ip_addr</I> <B>saddr</B>, <I>struct babel_iface *</I> <B>ifa</B>) --  process incoming data packet
+<P>
+<H3>Arguments</H3>
+<P>
+<DL>
+<DT><I>struct babel_pkt_header *</I> <B>pkt</B><DD><P>Pointer to the packet data
+<DT><I>int</I> <B>len</B><DD><P>Length of received packet
+<DT><I>ip_addr</I> <B>saddr</B><DD><P>Address of packet sender
+<DT><I>struct babel_iface *</I> <B>ifa</B><DD><P>Interface packet was received on.
+</DL>
+<H3>Description</H3>
+<P>This function is the main processing hook of incoming Babel packets. It
+checks that the packet header is well-formed, then processes the TLVs
+contained in the packet. This is done in two passes: First all TLVs are
+parsed into the internal TLV format. If a TLV parser fails, processing of the
+rest of the packet is aborted.
+<P>After the parsing step, the TLV handlers are called for each parsed TLV in
+order.
+
 <H2><A NAME="ss5.2">5.2</A> <A HREF="prog.html#toc5.2">Bidirectional Forwarding Detection</A>
 </H2>
 
@@ -1075,7 +1156,7 @@ link.
 <P>
 <DL>
 <DT><I>sock *</I> <B>sk</B><DD><P>socket we received the packet.
-<DT><I>int</I> <B>len</B><DD><P>-- undescribed --
+<DT><I>int</I> <B>len</B><DD><P>size of the packet
 </DL>
 <H3>Description</H3>
 <P>This is the entry point for messages from neighbors. Many checks (like
@@ -1092,8 +1173,8 @@ non generic functions.
 <P>
 <DL>
 <DT><I>struct ospf_lsa_header *</I> <B>lsa</B><DD><P>LSA header
-<DT><I>u32</I> <B>lsa_type</B><DD><P>-- undescribed --
-<DT><I>int</I> <B>ospf2</B><DD><P>-- undescribed --
+<DT><I>u32</I> <B>lsa_type</B><DD><P>one of <I>LSA_T_xxx</I>
+<DT><I>int</I> <B>ospf2</B><DD><P><I>true</I> means OSPF version 2, <I>false</I> means OSPF version 3
 <DT><I>void *</I> <B>body</B><DD><P>pointer to LSA body
 </DL>
 <H3>Description</H3>
@@ -1109,7 +1190,7 @@ consistency). Returns true if valid.
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>struct ospf_proto *</I> <B>p</B><DD><P>-- undescribed --
+<DT><I>struct ospf_proto *</I> <B>p</B><DD><P>OSPF protocol instance
 <DT><I>struct ospf_neighbor *</I> <B>n</B><DD><P>neighbor
 </DL>
 <H3>Description</H3>
