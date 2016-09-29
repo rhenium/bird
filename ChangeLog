@@ -1,3 +1,25 @@
+commit f51b1f556595108d53b9f4580bfcb96bfbc85442
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Sep 29 15:06:19 2016 +0200
+
+    NEWS and version update
+
+commit 5bf35a9aee448ce7e3493ec7b80c84c8f5f39242
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Thu Sep 29 13:28:18 2016 +0200
+
+    Docs: fix BFD label
+    
+    BFD headline will appear in Table of Contents again.
+
+commit ccd2a3eda24230df550e9880f4340fc6341c8f52
+Author: Jan Moskyto Matejka <mq@ucw.cz>
+Date:   Thu Sep 29 12:00:53 2016 +0200
+
+    Kernel socket missing err_hook fix
+    
+    Thanks to Tim Weippert for bugreport.
+
 commit 79e2293ab2abbd92bb3326a95759a4ca32d9af81
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Thu Sep 22 13:34:56 2016 +0200
