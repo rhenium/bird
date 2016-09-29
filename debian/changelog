@@ -1,3 +1,9 @@
+bird (1.6.2-1) unstable; urgency=high
+
+  * Imported Upstream version 1.6.2
+
+ -- Ondřej Surý <ondrej@debian.org>  Thu, 29 Sep 2016 20:48:49 +0200
+
 bird (1.6.1-1) unstable; urgency=medium
 
   * Imported Upstream version 1.6.1
