@@ -69,8 +69,8 @@ override_dh_strip:
 	dh_strip -O--dbgsym-migration='bird-dbg (<< 1.6.0-2~), bird-bgp-dbg (<< 1.6.0-2~)'
 
 override_dh_installinit:
-	dh_installinit --name=bird
-	dh_installinit --name=bird6
+	dh_installinit --name=bird --restart-after-upgrade
+	dh_installinit --name=bird6 --restart-after-upgrade
 
 DB2MAN = /usr/share/sgml/docbook/stylesheet/xsl/nwalsh/manpages/docbook.xsl
 XP     = xsltproc -''-nonet -''-param man.charmap.use.subset "0"
