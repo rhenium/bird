@@ -6,10 +6,8 @@ Subject: Link using ld
  tools/Rules.in | 4 ++--
  1 file changed, 2 insertions(+), 2 deletions(-)
 
-diff --git a/tools/Rules.in b/tools/Rules.in
-index f00c85d..e467b2e 100644
---- a/tools/Rules.in
-+++ b/tools/Rules.in
+--- bird.orig/tools/Rules.in
++++ bird/tools/Rules.in
 @@ -68,8 +68,8 @@ subdir: all.o
  all.o: $(objs)
  #       $(LD) -r -o $@ $^

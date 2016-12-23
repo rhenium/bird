@@ -6,10 +6,8 @@ Subject: Split example config files
  doc/bird.conf.example | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/doc/bird.conf.example b/doc/bird.conf.example
-index bbfe002..44dfc53 100644
---- a/doc/bird.conf.example
-+++ b/doc/bird.conf.example
+--- bird.orig/doc/bird.conf.example
++++ bird/doc/bird.conf.example
 @@ -10,7 +10,7 @@
  #log "tmp" all;
  

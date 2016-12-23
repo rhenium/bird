@@ -7,10 +7,8 @@ Subject: Generate docs with modern linuxdoc
  doc/Makefile         | 14 +++++++++-----
  2 files changed, 10 insertions(+), 6 deletions(-)
 
-diff --git a/doc/LinuxDocTools.pm b/doc/LinuxDocTools.pm
-index 51d4a04..b6c950a 100644
---- a/doc/LinuxDocTools.pm
-+++ b/doc/LinuxDocTools.pm
+--- bird.orig/doc/LinuxDocTools.pm
++++ bird/doc/LinuxDocTools.pm
 @@ -372,7 +372,7 @@ sub process_file
          }
      }
@@ -20,21 +18,17 @@ index 51d4a04..b6c950a 100644
  
    #
    #  You can hack $NsgmlsOpts here, etcetera.
-diff --git a/doc/Makefile b/doc/Makefile
-index f88c320..1e5f4ba 100644
---- a/doc/Makefile
-+++ b/doc/Makefile
-@@ -12,8 +12,8 @@ endif
+--- bird.orig/doc/Makefile
++++ bird/doc/Makefile
+@@ -12,7 +12,7 @@ endif
  .PHONY: prog.sgml bird.sgml
  
  docs: progdocs userdocs
 -progdocs: prog.html prog.ps
--userdocs: bird.html bird.ps
 +progdocs: prog.html prog.pdf
-+userdocs: bird.html bird.pdf
+ userdocs: bird.html bird.pdf
  
  prog.sgml:
- 	$(srcdir)/tools/progdoc $(srcdir_abs)
 @@ -22,8 +22,12 @@ prog.sgml:
  	./sgml2html $<
  
@@ -50,7 +44,7 @@ index f88c320..1e5f4ba 100644
  
  %.ps: %.dvi
  	dvips -D600 -ta4 -o $@ $<
-@@ -43,4 +47,4 @@ clean:
+@@ -47,4 +51,4 @@ clean:
  	rm -f prog.sgml
  
  distclean: clean
