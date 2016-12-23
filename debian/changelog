@@ -1,3 +1,12 @@
+bird (1.6.3-1) unstable; urgency=medium
+
+  * Imported Upstream version 1.6.3
+  * Rebase patches on top of 1.6.3 release
+  * Add texlive-latex-extra to build-depends to add enumitem.sty to the
+    system
+
+ -- Ondřej Surý <ondrej@debian.org>  Fri, 23 Dec 2016 22:54:45 +0100
+
 bird (1.6.2-3) unstable; urgency=medium
 
   [ Ondrej Zajicek ]
