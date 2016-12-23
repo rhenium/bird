@@ -65,7 +65,7 @@ make_tmp_attrs(struct rte *rt, struct linpool *pool)
 {
   struct ea_list *(*mta)(struct rte *rt, struct linpool *pool);
   mta = rt->attrs->src->proto->make_tmp_attrs;
-  return mta ? mta(rt, rte_update_pool) : NULL;
+  return mta ? mta(rt, pool) : NULL;
 }
 
 /* Like fib_route(), but skips empty net entries */
@@ -596,7 +596,7 @@ mpnh_merge_rta(struct mpnh *nhs, rta *a, linpool *pool, int max)
 {
   struct mpnh nh = { .gw = a->gw, .iface = a->iface };
   struct mpnh *nh2 = (a->dest == RTD_MULTIPATH) ? a->nexthops : &nh;
-  return mpnh_merge(nhs, nh2, 1, 0, max, rte_update_pool);
+  return mpnh_merge(nhs, nh2, 1, 0, max, pool);
 }
 
 rte *
@@ -1282,8 +1282,8 @@ rte_announce_i(rtable *tab, unsigned type, net *net, rte *new, rte *old,
   rte_update_unlock();
 }
 
-void
-rte_discard(rtable *t, rte *old)	/* Non-filtered route deletion, used during garbage collection */
+static inline void
+rte_discard(rte *old)	/* Non-filtered route deletion, used during garbage collection */
 {
   rte_update_lock();
   rte_recalculate(old->sender, old->net, NULL, old->attrs->src);
@@ -1606,7 +1606,7 @@ again:
 		return 0;
 	      }
 
-	    rte_discard(tab, e);
+	    rte_discard(e);
 	    (*limit)--;
 
 	    goto rescan;
@@ -1712,7 +1712,7 @@ rta_apply_hostentry(rta *a, struct hostentry *he)
 }
 
 static inline rte *
-rt_next_hop_update_rte(rtable *tab, rte *old)
+rt_next_hop_update_rte(rtable *tab UNUSED, rte *old)
 {
   rta a;
   memcpy(&a, old->attrs, sizeof(rta));
@@ -2104,11 +2104,11 @@ hc_remove(struct hostcache *hc, struct hostentry *he)
 static void
 hc_alloc_table(struct hostcache *hc, unsigned order)
 {
-  unsigned hsize = 1 << order;
+  uint hsize = 1 << order;
   hc->hash_order = order;
   hc->hash_shift = 16 - order;
-  hc->hash_max = (order >= HC_HI_ORDER) ? ~0 : (hsize HC_HI_MARK);
-  hc->hash_min = (order <= HC_LO_ORDER) ?  0 : (hsize HC_LO_MARK);
+  hc->hash_max = (order >= HC_HI_ORDER) ? ~0U : (hsize HC_HI_MARK);
+  hc->hash_min = (order <= HC_LO_ORDER) ?  0U : (hsize HC_LO_MARK);
 
   hc->hash_table = mb_allocz(rt_table_pool, hsize * sizeof(struct hostentry *));
 }
@@ -2116,10 +2116,10 @@ hc_alloc_table(struct hostcache *hc, unsigned order)
 static void
 hc_resize(struct hostcache *hc, unsigned new_order)
 {
-  unsigned old_size = 1 << hc->hash_order;
   struct hostentry **old_table = hc->hash_table;
   struct hostentry *he, *hen;
-  int i;
+  uint old_size = 1 << hc->hash_order;
+  uint i;
 
   hc_alloc_table(hc, new_order);
   for (i = 0; i < old_size; i++)

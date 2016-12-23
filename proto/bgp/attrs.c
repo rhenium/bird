@@ -191,7 +191,7 @@ validate_as4_path(struct bgp_proto *p, struct adata *path)
 }
 
 static int
-bgp_check_next_hop(struct bgp_proto *p UNUSED, byte *a, int len)
+bgp_check_next_hop(struct bgp_proto *p UNUSED, byte *a UNUSED6, int len UNUSED6)
 {
 #ifdef IPV6
   return IGNORE;
@@ -289,6 +289,12 @@ bgp_check_ext_community(struct bgp_proto *p UNUSED, byte *a UNUSED, int len)
   return ((len % 8) == 0) ? 0 : WITHDRAW;
 }
 
+static int
+bgp_check_large_community(struct bgp_proto *p UNUSED, byte *a UNUSED, int len)
+{
+  return ((len % 12) == 0) ? 0 : WITHDRAW;
+}
+
 
 static struct attr_desc bgp_attr_table[] = {
   { NULL, -1, 0, 0, 0,								/* Undefined */
@@ -325,7 +331,10 @@ static struct attr_desc bgp_attr_table[] = {
   { "as4_path", -1, BAF_OPTIONAL | BAF_TRANSITIVE, EAF_TYPE_OPAQUE, 1,		/* BA_AS4_PATH */
     NULL, NULL },
   { "as4_aggregator", -1, BAF_OPTIONAL | BAF_TRANSITIVE, EAF_TYPE_OPAQUE, 1,	/* BA_AS4_PATH */
-    NULL, NULL }
+    NULL, NULL },
+  [BA_LARGE_COMMUNITY] =
+  { "large_community", -1, BAF_OPTIONAL | BAF_TRANSITIVE, EAF_TYPE_LC_SET, 1,
+    bgp_check_large_community, NULL }
 };
 
 /* BA_AS4_PATH is type EAF_TYPE_OPAQUE and not type EAF_TYPE_AS_PATH.
@@ -575,7 +584,7 @@ bgp_encode_attrs(struct bgp_proto *p, byte *w, ea_list *attrs, int remains)
       len = bgp_get_attr_len(a);
 
       /* Skip empty sets */ 
-      if (((type == EAF_TYPE_INT_SET) || (type == EAF_TYPE_EC_SET)) && (len == 0))
+      if (((type == EAF_TYPE_INT_SET) || (type == EAF_TYPE_EC_SET) || (type == EAF_TYPE_LC_SET)) && (len == 0))
 	continue; 
 
       if (remains < len + 4)
@@ -601,6 +610,7 @@ bgp_encode_attrs(struct bgp_proto *p, byte *w, ea_list *attrs, int remains)
 	    break;
 	  }
 	case EAF_TYPE_INT_SET:
+	case EAF_TYPE_LC_SET:
 	case EAF_TYPE_EC_SET:
 	  {
 	    u32 *z = int_set_get_data(a->u.ptr);
@@ -681,6 +691,25 @@ bgp_normalize_ec_set(struct adata *ad, u32 *src, int internal)
     memcpy(dst, src, ad->length);
 
   qsort(dst, ad->length / 8, 8, (int(*)(const void *, const void *)) bgp_compare_ec);
+}
+
+static int
+bgp_compare_lc(const u32 *x, const u32 *y)
+{
+  if (x[0] != y[0])
+    return (x[0] > y[0]) ? 1 : -1;
+  if (x[1] != y[1])
+    return (x[1] > y[1]) ? 1 : -1;
+  if (x[2] != y[2])
+    return (x[2] > y[2]) ? 1 : -1;
+  return 0;
+}
+
+static inline void
+bgp_normalize_lc_set(u32 *dest, u32 *src, unsigned cnt)
+{
+  memcpy(dest, src, LCOMM_LENGTH * cnt);
+  qsort(dest, cnt, LCOMM_LENGTH, (int(*)(const void *, const void *)) bgp_compare_lc);
 }
 
 static void
@@ -827,6 +856,14 @@ bgp_get_bucket(struct bgp_proto *p, net *n, ea_list *attrs, int originate)
 	    d->u.ptr = z;
 	    break;
 	  }
+	case EAF_TYPE_LC_SET:
+	  {
+	    struct adata *z = alloca(sizeof(struct adata) + d->u.ptr->length);
+	    z->length = d->u.ptr->length;
+	    bgp_normalize_lc_set((u32 *) z->data, (u32 *) d->u.ptr->data, z->length / LCOMM_LENGTH);
+	    d->u.ptr = z;
+	    break;
+	  }
 	default: ;
 	}
       d++;
@@ -895,6 +932,15 @@ bgp_init_prefix_table(struct bgp_proto *p, u32 order)
   HASH_INIT(p->prefix_hash, p->p.pool, order);
 
   p->prefix_slab = sl_new(p->p.pool, sizeof(struct bgp_prefix));
+}
+
+void
+bgp_free_prefix_table(struct bgp_proto *p)
+{
+  HASH_FREE(p->prefix_hash);
+
+  rfree(p->prefix_slab);
+  p->prefix_slab = NULL;
 }
 
 static struct bgp_prefix *
@@ -1040,7 +1086,7 @@ static inline void
 bgp_cluster_list_prepend(rte *e, ea_list **attrs, struct linpool *pool, u32 cid)
 {
   eattr *a = ea_find(e->attrs->eattrs, EA_CODE(EAP_BGP, BA_CLUSTER_LIST));
-  bgp_attach_attr(attrs, pool, BA_CLUSTER_LIST, (uintptr_t) int_set_add(pool, a ? a->u.ptr : NULL, cid));
+  bgp_attach_attr(attrs, pool, BA_CLUSTER_LIST, (uintptr_t) int_set_prepend(pool, a ? a->u.ptr : NULL, cid));
 }
 
 static int
@@ -1797,6 +1843,7 @@ bgp_decode_attrs(struct bgp_conn *conn, byte *attr, uint len, struct linpool *po
 	  ipa_ntoh(*(ip_addr *)ad->data);
 	  break;
 	case EAF_TYPE_INT_SET:
+	case EAF_TYPE_LC_SET:
 	case EAF_TYPE_EC_SET:
 	  {
 	    u32 *z = (u32 *) ad->data;
@@ -1900,6 +1947,23 @@ bgp_init_bucket_table(struct bgp_proto *p)
   init_list(&p->bucket_queue);
   p->withdraw_bucket = NULL;
   // fib_init(&p->prefix_fib, p->p.pool, sizeof(struct bgp_prefix), 0, bgp_init_prefix);
+}
+
+void
+bgp_free_bucket_table(struct bgp_proto *p)
+{
+  mb_free(p->bucket_hash);
+  p->bucket_hash = NULL;
+
+  struct bgp_bucket *b;
+  WALK_LIST_FIRST(b, p->bucket_queue)
+  {
+    rem_node(&b->send_node);
+    mb_free(b);
+  }
+
+  mb_free(p->withdraw_bucket);
+  p->withdraw_bucket = NULL;
 }
 
 void

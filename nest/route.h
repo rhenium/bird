@@ -274,7 +274,6 @@ rte *rte_find(net *net, struct rte_src *src);
 rte *rte_get_temp(struct rta *);
 void rte_update2(struct announce_hook *ah, net *net, rte *new, struct rte_src *src);
 static inline void rte_update(struct proto *p, net *net, rte *new) { rte_update2(p->main_ahook, net, new, p->main_source); }
-void rte_discard(rtable *tab, rte *old);
 int rt_examine(rtable *t, ip_addr prefix, int pxlen, struct proto *p, struct filter *filter);
 rte *rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, struct ea_list **tmpa, linpool *pool, int silent);
 void rt_refresh_begin(rtable *t, struct announce_hook *ah);
@@ -442,7 +441,7 @@ typedef struct eattr {
 #define EA_ALLOW_UNDEF 0x10000		/* ea_find: allow EAF_TYPE_UNDEF */
 #define EA_BIT(n) ((n) << 24)		/* Used in bitfield accessors */
 
-#define EAF_TYPE_MASK 0x0f		/* Mask with this to get type */
+#define EAF_TYPE_MASK 0x1f		/* Mask with this to get type */
 #define EAF_TYPE_INT 0x01		/* 32-bit unsigned integer number */
 #define EAF_TYPE_OPAQUE 0x02		/* Opaque byte string (not filterable) */
 #define EAF_TYPE_IP_ADDRESS 0x04	/* IP address */
@@ -451,7 +450,8 @@ typedef struct eattr {
 #define EAF_TYPE_BITFIELD 0x09		/* 32-bit embedded bitfield */
 #define EAF_TYPE_INT_SET 0x0a		/* Set of u32's (e.g., a community list) */
 #define EAF_TYPE_EC_SET 0x0e		/* Set of pairs of u32's - ext. community list */
-#define EAF_TYPE_UNDEF 0x0f		/* `force undefined' entry */
+#define EAF_TYPE_LC_SET 0x12		/* Set of triplets of u32's - large community list */
+#define EAF_TYPE_UNDEF 0x1f		/* `force undefined' entry */
 #define EAF_EMBEDDED 0x01		/* Data stored in eattr.u.data (part of type spec) */
 #define EAF_VAR_LENGTH 0x02		/* Attribute length is variable (part of type spec) */
 #define EAF_ORIGINATED 0x40		/* The attribute has originated locally */
