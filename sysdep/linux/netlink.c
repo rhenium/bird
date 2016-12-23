@@ -487,7 +487,7 @@ nl_parse_multipath(struct krt_proto *p, struct rtattr *ra)
   struct rtattr *a[BIRD_RTA_MAX];
   struct rtnexthop *nh = RTA_DATA(ra);
   struct mpnh *rv, *first, **last;
-  int len = RTA_PAYLOAD(ra);
+  unsigned len = RTA_PAYLOAD(ra);
 
   first = NULL;
   last = &first;
@@ -1473,7 +1473,7 @@ nl_async_msg(struct nlmsghdr *h)
 }
 
 static int
-nl_async_hook(sock *sk, int size UNUSED)
+nl_async_hook(sock *sk, uint size UNUSED)
 {
   struct iovec iov = { nl_async_rx_buffer, NL_RX_SIZE };
   struct sockaddr_nl sa;
@@ -1497,6 +1497,7 @@ nl_async_hook(sock *sk, int size UNUSED)
 	   *  One day we might react to it by asking for route table
 	   *  scan in near future.
 	   */
+	  log(L_WARN "Kernel dropped some netlink messages, will resync on next scan.");
 	  return 1;	/* More data are likely to be ready */
 	}
       else if (errno != EWOULDBLOCK)

@@ -103,7 +103,7 @@ static inline int u32_cto(uint x) { return ffs(~x) - 1; }
 static inline u32
 rte_src_alloc_id(void)
 {
-  int i, j;
+  uint i, j;
   for (i = src_id_pos; i < src_id_size; i++)
     if (src_ids[i] != 0xffffffff)
       goto found;
@@ -785,7 +785,7 @@ static inline void
 opaque_format(struct adata *ad, byte *buf, uint size)
 {
   byte *bound = buf + size - 10;
-  int i;
+  uint i;
 
   for(i = 0; i < ad->length; i++)
     {
@@ -824,6 +824,18 @@ ea_show_ec_set(struct cli *c, struct adata *ad, byte *pos, byte *buf, byte *end)
   while (i)
     {
       i = ec_set_format(ad, i, buf, end - buf - 1);
+      cli_printf(c, -1012, "\t\t%s", buf);
+    }
+}
+
+static inline void
+ea_show_lc_set(struct cli *c, struct adata *ad, byte *pos, byte *buf, byte *end)
+{
+  int i = lc_set_format(ad, 0, pos, end - pos);
+  cli_printf(c, -1012, "\t%s", buf);
+  while (i)
+    {
+      i = lc_set_format(ad, i, buf, end - buf - 1);
       cli_printf(c, -1012, "\t\t%s", buf);
     }
 }
@@ -891,6 +903,9 @@ ea_show(struct cli *c, eattr *e)
 	  return;
 	case EAF_TYPE_EC_SET:
 	  ea_show_ec_set(c, ad, pos, buf, end);
+	  return;
+	case EAF_TYPE_LC_SET:
+	  ea_show_lc_set(c, ad, pos, buf, end);
 	  return;
 	case EAF_TYPE_UNDEF:
 	default:

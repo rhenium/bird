@@ -156,7 +156,7 @@ cache.
 
 
 <HR><H3>Function</H3>
-<P><I>int</I>
+<P><I>uint</I>
 <B>babel_write_queue</B>
 (<I>struct babel_iface *</I> <B>ifa</B>, <I>list *</I> <B>queue</B>) --  Write a TLV queue to a transmission buffer
 <P>
@@ -577,13 +577,13 @@ by the BGP state machine as described in the standard.
 <HR><H3>Function</H3>
 <P><I>int</I>
 <B>bgp_incoming_connection</B>
-(<I>sock *</I> <B>sk</B>, <I>int dummy</I> <B>UNUSED</B>) --     handle an incoming connection
+(<I>sock *</I> <B>sk</B>, <I>uint dummy</I> <B>UNUSED</B>) --     handle an incoming connection
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
 <DT><I>sock *</I> <B>sk</B><DD><P>TCP socket
-<DT><I>int dummy</I> <B>UNUSED</B><DD><P>-- undescribed --
+<DT><I>uint dummy</I> <B>UNUSED</B><DD><P>-- undescribed --
 </DL>
 <H3>Description</H3>
 <P>This function serves as a socket hook for accepting of new BGP
@@ -701,13 +701,13 @@ packet handler according to the packet type.
 <HR><H3>Function</H3>
 <P><I>int</I>
 <B>bgp_rx</B>
-(<I>sock *</I> <B>sk</B>, <I>int</I> <B>size</B>) --  handle received data
+(<I>sock *</I> <B>sk</B>, <I>uint</I> <B>size</B>) --  handle received data
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
 <DT><I>sock *</I> <B>sk</B><DD><P>socket
-<DT><I>int</I> <B>size</B><DD><P>amount of data received
+<DT><I>uint</I> <B>size</B><DD><P>amount of data received
 </DL>
 <H3>Description</H3>
 <P><B>bgp_rx()</B> is called by the socket layer whenever new data arrive from
@@ -1043,12 +1043,12 @@ the export from <B>ospf_rt_notify()</B>, or the NSSA-EXT translation.
 <HR><H3>Function</H3>
 <P><I>struct top_graph *</I>
 <B>ospf_top_new</B>
-(<I>struct ospf_proto *</I> <B>p</B>, <I>pool *</I> <B>pool</B>) --  allocated new topology database
+(<I>struct ospf_proto *p UNUSED4</I> <B>UNUSED6</B>, <I>pool *</I> <B>pool</B>) --  allocated new topology database
 <P>
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>struct ospf_proto *</I> <B>p</B><DD><P>OSPF protocol instance
+<DT><I>struct ospf_proto *p UNUSED4</I> <B>UNUSED6</B><DD><P>-- undescribed --
 <DT><I>pool *</I> <B>pool</B><DD><P>pool for allocation
 </DL>
 <H3>Description</H3>
@@ -1151,12 +1151,12 @@ link.
 <HR><H3>Function</H3>
 <P><I>int</I>
 <B>ospf_rx_hook</B>
-(<I>sock *</I> <B>sk</B>, <I>int</I> <B>len</B>)
+(<I>sock *</I> <B>sk</B>, <I>uint</I> <B>len</B>)
 <H3>Arguments</H3>
 <P>
 <DL>
 <DT><I>sock *</I> <B>sk</B><DD><P>socket we received the packet.
-<DT><I>int</I> <B>len</B><DD><P>size of the packet
+<DT><I>uint</I> <B>len</B><DD><P>size of the packet
 </DL>
 <H3>Description</H3>
 <P>This is the entry point for messages from neighbors. Many checks (like

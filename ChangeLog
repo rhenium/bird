@@ -1,3 +1,337 @@
+commit 017da76b729cc36c4a3416995b06386235660f42
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Dec 21 16:46:47 2016 +0100
+
+    NEWS and version update
+
+commit 2c33da507046c25d87741fe0ce7947985c8c7a10
+Author: Jan Moskyto Matejka <mq@ucw.cz>
+Date:   Tue Dec 20 20:13:08 2016 +0100
+
+    Netlink: fix occasional netlink hangs on busy machines
+
+commit 7d95c44572d79ef15ec8b0220950b4e4374c6bc6
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Dec 15 15:31:25 2016 +0100
+
+    OSPF: Fix ECMP external merging
+    
+    The variable nfa is not cleaned before each loop iteration and can have
+    a wrong value of nfa.nhs_reuse from the previous step.
+    
+    Thanks to Bernardo Figueiredo for the bugreport and analysis.
+
+commit 9e7d3a781075b39a7e0f97e63b6f313955daa661
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Dec 13 17:34:42 2016 +0100
+
+    OSPF: Fix net-summary origination combined with stubnet option
+    
+    Stubnet nodes in OSPF FIB were removed during rt_sync(), but the pointer
+    remained in top_hash_entry.nf, so net-summary LSA origination was
+    confused, reported 'LSA ID collision' and net-summary LSAs were not
+    originated properly.
+    
+    Thanks to Naveen Chowdary Yerramneni for bugreport and analysis.
+
+commit ed1a908e535e4333b358d83b472453a2ad6d3f51
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Fri Nov 25 11:51:38 2016 +0100
+
+    BGP: Fix memory leak in graceful restart code
+    
+    Prefix and bucket tables are initialized when entering established state
+    but not explicitly freed when leaving it (that is handled by protocol
+    restart). With graceful restart, BGP may enter and leave established
+    state multiple times without hard protocol restart causing memory leak.
+
+commit 261816b0d4f3d4549a4402b95541b82fc7f10a4b
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Nov 15 16:24:39 2016 +0100
+
+    BGP: Cluster list item should be prepended
+    
+    Commit 3c09af41... changed behavior of int_set_add() from prepend to
+    append, which makes more sense for community list, but prepend must be
+    used for cluster list. Add int_set_prepend() and use it in cluster list
+    handling code.
+
+commit c8cafc8ebb5320ac7c6117c17e6460036f0fdf62
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Nov 8 17:46:29 2016 +0100
+
+    Minor code cleanups
+
+commit 920a86e8493fe25008f084f67f368aea9b197efd
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Nov 3 09:53:53 2016 +0100
+
+    Add missing extern
+
+commit e03dc6a984555e3c943735d50376cada2220bac8
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Oct 30 23:51:23 2016 +0100
+
+    BFD: Authentication
+    
+    Implement BFD authentication (part of RFC 5880). Supports plaintext
+    passwords and cryptographic MD5 / SHA-1 authentication.
+    
+    Based on former commit from Pavel Tvrdik
+
+commit 29239ba2bbee3e9ec7d17793b25936a1bfc795ca
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Oct 27 20:58:21 2016 +0200
+
+    OSPF: Use message authentication interface
+    
+    Based on former commit from Pavel Tvrdik
+
+commit 390601f038b69d5de3841c691f92af0fcd088454
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Oct 26 16:07:45 2016 +0200
+
+    RIP: Use message authentication interface
+    
+    Based on former commit from Pavel Tvrdik
+
+commit 64385aee0cc2dfae8297f29ce6724cedf7cc4736
+Author: Pavel Tvrdík <pawel.tvrdik@gmail.com>
+Date:   Thu Jan 28 17:05:15 2016 +0100
+
+    DOC: Password algorithm option
+
+commit 56cb3bedc2634a44ea41587566c2889f5b5f5b5b
+Author: Pavel Tvrdík <pawel.tvrdik@gmail.com>
+Date:   Tue Jan 26 16:45:13 2016 +0100
+
+    Nest: Add support for MAC algorithms in grammar
+
+commit de2a27e255b6ec834d11c005909b28a150c7c0db
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Oct 25 17:04:17 2016 +0200
+
+    Add generic message authentication interface
+    
+    Add generic interface for generating and verifying MACs (message
+    authentication codes). Replace multiple HMAC implementation with
+    a generic one.
+
+commit 7eec3988758cb4c19a0ab3bf90cab2a4914165be
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Nov 1 16:18:27 2016 +0100
+
+    BSD: Fix build on OpenBSD broken by previous commit
+
+commit 3e236955c9369475872b9b86a58502fa777b50b9
+Author: Jan Moskyto Matejka <mq@ucw.cz>
+Date:   Fri Oct 14 15:37:04 2016 +0200
+
+    Build: switch on -Wextra, get rid of most of the warnings
+    
+    There are several unresolved -Wmissing-field-initializers on older
+    versions of GCC than 5.1, all of them false positive.
+
+commit 17fe57d8dcc89aea520788914b252cf49cf060ff
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Nov 1 11:37:49 2016 +0100
+
+    Log: Fix broken syslog name
+    
+    BIRD passed string from configuration to openlog(), which kept it
+    internally. After reconfiguration the old string was freed, therefore
+    openlog had invalid copy.
+    
+    Thanks to Chris Caputo for the original patch.
+
+commit 3213273d8261c69a343fcd7d4c9607385dfdbb65
+Author: Ondrej Filip <feela@network.cz>
+Date:   Thu Oct 27 11:08:28 2016 +0200
+
+    IANA assigned a different number to large BGP communities - changed.
+
+commit c68e8cd374f16a1d659c80f9ebe503f2dd0d4acb
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Oct 18 13:06:05 2016 +0200
+
+    Filter: Minor formatting changes in test.conf
+
+commit 3c09af416939d26c252aa1b339b52fd8f9f8e774
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Thu Oct 13 16:57:21 2016 +0200
+
+    Clist: The add() function will append a new value
+    
+    The add() function used to prepend a new community to clist, but after
+    this fix the add() function appends new community.
+
+commit 5fd7dacadc3cd8f91f66cb56e3a9ef81028aa102
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Thu Oct 13 15:17:41 2016 +0200
+
+    Filter: Expand testing of large community sets
+
+commit 2e7fb11a6e31324151c6db98df2fe26d2d6cffab
+Author: Jan Moskyto Matejka <mq@ucw.cz>
+Date:   Wed Oct 12 14:16:34 2016 +0200
+
+    Fixed memory bloating on kernel merge paths together with export filter.
+    
+    Some memory was being allocated from bad linpool, not from the given one
+    as they should.
+    
+    Thanks to Madhu and Justin Cattle for reporting this.
+
+commit 9df52a98e2eae28f219510d4c3d65ec43a50c394
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Mon Sep 5 11:20:28 2016 +0200
+
+    Doc: Change debug to { flag1|flag2|flag3  [, ...] } style
+    
+    Thanks to Micah Anderson for bug report and Ondrej Zajicek for the idea!
+
+commit 9fcb9637b55d234dfedfcb54bd76ed5a9570b7a1
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Mon Sep 19 16:01:29 2016 +0200
+
+    Nest: Remove trailing whitespaces
+
+commit 3d28f0145382feddcf7f66c0a20b6c5b3e0edbc9
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Mon Sep 26 18:05:51 2016 +0200
+
+    Doc: Fix deprecated unescaped braces in perl script
+    
+    This commit should fix warning `make docs'
+    
+    ./sgml2html bird.sgml Unescaped left brace in regex is deprecated,
+      passed through in regex; marked by <-- HERE in m/\\nameurl{ <-- HERE
+        (.*)}{(.*)}/ at fmt_latex2e.pl line 287.
+
+commit c2564d34af9e01a828c24b0be7f269e5b036b5da
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Sat Oct 1 12:50:29 2016 +0200
+
+    Tree/Trie: Check the end of buffer
+    
+    We set buffer->pos to buffer->end in function buffer_print() when
+    bvsnprintf() failed, so there would be uninitialized memory between
+    the old buffer->pos and the current buffer->pos.
+
+commit 7935b9d21228dcd1eb95ebcb056b2a815e3e854b
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Thu Sep 29 18:08:40 2016 +0200
+
+    Doc: Add tag for links to RFCs
+
+commit 9c20a8b7ae69487397392c720a5e75087c343df1
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Mon Oct 3 12:35:36 2016 +0200
+
+    Doc: Fix inline <htmlurl></htmlurl>
+    
+    Don't make space before or after link name.
+
+commit 963929df021ae54d8ff4cd18ca228932fc89dc13
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Mon Oct 3 12:04:44 2016 +0200
+
+    Doc: Do not use symlinks for files
+
+commit 70104ef4fb5f8105422d6eb811a93b68aeae709d
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Mon Oct 3 11:46:40 2016 +0200
+
+    Doc: Generate one-sided version
+    
+    This removes jumping offset for odd and even pages for binding book.
+
+commit f9bd11c337afcc3e95b459e3901a4ca28cb14b85
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Mon Oct 3 11:39:56 2016 +0200
+
+    Doc: Use [table t] or [table name]
+
+commit 74d76f6c3877e4a745fb63b55486810322076153
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Mon Oct 3 11:36:44 2016 +0200
+
+    Doc: Fix unnecessary special chars
+
+commit f15dc6813870565d01378265ab20e017757af220
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Mon Oct 3 10:59:43 2016 +0200
+
+    Doc: Enable break lines in <tag></tag>
+
+commit f5952c7343841fe4b7b63b7a56e95aba104f2e82
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Mon Oct 3 10:32:28 2016 +0200
+
+    Doc: Daemon command-line options alphabet order
+
+commit 22558357d45c27583156f8c11412e37ce48a42e0
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Mon Oct 3 10:22:24 2016 +0200
+
+    Doc: Add command-line options --version, --help
+
+commit b9864aa87193ac1a5ebbc04d24ec782a1fe9637a
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Mon Sep 26 18:00:59 2016 +0200
+
+    Doc: Add labels to all chapters and options
+
+commit a2df7c0303d235f4122969243e9df152a8a16dcb
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Thu Sep 29 14:05:25 2016 +0200
+
+    Doc: Generate clickable PDF
+
+commit 9faf72c8cc9a099b41c90ee1822e8bca22fd0596
+Author: Pavel Tvrdik <pawel.tvrdik@gmail.com>
+Date:   Thu Sep 29 11:20:04 2016 +0200
+
+    Doc: Fix whitespaces
+
+commit a998836d4bd4df8820e67f51e16d81a5a8dc9e9b
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Oct 4 23:19:35 2016 +0200
+
+    Filter: fix missing separator
+
+commit a46e01eeef17a7efe876618623397f60e62afe37
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Oct 4 12:45:39 2016 +0200
+
+    Nest: Fix signedness of large communities
+
+commit cec4a73ccb22ed412e87560e4210b6df40832aad
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Oct 4 00:31:43 2016 +0200
+
+    Doc: Documentation for large communities
+
+commit 60566c5c804070c145fafd75ef2c17efb489a1eb
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sat Oct 1 22:31:01 2016 +0200
+
+    Filter: large community sets
+    
+    Add support for lc sets to filter code. Grammar of (small) community sets
+    has to be updated to avoid parser collisions.
+
+commit 66dbdbd993115c57acafdb776d2165d0b4a90a45
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sat Oct 1 12:50:29 2016 +0200
+
+    BGP: Support for large communities
+    
+    Add support for large communities (draft-ietf-idr-large-community),
+    96bit alternative to RFC 1997 communities.
+    
+    Thanks to Matt Griswold for the original patch.
+
 commit f51b1f556595108d53b9f4580bfcb96bfbc85442
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Thu Sep 29 15:06:19 2016 +0200

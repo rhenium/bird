@@ -429,10 +429,9 @@ add_network(struct ospf_area *oa, ip_addr px, int pxlen, int metric, struct top_
   if (en == oa->rt)
   {
     /*
-     * Local stub networks does not have proper iface in en->nhi
-     * (because they all have common top_hash_entry en).
-     * We have to find iface responsible for that stub network.
-     * Configured stubnets does not have any iface. They will
+     * Local stub networks do not have proper iface in en->nhi (because they all
+     * have common top_hash_entry en). We have to find iface responsible for
+     * that stub network. Configured stubnets do not have any iface. They will
      * be removed in rt_sync().
      */
 
@@ -678,7 +677,7 @@ link_back(struct ospf_area *oa, struct top_hash_entry *en, struct top_hash_entry
      which may be later used as the next hop. */
 
   /* In OSPFv2, en->lb is set here. In OSPFv3, en->lb is just cleared here,
-     it is set in process_prefixes() to any global addres in the area */
+     it is set in process_prefixes() to any global address in the area */
 
   en->lb = IPA_NONE;
   en->lb_id = 0;
@@ -930,7 +929,7 @@ ospf_rt_sum_tr(struct ospf_area *oa)
   }
 }
 
-/* Decide about originating or flushing summary LSAs for condended area networks */
+/* Decide about originating or flushing summary LSAs for condensed area networks */
 static int
 decide_anet_lsa(struct ospf_area *oa, struct area_net *anet, struct ospf_area *anet_oa)
 {
@@ -1049,7 +1048,7 @@ check_sum_rt_lsa(struct ospf_proto *p, ort *nf)
 }
 
 static inline int
-decide_nssa_lsa(struct ospf_proto *p, ort *nf, struct ospf_lsa_ext_local *rt)
+decide_nssa_lsa(struct ospf_proto *p UNUSED4 UNUSED6, ort *nf, struct ospf_lsa_ext_local *rt)
 {
   struct ospf_area *oa = nf->n.oa;
   struct top_hash_entry *en = nf->n.en;
@@ -1406,7 +1405,6 @@ ospf_ext_spf(struct ospf_proto *p)
   struct top_hash_entry *en;
   struct ospf_lsa_ext_local rt;
   ort *nf1, *nf2;
-  orta nfa = {};
   ip_addr rtid;
   u32 br_metric;
   struct ospf_area *atmp;
@@ -1415,6 +1413,8 @@ ospf_ext_spf(struct ospf_proto *p)
 
   WALK_SLIST(en, p->lsal)
   {
+    orta nfa = {};
+
     /* 16.4. (1) */
     if ((en->lsa_type != LSA_T_EXT) && (en->lsa_type != LSA_T_NSSA))
       continue;
@@ -1560,6 +1560,7 @@ ospf_rt_reset(struct ospf_proto *p)
   {
     ri = (ort *) nftmp;
     ri->area_net = 0;
+    ri->keep = 0;
     reset_ri(ri);
   }
   FIB_WALK_END;
@@ -1929,9 +1930,12 @@ again1:
 	}
     }
 
-    /* Remove configured stubnets */
-    if (!nf->n.nhs)
+    /* Remove configured stubnets but keep the entries */
+    if (nf->n.type && !nf->n.nhs)
+    {
       reset_ri(nf);
+      nf->keep = 1;
+    }
 
     if (nf->n.type) /* Add the route */
     {
@@ -1991,7 +1995,7 @@ again1:
     }
 
     /* Remove unused rt entry, some special entries are persistent */
-    if (!nf->n.type && !nf->external_rte && !nf->area_net)
+    if (!nf->n.type && !nf->external_rte && !nf->area_net && !nf->keep)
     {
       FIB_ITERATE_PUT(&fit, nftmp);
       fib_delete(fib, nftmp);
