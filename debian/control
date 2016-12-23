@@ -12,8 +12,9 @@ Build-Depends: autotools-dev,
                libreadline-dev | libreadline6-dev | libreadline5-dev,
                linuxdoc-tools-latex,
                m4,
-               quilt,
                opensp,
+               quilt,
+               texlive-latex-extra,
                xsltproc
 Maintainer: Ondřej Surý <ondrej@debian.org>
 Standards-Version: 3.9.6
@@ -24,7 +25,7 @@ Homepage: http://bird.network.cz/
 Package: bird
 Architecture: kfreebsd-any linux-any
 Depends: adduser,
-	 ucf,
+         ucf,
          ${misc:Depends},
          ${shlibs:Depends}
 Conflicts: routed,
