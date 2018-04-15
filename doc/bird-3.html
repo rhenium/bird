@@ -323,6 +323,15 @@ part of the output of 'show route all' command.
 <P>
 <DT><CODE>
 <A NAME="proto-table"></A> table <I>name</I></CODE><DD><P>Connect this protocol to a non-default routing table.
+<P>
+<DT><CODE>
+<A NAME="proto-vrf"></A> vrf "<I>text</I>"</CODE><DD><P>Associate the protocol with specific VRF. The protocol will be
+restricted to interfaces assigned to the VRF and will use sockets bound
+to the VRF. Appropriate VRF interface must exist on OS level. For kernel
+protocol, an appropriate table still must be explicitly selected by
+<CODE>table</CODE> option. Note that for proper VRF support it is necessary to
+use Linux kernel version at least 4.14, older versions have limited
+VRF implementation.
 </DL>
 <P>
 <P>There are several options that give sense only with certain protocols:
