@@ -3,12 +3,13 @@ Date: Sun, 18 Sep 2016 11:26:45 +0200
 Subject: Generate docs with modern linuxdoc
 
 ---
- doc/LinuxDocTools.pm |  2 +-
- doc/Makefile         | 14 +++++++++-----
- 2 files changed, 10 insertions(+), 6 deletions(-)
+ doc/LinuxDocTools.pm | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
---- bird.orig/doc/LinuxDocTools.pm
-+++ bird/doc/LinuxDocTools.pm
+diff --git a/doc/LinuxDocTools.pm b/doc/LinuxDocTools.pm
+index 51d4a04..b6c950a 100644
+--- a/doc/LinuxDocTools.pm
++++ b/doc/LinuxDocTools.pm
 @@ -372,7 +372,7 @@ sub process_file
          }
      }
@@ -18,35 +19,3 @@ Subject: Generate docs with modern linuxdoc
  
    #
    #  You can hack $NsgmlsOpts here, etcetera.
---- bird.orig/doc/Makefile
-+++ bird/doc/Makefile
-@@ -12,7 +12,7 @@ endif
- .PHONY: prog.sgml bird.sgml
- 
- docs: progdocs userdocs
--progdocs: prog.html prog.ps
-+progdocs: prog.html prog.pdf
- userdocs: bird.html bird.pdf
- 
- prog.sgml:
-@@ -22,8 +22,12 @@ prog.sgml:
- 	./sgml2html $<
- 
- %.dvi: %.tex
--	latex $<
--	latex $<
-+	TEXINPUTS=.:tex: latex $<
-+	TEXINPUTS=.:tex: latex $<
-+
-+%.pdf: %.tex
-+	TEXINPUTS=.:tex: pdflatex $<
-+	TEXINPUTS=.:tex: pdflatex $<
- 
- %.ps: %.dvi
- 	dvips -D600 -ta4 -o $@ $<
-@@ -47,4 +51,4 @@ clean:
- 	rm -f prog.sgml
- 
- distclean: clean
--	rm -f *.html *.ps
-+	rm -f *.html *.ps *.pdf

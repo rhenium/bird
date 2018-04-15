@@ -8,9 +8,11 @@ Subject: Use onsgmls from opensp tools
  doc/sgml2txt   | 2 +-
  3 files changed, 3 insertions(+), 3 deletions(-)
 
---- bird.orig/doc/sgml2html
-+++ bird/doc/sgml2html
-@@ -26,7 +26,7 @@ use lib "/usr/perl5";
+diff --git a/doc/sgml2html b/doc/sgml2html
+index a5bbee9..f8e7f74 100755
+--- a/doc/sgml2html
++++ b/doc/sgml2html
+@@ -28,7 +28,7 @@ use lib "/usr/perl5";
  use lib "/usr/lib/perl5";
  use lib "/usr/share/perl5";
  $progs = {
@@ -19,9 +21,11 @@ Subject: Use onsgmls from opensp tools
    "SGMLSASP" => "/usr/bin/sgmlsasp",
    "GROFF" => "/usr/bin/groff",
    "GROFFMACRO" => "-ms",
---- bird.orig/doc/sgml2latex
-+++ bird/doc/sgml2latex
-@@ -26,7 +26,7 @@ use lib "/usr/perl5";
+diff --git a/doc/sgml2latex b/doc/sgml2latex
+index 02b60d9..c0750cf 100755
+--- a/doc/sgml2latex
++++ b/doc/sgml2latex
+@@ -28,7 +28,7 @@ use lib "/usr/perl5";
  use lib "/usr/lib/perl5";
  use lib "/usr/share/perl5";
  $progs = {
@@ -30,9 +34,11 @@ Subject: Use onsgmls from opensp tools
    "SGMLSASP" => "/usr/bin/sgmlsasp",
    "GROFF" => "/usr/bin/groff",
    "GROFFMACRO" => "-ms",
---- bird.orig/doc/sgml2txt
-+++ bird/doc/sgml2txt
-@@ -26,7 +26,7 @@ use lib "/usr/perl5";
+diff --git a/doc/sgml2txt b/doc/sgml2txt
+index dfc017d..7b985b8 100755
+--- a/doc/sgml2txt
++++ b/doc/sgml2txt
+@@ -28,7 +28,7 @@ use lib "/usr/perl5";
  use lib "/usr/lib/perl5";
  use lib "/usr/share/perl5";
  $progs = {
