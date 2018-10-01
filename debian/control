@@ -1,6 +1,6 @@
 Source: bird2
 Section: net
-Priority: extra
+Priority: optional
 Build-Depends: autotools-dev,
                bison,
                debhelper (>= 9~),
@@ -44,7 +44,6 @@ Description: Internet Routing Daemon
 Package: bird2-doc
 Architecture: all
 Section: doc
-Priority: optional
 Depends: ${misc:Depends}
 Description: Internet Routing Daemon - documentation
  BIRD is an Internet routing daemon with full support for all the major
