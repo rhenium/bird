@@ -203,7 +203,7 @@ bird (1.4.3-1) unstable; urgency=low
 bird (1.4.2-1) unstable; urgency=medium
 
   * New upstream version 1.4.2
-   o Important bugfix in BFD.  
+   o Important bugfix in BFD.
   * Build documentation and install it into bird-doc package (Closes: #664464)
 
  -- Ondřej Surý <ondrej@debian.org>  Thu, 03 Apr 2014 08:40:29 +0200
@@ -684,7 +684,7 @@ bird (1.0.4-6) unstable; urgency=low
 
 bird (1.0.4-5) unstable; urgency=low
 
-  * Fix changed option parsing with flex 
+  * Fix changed option parsing with flex
     Closes: Bug#191186
 
  -- Florian Lohoff <flo@rfc822.org>  Tue, 29 Apr 2003 05:39:53 +0000
@@ -744,7 +744,7 @@ bird (1.0.4-2) unstable; urgency=low
 
 bird (1.0.4-1) unstable; urgency=low
 
-  * New upstream release 
+  * New upstream release
 
  -- Florian Lohoff <flo@rfc822.org>  Wed,  6 Sep 2000 18:14:01 +0200
 
