@@ -39,6 +39,8 @@
 #include "lib/socket.h"
 #include "lib/string.h"
 #include "lib/unaligned.h"
+#include "lib/net.h"
+#include "lib/ip.h"
 #include "nest/route.h"
 #include "nest/protocol.h"
 #include "nest/iface.h"
@@ -47,6 +49,19 @@
 #include "filter/filter.h"
 
 #define CMP_ERROR 999
+
+void (*bt_assert_hook)(int result, struct f_inst *assert);
+
+static struct adata undef_adata;	/* adata of length 0 used for undefined */
+
+/* Special undef value for paths and clists */
+static inline int
+undef_value(struct f_val v)
+{
+  return ((v.type == T_PATH) || (v.type == T_CLIST) ||
+	  (v.type == T_ECLIST) || (v.type == T_LCLIST)) &&
+    (v.val.ad == &undef_adata);
+}
 
 static struct adata *
 adata_empty(struct linpool *pool, int l)
@@ -91,17 +106,8 @@ pm_format(struct f_path_mask *p, buffer *buf)
   buffer_puts(buf, "=]");
 }
 
-static inline int
-uint_cmp(uint i1, uint i2)
-{
-  return (int)(i1 > i2) - (int)(i1 < i2);
-}
-
-static inline int
-u64_cmp(u64 i1, u64 i2)
-{
-  return (int)(i1 > i2) - (int)(i1 < i2);
-}
+static inline int val_is_ip4(const struct f_val v)
+{ return (v.type == T_IP) && ipa_is_ip4(v.val.ip); }
 
 static inline int
 lcomm_cmp(lcomm v1, lcomm v2)
@@ -127,21 +133,17 @@ lcomm_cmp(lcomm v1, lcomm v2)
 int
 val_compare(struct f_val v1, struct f_val v2)
 {
-  int rc;
-
   if (v1.type != v2.type) {
     if (v1.type == T_VOID)	/* Hack for else */
       return -1;
     if (v2.type == T_VOID)
       return 1;
 
-#ifndef IPV6
     /* IP->Quad implicit conversion */
-    if ((v1.type == T_QUAD) && (v2.type == T_IP))
-      return uint_cmp(v1.val.i, ipa_to_u32(v2.val.px.ip));
-    if ((v1.type == T_IP) && (v2.type == T_QUAD))
-      return uint_cmp(ipa_to_u32(v1.val.px.ip), v2.val.i);
-#endif
+    if ((v1.type == T_QUAD) && val_is_ip4(v2))
+      return uint_cmp(v1.val.i, ipa_to_u32(v2.val.ip));
+    if (val_is_ip4(v1) && (v2.type == T_QUAD))
+      return uint_cmp(ipa_to_u32(v1.val.ip), v2.val.i);
 
     debug( "Types do not match in val_compare\n" );
     return CMP_ERROR;
@@ -157,15 +159,14 @@ val_compare(struct f_val v1, struct f_val v2)
   case T_QUAD:
     return uint_cmp(v1.val.i, v2.val.i);
   case T_EC:
+  case T_RD:
     return u64_cmp(v1.val.ec, v2.val.ec);
   case T_LC:
     return lcomm_cmp(v1.val.lc, v2.val.lc);
   case T_IP:
-    return ipa_compare(v1.val.px.ip, v2.val.px.ip);
-  case T_PREFIX:
-    if (rc = ipa_compare(v1.val.px.ip, v2.val.px.ip))
-      return rc;
-    return uint_cmp(v1.val.px.len, v2.val.px.len);
+    return ipa_compare(v1.val.ip, v2.val.ip);
+  case T_NET:
+    return net_compare(v1.val.net, v2.val.net);
   case T_STRING:
     return strcmp(v1.val.s, v2.val.s);
   default:
@@ -236,38 +237,26 @@ val_same(struct f_val v1, struct f_val v2)
   }
 }
 
-void
-fprefix_get_bounds(struct f_prefix *px, int *l, int *h)
-{
-  *l = *h = px->len & LEN_MASK;
-
-  if (px->len & LEN_MINUS)
-    *l = 0;
-
-  else if (px->len & LEN_PLUS)
-    *h = MAX_PREFIX_LENGTH;
-
-  else if (px->len & LEN_RANGE)
-    {
-      *l = 0xff & (px->len >> 16);
-      *h = 0xff & (px->len >> 8);
-    }
-}
-
 static int
 clist_set_type(struct f_tree *set, struct f_val *v)
 {
- switch (set->from.type) {
+  switch (set->from.type)
+  {
   case T_PAIR:
     v->type = T_PAIR;
     return 1;
+
   case T_QUAD:
-#ifndef IPV6
-  case T_IP:
-#endif
     v->type = T_QUAD;
     return 1;
-    break;
+
+  case T_IP:
+    if (val_is_ip4(set->from) && val_is_ip4(set->to))
+    {
+      v->type = T_QUAD;
+      return 1;
+    }
+    /* Fall through */
   default:
     v->type = T_VOID;
     return 0;
@@ -470,11 +459,9 @@ val_in_range(struct f_val v1, struct f_val v2)
 
   if (((v1.type == T_PAIR) || (v1.type == T_QUAD)) && (v2.type == T_CLIST))
     return int_set_contains(v2.val.ad, v1.val.i);
-#ifndef IPV6
   /* IP->Quad implicit conversion */
-  if ((v1.type == T_IP) && (v2.type == T_CLIST))
-    return int_set_contains(v2.val.ad, ipa_to_u32(v1.val.px.ip));
-#endif
+  if (val_is_ip4(v1) && (v2.type == T_CLIST))
+    return int_set_contains(v2.val.ad, ipa_to_u32(v1.val.ip));
 
   if ((v1.type == T_EC) && (v2.type == T_ECLIST))
     return ec_set_contains(v2.val.ad, v1.val.ec);
@@ -485,21 +472,21 @@ val_in_range(struct f_val v1, struct f_val v2)
   if ((v1.type == T_STRING) && (v2.type == T_STRING))
     return patmatch(v2.val.s, v1.val.s);
 
-  if ((v1.type == T_IP) && (v2.type == T_PREFIX))
-    return ipa_in_net(v1.val.px.ip, v2.val.px.ip, v2.val.px.len);
+  if ((v1.type == T_IP) && (v2.type == T_NET))
+    return ipa_in_netX(v1.val.ip, v2.val.net);
 
-  if ((v1.type == T_PREFIX) && (v2.type == T_PREFIX))
-    return net_in_net(v1.val.px.ip, v1.val.px.len, v2.val.px.ip, v2.val.px.len);
+  if ((v1.type == T_NET) && (v2.type == T_NET))
+    return net_in_netX(v1.val.net, v2.val.net);
 
-  if ((v1.type == T_PREFIX) && (v2.type == T_PREFIX_SET))
-    return trie_match_fprefix(v2.val.ti, &v1.val.px);
+  if ((v1.type == T_NET) && (v2.type == T_PREFIX_SET))
+    return trie_match_net(v2.val.ti, v1.val.net);
 
   if (v2.type != T_SET)
     return CMP_ERROR;
 
   /* With integrated Quad<->IP implicit conversion */
   if ((v1.type == v2.val.t->from.type) ||
-      ((IP_VERSION == 4) && (v1.type == T_QUAD) && (v2.val.t->from.type == T_IP)))
+      ((v1.type == T_QUAD) && val_is_ip4(v2.val.t->from) && val_is_ip4(v2.val.t->to)))
     return !!find_tree(v2.val.t, v1);
 
   if (v1.type == T_CLIST)
@@ -530,12 +517,13 @@ val_format(struct f_val v, buffer *buf)
   case T_BOOL:	buffer_puts(buf, v.val.i ? "TRUE" : "FALSE"); return;
   case T_INT:	buffer_print(buf, "%u", v.val.i); return;
   case T_STRING: buffer_print(buf, "%s", v.val.s); return;
-  case T_IP:	buffer_print(buf, "%I", v.val.px.ip); return;
-  case T_PREFIX: buffer_print(buf, "%I/%d", v.val.px.ip, v.val.px.len); return;
+  case T_IP:	buffer_print(buf, "%I", v.val.ip); return;
+  case T_NET:   buffer_print(buf, "%N", v.val.net); return;
   case T_PAIR:	buffer_print(buf, "(%u,%u)", v.val.i >> 16, v.val.i & 0xffff); return;
   case T_QUAD:	buffer_print(buf, "%R", v.val.i); return;
   case T_EC:	ec_format(buf2, v.val.ec); buffer_print(buf, "%s", buf2); return;
   case T_LC:	lc_format(buf2, v.val.lc); buffer_print(buf, "%s", buf2); return;
+  case T_RD:	rd_format(v.val.ec, buf2, 1024); buffer_print(buf, "%s", buf2); return;
   case T_PREFIX_SET: trie_format(v.val.ti, buf); return;
   case T_SET:	tree_format(v.val.t, buf); return;
   case T_ENUM:	buffer_print(buf, "(enum %x)%u", v.type, v.val.i); return;
@@ -550,14 +538,22 @@ val_format(struct f_val v, buffer *buf)
 
 static struct rte **f_rte;
 static struct rta *f_old_rta;
-static struct ea_list **f_tmp_attrs;
+static struct ea_list **f_eattrs;
 static struct linpool *f_pool;
 static struct buffer f_buf;
 static int f_flags;
 
+static inline void f_cache_eattrs(void)
+{
+  f_eattrs = &((*f_rte)->attrs->eattrs);
+}
+
 static inline void f_rte_cow(void)
 {
-  *f_rte = rte_cow(*f_rte);
+  if (!((*f_rte)->flags & REF_COW))
+    return;
+
+  *f_rte = rte_do_cow(*f_rte);
 }
 
 /*
@@ -582,31 +578,46 @@ f_rta_cow(void)
    * suppose hostentry is not changed by filters).
    */
   (*f_rte)->attrs = rta_do_cow((*f_rte)->attrs, f_pool);
+
+  /* Re-cache the ea_list */
+  f_cache_eattrs();
+}
+
+static char *
+val_format_str(struct f_val v) {
+  buffer b;
+  LOG_BUFFER_INIT(b);
+  val_format(v, &b);
+  return lp_strdup(f_pool, b.start);
 }
 
 static struct tbf rl_runtime_err = TBF_DEFAULT_LOG_LIMITS;
 
-#define runtime(x) do { \
+#define runtime(fmt, ...) do { \
     if (!(f_flags & FF_SILENT)) \
-      log_rl(&rl_runtime_err, L_ERR "filters, line %d: %s", what->lineno, x); \
+      log_rl(&rl_runtime_err, L_ERR "filters, line %d: " fmt, what->lineno, ##__VA_ARGS__); \
     res.type = T_RETURN; \
     res.val.i = F_ERROR; \
     return res; \
   } while(0)
 
-#define ARG(x,y) \
-	x = interpret(what->y); \
-	if (x.type & T_RETURN) \
-		return x;
+#define ARG_ANY(n) INTERPRET(v##n, what->a##n.p)
 
-#define ONEARG ARG(v1, a1.p)
-#define TWOARGS ARG(v1, a1.p) \
-		ARG(v2, a2.p)
-#define TWOARGS_C TWOARGS \
-                  if (v1.type != v2.type) \
-		    runtime( "Can't operate with values of incompatible types" );
+#define ARG(n,t) ARG_ANY(n) \
+    if (v##n.type != t) \
+      runtime("Argument %d of instruction %s must be of type %02x, got %02x", \
+	  n, f_instruction_name(what->fi_code), t, v##n.type);
+
+#define INTERPRET(val, what_) \
+    val = interpret(what_); \
+    if (val.type & T_RETURN) \
+      return val;
+
 #define ACCESS_RTE \
   do { if (!f_rte) runtime("No route to access"); } while (0)
+
+#define ACCESS_EATTRS \
+  do { if (!f_eattrs) f_cache_eattrs(); } while (0)
 
 #define BITFIELD_MASK(what) \
   (1u << (what->a2.i >> 24))
@@ -632,7 +643,7 @@ static struct f_val
 interpret(struct f_inst *what)
 {
   struct symbol *sym;
-  struct f_val v1, v2, res = { .type = T_VOID }, *vp;
+  struct f_val v1, v2, v3, res = { .type = T_VOID }, *vp;
   unsigned u1, u2;
   int i;
   u32 as;
@@ -642,61 +653,44 @@ interpret(struct f_inst *what)
   switch(what->fi_code) {
 /* Binary operators */
   case FI_ADD:
-    TWOARGS_C;
-    switch (res.type = v1.type) {
-    case T_VOID: runtime( "Can't operate with values of type void" );
-    case T_INT: res.val.i = v1.val.i + v2.val.i; break;
-    default: runtime( "Usage of unknown type" );
-    }
+    ARG(1,T_INT);
+    ARG(2,T_INT);
+    res.type = T_INT;
+    res.val.i = v1.val.i + v2.val.i;
     break;
   case FI_SUBTRACT:
-    TWOARGS_C;
-    switch (res.type = v1.type) {
-    case T_VOID: runtime( "Can't operate with values of type void" );
-    case T_INT: res.val.i = v1.val.i - v2.val.i; break;
-    default: runtime( "Usage of unknown type" );
-    }
+    ARG(1,T_INT);
+    ARG(2,T_INT);
+    res.type = T_INT;
+    res.val.i = v1.val.i - v2.val.i;
     break;
   case FI_MULTIPLY:
-    TWOARGS_C;
-    switch (res.type = v1.type) {
-    case T_VOID: runtime( "Can't operate with values of type void" );
-    case T_INT: res.val.i = v1.val.i * v2.val.i; break;
-    default: runtime( "Usage of unknown type" );
-    }
+    ARG(1,T_INT);
+    ARG(2,T_INT);
+    res.type = T_INT;
+    res.val.i = v1.val.i * v2.val.i;
     break;
   case FI_DIVIDE:
-    TWOARGS_C;
-    switch (res.type = v1.type) {
-    case T_VOID: runtime( "Can't operate with values of type void" );
-    case T_INT: if (v2.val.i == 0) runtime( "Mother told me not to divide by 0" );
-      	        res.val.i = v1.val.i / v2.val.i; break;
-    default: runtime( "Usage of unknown type" );
-    }
+    ARG(1,T_INT);
+    ARG(2,T_INT);
+    res.type = T_INT;
+    if (v2.val.i == 0) runtime( "Mother told me not to divide by 0" );
+    res.val.i = v1.val.i / v2.val.i;
     break;
-
   case FI_AND:
   case FI_OR:
-    ARG(v1, a1.p);
-    if (v1.type != T_BOOL)
-      runtime( "Can't do boolean operation on non-booleans" );
+    ARG(1,T_BOOL);
     if (v1.val.i == (what->fi_code == FI_OR)) {
       res.type = T_BOOL;
       res.val.i = v1.val.i;
-      break;
+    } else {
+      ARG(2,T_BOOL);
+      res = v2;
     }
-
-    ARG(v2, a2.p);
-    if (v2.type != T_BOOL)
-      runtime( "Can't do boolean operation on non-booleans" );
-    res.type = T_BOOL;
-    res.val.i = v2.val.i;
     break;
-
   case FI_PAIR_CONSTRUCT:
-    TWOARGS;
-    if ((v1.type != T_INT) || (v2.type != T_INT))
-      runtime( "Can't operate with value of non-integer type in pair constructor" );
+    ARG(1,T_INT);
+    ARG(2,T_INT);
     u1 = v1.val.i;
     u2 = v2.val.i;
     if ((u1 > 0xFFFF) || (u2 > 0xFFFF))
@@ -707,7 +701,8 @@ interpret(struct f_inst *what)
 
   case FI_EC_CONSTRUCT:
     {
-      TWOARGS;
+      ARG_ANY(1);
+      ARG(2, T_INT);
 
       int check, ipv4_used;
       u32 key, val;
@@ -718,17 +713,13 @@ interpret(struct f_inst *what)
       else if (v1.type == T_QUAD) {
 	ipv4_used = 1; key = v1.val.i;
       }
-#ifndef IPV6
       /* IP->Quad implicit conversion */
-      else if (v1.type == T_IP) {
-	ipv4_used = 1; key = ipa_to_u32(v1.val.px.ip);
+      else if (val_is_ip4(v1)) {
+	ipv4_used = 1; key = ipa_to_u32(v1.val.ip);
       }
-#endif
       else
 	runtime("Can't operate with key of non-integer/IPv4 type in EC constructor");
 
-      if (v2.type != T_INT)
-	runtime("Can't operate with value of non-integer type in EC constructor");
       val = v2.val.i;
 
       /* XXXX */
@@ -755,15 +746,9 @@ interpret(struct f_inst *what)
 
   case FI_LC_CONSTRUCT:
     {
-      TWOARGS;
-
-      /* Third argument hack */
-      struct f_val v3 = interpret(INST3(what).p);
-      if (v3.type & T_RETURN)
-	return v3;
-
-      if ((v1.type != T_INT) || (v2.type != T_INT) || (v3.type != T_INT))
-	runtime( "Can't operate with value of non-integer type in LC constructor" );
+      ARG(1, T_INT);
+      ARG(2, T_INT);
+      ARG(3, T_INT);
 
       res.type = T_LC;
       res.val.lc = (lcomm) { v1.val.i, v2.val.i, v3.val.i };
@@ -778,7 +763,8 @@ interpret(struct f_inst *what)
       while (tt) {
 	*vv = lp_alloc(f_pool, sizeof(struct f_path_mask));
 	if (tt->kind == PM_ASN_EXPR) {
-	  struct f_val res = interpret((struct f_inst *) tt->val);
+	  struct f_val res;
+	  INTERPRET(res, (struct f_inst *) tt->val);
 	  (*vv)->kind = PM_ASN;
 	  if (res.type != T_INT) {
 	    runtime( "Error resolving path mask template: value not an integer" );
@@ -800,7 +786,8 @@ interpret(struct f_inst *what)
 /* Relational operators */
 
 #define COMPARE(x) \
-    TWOARGS; \
+    ARG_ANY(1); \
+    ARG_ANY(2); \
     i = val_compare(v1, v2); \
     if (i==CMP_ERROR) \
       runtime( "Can't compare values of incompatible types" ); \
@@ -809,7 +796,8 @@ interpret(struct f_inst *what)
     break;
 
 #define SAME(x) \
-    TWOARGS; \
+    ARG_ANY(1); \
+    ARG_ANY(2); \
     i = val_same(v1, v2); \
     res.type = T_BOOL; \
     res.val.i = (x); \
@@ -821,15 +809,14 @@ interpret(struct f_inst *what)
   case FI_LTE: COMPARE(i!=1);
 
   case FI_NOT:
-    ONEARG;
-    if (v1.type != T_BOOL)
-      runtime( "Not applied to non-boolean" );
+    ARG(1,T_BOOL);
     res = v1;
     res.val.i = !res.val.i;
     break;
 
   case FI_MATCH:
-    TWOARGS;
+    ARG_ANY(1);
+    ARG_ANY(2);
     res.type = T_BOOL;
     res.val.i = val_in_range(v1, v2);
     if (res.val.i == CMP_ERROR)
@@ -838,7 +825,8 @@ interpret(struct f_inst *what)
     break;
 
   case FI_NOT_MATCH:
-    TWOARGS;
+    ARG_ANY(1);
+    ARG_ANY(2);
     res.type = T_BOOL;
     res.val.i = val_in_range(v1, v2);
     if (res.val.i == CMP_ERROR)
@@ -847,25 +835,42 @@ interpret(struct f_inst *what)
     break;
 
   case FI_DEFINED:
-    ONEARG;
+    ARG_ANY(1);
     res.type = T_BOOL;
-    res.val.i = (v1.type != T_VOID);
+    res.val.i = (v1.type != T_VOID) && !undef_value(v1);
+    break;
+  case FI_TYPE:
+    ARG_ANY(1); /* There may be more types supporting this operation */
+    switch (v1.type)
+    {
+      case T_NET:
+	res.type = T_ENUM_NETTYPE;
+	res.val.i = v1.val.net->type;
+	break;
+      default:
+	runtime( "Can't determine type of this item" );
+    }
+    break;
+  case FI_IS_V4:
+    ARG(1, T_IP);
+    res.type = T_BOOL;
+    res.val.i = ipa_is_ip4(v1.val.ip);
     break;
 
   /* Set to indirect value, a1 = variable, a2 = value */
   case FI_SET:
-    ARG(v2, a2.p);
+    ARG_ANY(2);
     sym = what->a1.p;
     vp = sym->def;
-    if ((sym->class != (SYM_VARIABLE | v2.type)) && (v2.type != T_VOID)) {
-#ifndef IPV6
+    if ((sym->class != (SYM_VARIABLE | v2.type)) && (v2.type != T_VOID))
+    {
       /* IP->Quad implicit conversion */
-      if ((sym->class == (SYM_VARIABLE | T_QUAD)) && (v2.type == T_IP)) {
+      if ((sym->class == (SYM_VARIABLE | T_QUAD)) && val_is_ip4(v2))
+      {
 	vp->type = T_QUAD;
-	vp->val.i = ipa_to_u32(v2.val.px.ip);
+	vp->val.i = ipa_to_u32(v2.val.ip);
 	break;
       }
-#endif
       runtime( "Assigning to variable of incompatible type" );
     }
     *vp = v2;
@@ -889,24 +894,23 @@ interpret(struct f_inst *what)
     res = * ((struct f_val *) what->a1.p);
     break;
   case FI_PRINT:
-    ONEARG;
+    ARG_ANY(1);
     val_format(v1, &f_buf);
     break;
   case FI_CONDITION:	/* ? has really strange error value, so we can implement if ... else nicely :-) */
-    ONEARG;
-    if (v1.type != T_BOOL)
-      runtime( "If requires boolean expression" );
+    ARG(1, T_BOOL);
     if (v1.val.i) {
-      ARG(res,a2.p);
+      ARG_ANY(2);
       res.val.i = 0;
-    } else res.val.i = 1;
+    } else
+      res.val.i = 1;
     res.type = T_BOOL;
     break;
   case FI_NOP:
     debug( "No operation\n" );
     break;
   case FI_PRINT_AND_DIE:
-    ONEARG;
+    ARG_ANY(1);
     if ((what->a2.i == F_NOP || (what->a2.i != F_NONL && what->a1.p)) &&
 	!(f_flags & FF_SILENT))
       log_commit(*L_INFO, &f_buf);
@@ -936,17 +940,15 @@ interpret(struct f_inst *what)
 
       switch (what->a2.i)
       {
-      case SA_FROM:	res.val.px.ip = rta->from; break;
-      case SA_GW:	res.val.px.ip = rta->gw; break;
-      case SA_NET:	res.val.px.ip = (*f_rte)->net->n.prefix;
-			res.val.px.len = (*f_rte)->net->n.pxlen; break;
+      case SA_FROM:	res.val.ip = rta->from; break;
+      case SA_GW:	res.val.ip = rta->nh.gw; break;
+      case SA_NET:	res.val.net = (*f_rte)->net->n.addr; break;
       case SA_PROTO:	res.val.s = rta->src->proto->name; break;
       case SA_SOURCE:	res.val.i = rta->source; break;
       case SA_SCOPE:	res.val.i = rta->scope; break;
-      case SA_CAST:	res.val.i = rta->cast; break;
       case SA_DEST:	res.val.i = rta->dest; break;
-      case SA_IFNAME:	res.val.s = rta->iface ? rta->iface->name : ""; break;
-      case SA_IFINDEX:	res.val.i = rta->iface ? rta->iface->index : 0; break;
+      case SA_IFNAME:	res.val.s = rta->nh.iface ? rta->nh.iface->name : ""; break;
+      case SA_IFINDEX:	res.val.i = rta->nh.iface ? rta->nh.iface->index : 0; break;
 
       default:
 	bug("Invalid static attribute access (%x)", res.type);
@@ -955,7 +957,7 @@ interpret(struct f_inst *what)
     break;
   case FI_RTA_SET:
     ACCESS_RTE;
-    ONEARG;
+    ARG_ANY(1);
     if (what->aux != v1.type)
       runtime( "Attempt to set static attribute to incompatible type" );
 
@@ -966,20 +968,20 @@ interpret(struct f_inst *what)
       switch (what->a2.i)
       {
       case SA_FROM:
-	rta->from = v1.val.px.ip;
+	rta->from = v1.val.ip;
 	break;
 
       case SA_GW:
 	{
-	  ip_addr ip = v1.val.px.ip;
-	  neighbor *n = neigh_find(rta->src->proto, &ip, 0);
+	  ip_addr ip = v1.val.ip;
+	  neighbor *n = neigh_find(rta->src->proto, ip, NULL, 0);
 	  if (!n || (n->scope == SCOPE_HOST))
 	    runtime( "Invalid gw address" );
 
-	  rta->dest = RTD_ROUTER;
-	  rta->gw = ip;
-	  rta->iface = n->iface;
-	  rta->nexthops = NULL;
+	  rta->dest = RTD_UNICAST;
+	  rta->nh.gw = ip;
+	  rta->nh.iface = n->iface;
+	  rta->nh.next = NULL;
 	  rta->hostentry = NULL;
 	}
 	break;
@@ -994,9 +996,9 @@ interpret(struct f_inst *what)
 	  runtime( "Destination can be changed only to blackhole, unreachable or prohibit" );
 
 	rta->dest = i;
-	rta->gw = IPA_NONE;
-	rta->iface = NULL;
-	rta->nexthops = NULL;
+	rta->nh.gw = IPA_NONE;
+	rta->nh.iface = NULL;
+	rta->nh.next = NULL;
 	rta->hostentry = NULL;
 	break;
 
@@ -1006,10 +1008,10 @@ interpret(struct f_inst *what)
 	  if (!ifa)
 	    runtime( "Invalid iface name" );
 
-	  rta->dest = RTD_DEVICE;
-	  rta->gw = IPA_NONE;
-	  rta->iface = ifa;
-	  rta->nexthops = NULL;
+	  rta->dest = RTD_UNICAST;
+	  rta->nh.gw = IPA_NONE;
+	  rta->nh.iface = ifa;
+	  rta->nh.next = NULL;
 	  rta->hostentry = NULL;
 	}
 	break;
@@ -1021,36 +1023,38 @@ interpret(struct f_inst *what)
     break;
   case FI_EA_GET:	/* Access to extended attributes */
     ACCESS_RTE;
+    ACCESS_EATTRS;
     {
-      eattr *e = NULL;
       u16 code = what->a2.i;
-
-      if (!(f_flags & FF_FORCE_TMPATTR))
-	e = ea_find((*f_rte)->attrs->eattrs, code);
-      if (!e)
-	e = ea_find((*f_tmp_attrs), code);
-      if ((!e) && (f_flags & FF_FORCE_TMPATTR))
-	e = ea_find((*f_rte)->attrs->eattrs, code);
+      int f_type = what->aux >> 8;
+      eattr *e = ea_find(*f_eattrs, code);
 
       if (!e) {
-	/* A special case: undefined int_set looks like empty int_set */
+	/* A special case: undefined as_path looks like empty as_path */
+	if ((what->aux & EAF_TYPE_MASK) == EAF_TYPE_AS_PATH) {
+	  res.type = T_PATH;
+	  res.val.ad = &undef_adata;
+	  break;
+	}
+
+	/* The same special case for int_set */
 	if ((what->aux & EAF_TYPE_MASK) == EAF_TYPE_INT_SET) {
 	  res.type = T_CLIST;
-	  res.val.ad = adata_empty(f_pool, 0);
+	  res.val.ad = &undef_adata;
 	  break;
 	}
 
 	/* The same special case for ec_set */
 	if ((what->aux & EAF_TYPE_MASK) == EAF_TYPE_EC_SET) {
 	  res.type = T_ECLIST;
-	  res.val.ad = adata_empty(f_pool, 0);
+	  res.val.ad = &undef_adata;
 	  break;
 	}
 
 	/* The same special case for lc_set */
 	if ((what->aux & EAF_TYPE_MASK) == EAF_TYPE_LC_SET) {
 	  res.type = T_LCLIST;
-	  res.val.ad = adata_empty(f_pool, 0);
+	  res.val.ad = &undef_adata;
 	  break;
 	}
 
@@ -1059,9 +1063,9 @@ interpret(struct f_inst *what)
 	break;
       }
 
-      switch (what->aux & EAF_TYPE_MASK) {
+      switch (e->type & EAF_TYPE_MASK) {
       case EAF_TYPE_INT:
-	res.type = T_INT;
+	res.type = f_type;
 	res.val.i = e->u.data;
 	break;
       case EAF_TYPE_ROUTER_ID:
@@ -1075,7 +1079,7 @@ interpret(struct f_inst *what)
       case EAF_TYPE_IP_ADDRESS:
 	res.type = T_IP;
 	struct adata * ad = e->u.ptr;
-	res.val.px.ip = * (ip_addr *) ad->data;
+	res.val.ip = * (ip_addr *) ad->data;
 	break;
       case EAF_TYPE_AS_PATH:
         res.type = T_PATH;
@@ -1107,34 +1111,33 @@ interpret(struct f_inst *what)
     break;
   case FI_EA_SET:
     ACCESS_RTE;
-    ONEARG;
+    ACCESS_EATTRS;
+    ARG_ANY(1);
     {
       struct ea_list *l = lp_alloc(f_pool, sizeof(struct ea_list) + sizeof(eattr));
       u16 code = what->a2.i;
+      int f_type = what->aux >> 8;
 
       l->next = NULL;
       l->flags = EALF_SORTED;
       l->count = 1;
       l->attrs[0].id = code;
       l->attrs[0].flags = 0;
-      l->attrs[0].type = what->aux | EAF_ORIGINATED;
+      l->attrs[0].type = (what->aux & 0xff) | EAF_ORIGINATED | EAF_FRESH;
 
       switch (what->aux & EAF_TYPE_MASK) {
       case EAF_TYPE_INT:
-	// Enums are also ints, so allow them in.
-	if (v1.type != T_INT && (v1.type < T_ENUM_LO || v1.type > T_ENUM_HI))
+	if (v1.type != f_type)
 	  runtime( "Setting int attribute to non-int value" );
 	l->attrs[0].u.data = v1.val.i;
 	break;
 
       case EAF_TYPE_ROUTER_ID:
-#ifndef IPV6
 	/* IP->Quad implicit conversion */
-	if (v1.type == T_IP) {
-	  l->attrs[0].u.data = ipa_to_u32(v1.val.px.ip);
+	if (val_is_ip4(v1)) {
+	  l->attrs[0].u.data = ipa_to_u32(v1.val.ip);
 	  break;
 	}
-#endif
 	/* T_INT for backward compatibility */
 	if ((v1.type != T_QUAD) && (v1.type != T_INT))
 	  runtime( "Setting quad attribute to non-quad value" );
@@ -1150,7 +1153,7 @@ interpret(struct f_inst *what)
 	int len = sizeof(ip_addr);
 	struct adata *ad = lp_alloc(f_pool, sizeof(struct adata) + len);
 	ad->length = len;
-	(* (ip_addr *) ad->data) = v1.val.px.ip;
+	(* (ip_addr *) ad->data) = v1.val.ip;
 	l->attrs[0].u.ptr = ad;
 	break;
       case EAF_TYPE_AS_PATH:
@@ -1163,13 +1166,7 @@ interpret(struct f_inst *what)
 	  runtime( "Setting bit in bitfield attribute to non-bool value" );
 	{
 	  /* First, we have to find the old value */
-	  eattr *e = NULL;
-	  if (!(f_flags & FF_FORCE_TMPATTR))
-	    e = ea_find((*f_rte)->attrs->eattrs, code);
-	  if (!e)
-	    e = ea_find((*f_tmp_attrs), code);
-	  if ((!e) && (f_flags & FF_FORCE_TMPATTR))
-	    e = ea_find((*f_rte)->attrs->eattrs, code);
+	  eattr *e = ea_find(*f_eattrs, code);
 	  u32 data = e ? e->u.data : 0;
 
 	  if (v1.val.i)
@@ -1201,14 +1198,9 @@ interpret(struct f_inst *what)
       default: bug("Unknown type in e,S");
       }
 
-      if (!(what->aux & EAF_TEMP) && (!(f_flags & FF_FORCE_TMPATTR))) {
-	f_rta_cow();
-	l->next = (*f_rte)->attrs->eattrs;
-	(*f_rte)->attrs->eattrs = l;
-      } else {
-	l->next = (*f_tmp_attrs);
-	(*f_tmp_attrs) = l;
-      }
+      f_rta_cow();
+      l->next = *f_eattrs;
+      *f_eattrs = l;
     }
     break;
   case FI_PREF_GET:
@@ -1218,19 +1210,17 @@ interpret(struct f_inst *what)
     break;
   case FI_PREF_SET:
     ACCESS_RTE;
-    ONEARG;
-    if (v1.type != T_INT)
-      runtime( "Can't set preference to non-integer" );
+    ARG(1,T_INT);
     if (v1.val.i > 0xFFFF)
       runtime( "Setting preference value out of bounds" );
     f_rte_cow();
     (*f_rte)->pref = v1.val.i;
     break;
   case FI_LENGTH:	/* Get length of */
-    ONEARG;
+    ARG_ANY(1);
     res.type = T_INT;
     switch(v1.type) {
-    case T_PREFIX: res.val.i = v1.val.px.len; break;
+    case T_NET:    res.val.i = net_pxlen(v1.val.net); break;
     case T_PATH:   res.val.i = as_path_getlen(v1.val.ad); break;
     case T_CLIST:  res.val.i = int_set_get_size(v1.val.ad); break;
     case T_ECLIST: res.val.i = ec_set_get_size(v1.val.ad); break;
@@ -1238,21 +1228,55 @@ interpret(struct f_inst *what)
     default: runtime( "Prefix, path, clist or eclist expected" );
     }
     break;
-  case FI_IP:	/* Convert prefix to ... */
-    ONEARG;
-    if (v1.type != T_PREFIX)
-      runtime( "Prefix expected" );
-    res.type = what->aux;
-    switch(res.type) {
-      /*    case T_INT:	res.val.i = v1.val.px.len; break; Not needed any more */
-    case T_IP: res.val.px.ip = v1.val.px.ip; break;
-    default: bug( "Unknown prefix to conversion" );
+  case FI_SADR_SRC: 	/* Get SADR src prefix */
+    ARG(1, T_NET);
+    if (!net_is_sadr(v1.val.net))
+      runtime( "SADR expected" );
+
+    {
+      net_addr_ip6_sadr *net = (void *) v1.val.net;
+      net_addr *src = lp_alloc(f_pool, sizeof(net_addr_ip6));
+      net_fill_ip6(src, net->src_prefix, net->src_pxlen);
+
+      res.type = T_NET;
+      res.val.net = src;
     }
     break;
+  case FI_ROA_MAXLEN: 	/* Get ROA max prefix length */
+    ARG(1, T_NET);
+    if (!net_is_roa(v1.val.net))
+      runtime( "ROA expected" );
+
+    res.type = T_INT;
+    res.val.i = (v1.val.net->type == NET_ROA4) ?
+      ((net_addr_roa4 *) v1.val.net)->max_pxlen :
+      ((net_addr_roa6 *) v1.val.net)->max_pxlen;
+    break;
+  case FI_ROA_ASN: 	/* Get ROA ASN */
+    ARG(1, T_NET);
+    if (!net_is_roa(v1.val.net))
+      runtime( "ROA expected" );
+
+    res.type = T_INT;
+    res.val.i = (v1.val.net->type == NET_ROA4) ?
+      ((net_addr_roa4 *) v1.val.net)->asn :
+      ((net_addr_roa6 *) v1.val.net)->asn;
+    break;
+  case FI_IP:	/* Convert prefix to ... */
+    ARG(1, T_NET);
+    res.type = T_IP;
+    res.val.ip = net_prefix(v1.val.net);
+    break;
+  case FI_ROUTE_DISTINGUISHER:
+    ARG(1, T_NET);
+    res.type = T_IP;
+    if (!net_is_vpn(v1.val.net))
+      runtime( "VPN address expected" );
+    res.type = T_RD;
+    res.val.ec = net_rd(v1.val.net);
+    break;
   case FI_AS_PATH_FIRST:	/* Get first ASN from AS PATH */
-    ONEARG;
-    if (v1.type != T_PATH)
-      runtime( "AS path expected" );
+    ARG(1, T_PATH);
 
     as = 0;
     as_path_get_first(v1.val.ad, &as);
@@ -1260,9 +1284,7 @@ interpret(struct f_inst *what)
     res.val.i = as;
     break;
   case FI_AS_PATH_LAST:	/* Get last ASN from AS PATH */
-    ONEARG;
-    if (v1.type != T_PATH)
-      runtime( "AS path expected" );
+    ARG(1, T_PATH);
 
     as = 0;
     as_path_get_last(v1.val.ad, &as);
@@ -1270,20 +1292,18 @@ interpret(struct f_inst *what)
     res.val.i = as;
     break;
   case FI_AS_PATH_LAST_NAG:	/* Get last ASN from non-aggregated part of AS PATH */
-    ONEARG;
-    if (v1.type != T_PATH)
-      runtime( "AS path expected" );
+    ARG(1, T_PATH);
 
     res.type = T_INT;
     res.val.i = as_path_get_last_nonaggregated(v1.val.ad);
     break;
   case FI_RETURN:
-    ONEARG;
+    ARG_ANY(1);
     res = v1;
     res.type |= T_RETURN;
     return res;
   case FI_CALL: /* CALL: this is special: if T_RETURN and returning some value, mask it out  */
-    ONEARG;
+    ARG_ANY(1);
     res = interpret(what->a2.p);
     if (res.type == T_RETURN)
       return res;
@@ -1294,7 +1314,7 @@ interpret(struct f_inst *what)
       ((struct f_val *) sym->def)->type = T_VOID;
     break;
   case FI_SWITCH:
-    ONEARG;
+    ARG_ANY(1);
     {
       struct f_tree *t = find_tree(what->a2.p, v1);
       if (!t) {
@@ -1307,22 +1327,17 @@ interpret(struct f_inst *what)
       }
       /* It is actually possible to have t->data NULL */
 
-      res = interpret(t->data);
-      if (res.type & T_RETURN)
-	return res;
+      INTERPRET(res, t->data);
     }
     break;
   case FI_IP_MASK: /* IP.MASK(val) */
-    TWOARGS;
-    if (v2.type != T_INT)
-      runtime( "Integer expected");
-    if (v1.type != T_IP)
-      runtime( "You can mask only IP addresses" );
-    {
-      ip_addr mask = ipa_mkmask(v2.val.i);
-      res.type = T_IP;
-      res.val.px.ip = ipa_and(mask, v1.val.px.ip);
-    }
+    ARG(1, T_IP);
+    ARG(2, T_INT);
+
+    res.type = T_IP;
+    res.val.ip = ipa_is_ip4(v1.val.ip) ?
+      ipa_from_ip4(ip4_and(ipa_to_ip4(v1.val.ip), ip4_mkmask(v2.val.i))) :
+      ipa_from_ip6(ip6_and(ipa_to_ip6(v1.val.ip), ip6_mkmask(v2.val.i)));
     break;
 
   case FI_EMPTY:	/* Create empty attribute */
@@ -1330,18 +1345,16 @@ interpret(struct f_inst *what)
     res.val.ad = adata_empty(f_pool, 0);
     break;
   case FI_PATH_PREPEND:	/* Path prepend */
-    TWOARGS;
-    if (v1.type != T_PATH)
-      runtime("Can't prepend to non-path");
-    if (v2.type != T_INT)
-      runtime("Can't prepend non-integer");
+    ARG(1, T_PATH);
+    ARG(2, T_INT);
 
     res.type = T_PATH;
     res.val.ad = as_path_prepend(f_pool, v1.val.ad, v2.val.i);
     break;
 
   case FI_CLIST_ADD_DEL:	/* (Extended) Community list add or delete */
-    TWOARGS;
+    ARG_ANY(1);
+    ARG_ANY(2);
     if (v1.type == T_PATH)
     {
       struct f_tree *set = NULL;
@@ -1378,11 +1391,9 @@ interpret(struct f_inst *what)
 
       if ((v2.type == T_PAIR) || (v2.type == T_QUAD))
 	n = v2.val.i;
-#ifndef IPV6
       /* IP->Quad implicit conversion */
-      else if (v2.type == T_IP)
-	n = ipa_to_u32(v2.val.px.ip);
-#endif
+      else if (val_is_ip4(v2))
+	n = ipa_to_u32(v2.val.ip);
       else if ((v2.type == T_SET) && clist_set_type(v2.val.t, &dummy))
 	arg_set = 1;
       else if (v2.type == T_CLIST)
@@ -1511,21 +1522,20 @@ interpret(struct f_inst *what)
   case FI_ROA_CHECK:	/* ROA Check */
     if (what->arg1)
     {
-      TWOARGS;
-      if ((v1.type != T_PREFIX) || (v2.type != T_INT))
-	runtime("Invalid argument to roa_check()");
+      ARG(1, T_NET);
+      ARG(2, T_INT);
 
       as = v2.val.i;
     }
     else
     {
       ACCESS_RTE;
-      v1.val.px.ip = (*f_rte)->net->n.prefix;
-      v1.val.px.len = (*f_rte)->net->n.pxlen;
+      ACCESS_EATTRS;
+      v1.val.net = (*f_rte)->net->n.addr;
 
       /* We ignore temporary attributes, probably not a problem here */
       /* 0x02 is a value of BA_AS_PATH, we don't want to include BGP headers */
-      eattr *e = ea_find((*f_rte)->attrs->eattrs, EA_CODE(EAP_BGP, 0x02));
+      eattr *e = ea_find(*f_eattrs, EA_CODE(PROTOCOL_BGP, 0x02));
 
       if (!e || ((e->type & EAF_TYPE_MASK) != EAF_TYPE_AS_PATH))
 	runtime("Missing AS_PATH attribute");
@@ -1533,12 +1543,36 @@ interpret(struct f_inst *what)
       as_path_get_last(e->u.ptr, &as);
     }
 
-    struct roa_table_config *rtc = ((struct f_inst_roa_check *) what)->rtc;
-    if (!rtc->table)
+    struct rtable *table = ((struct f_inst_roa_check *) what)->rtc->table;
+    if (!table)
       runtime("Missing ROA table");
 
+    if (table->addr_type != NET_ROA4 && table->addr_type != NET_ROA6)
+      runtime("Table type must be either ROA4 or ROA6");
+
     res.type = T_ENUM_ROA;
-    res.val.i = roa_check(rtc->table, v1.val.px.ip, v1.val.px.len, as);
+
+    if (table->addr_type != (v1.val.net->type == NET_IP4 ? NET_ROA4 : NET_ROA6))
+      res.val.i = ROA_UNKNOWN; /* Prefix and table type mismatch */
+    else
+      res.val.i = net_roa_check(table, v1.val.net, as);
+
+    break;
+
+  case FI_FORMAT:	/* Format */
+    ARG_ANY(1);
+
+    res.type = T_STRING;
+    res.val.s = val_format_str(v1);
+    break;
+
+  case FI_ASSERT:	/* Birdtest Assert */
+    ARG(1, T_BOOL);
+
+    res.type = v1.type;
+    res.val = v1.val;
+
+    CALL(bt_assert_hook, res.val.i, what);
     break;
 
   default:
@@ -1548,13 +1582,15 @@ interpret(struct f_inst *what)
 }
 
 #undef ARG
-#define ARG(x,y) \
-	if (!i_same(f1->y, f2->y)) \
+#undef ARG_ANY
+
+#define ARG(n) \
+	if (!i_same(f1->a##n.p, f2->a##n.p)) \
 		return 0;
 
-#define ONEARG ARG(v1, a1.p)
-#define TWOARGS ARG(v1, a1.p) \
-		ARG(v2, a2.p)
+#define ONEARG		ARG(1);
+#define TWOARGS		ONEARG; ARG(2);
+#define THREEARGS	TWOARGS; ARG(3);
 
 #define A2_SAME if (f1->a2.i != f2->a2.i) return 0;
 
@@ -1595,15 +1631,14 @@ i_same(struct f_inst *f1, struct f_inst *f2)
   case FI_NOT_MATCH:
   case FI_MATCH: TWOARGS; break;
   case FI_DEFINED: ONEARG; break;
+  case FI_TYPE: ONEARG; break;
 
   case FI_LC_CONSTRUCT:
-    TWOARGS;
-    if (!i_same(INST3(f1).p, INST3(f2).p))
-      return 0;
+    THREEARGS;
     break;
 
   case FI_SET:
-    ARG(v2, a2.p);
+    ARG(2);
     {
       struct symbol *s1, *s2;
       s1 = f1->a1.p;
@@ -1659,7 +1694,12 @@ i_same(struct f_inst *f1, struct f_inst *f2)
   case FI_EA_SET: ONEARG; A2_SAME; break;
 
   case FI_RETURN: ONEARG; break;
+  case FI_ROA_MAXLEN: ONEARG; break;
+  case FI_ROA_ASN: ONEARG; break;
+  case FI_SADR_SRC: ONEARG; break;
   case FI_IP: ONEARG; break;
+  case FI_IS_V4: ONEARG; break;
+  case FI_ROUTE_DISTINGUISHER: ONEARG; break;
   case FI_CALL: /* Call rewriting trickery to avoid exponential behaviour */
              ONEARG;
 	     if (!i_same(f1->a2.p, f2->a2.p))
@@ -1676,11 +1716,13 @@ i_same(struct f_inst *f1, struct f_inst *f2)
   case FI_AS_PATH_LAST_NAG: ONEARG; break;
   case FI_ROA_CHECK:
     TWOARGS;
-    /* Does not really make sense - ROA check resuls may change anyway */
+    /* Does not really make sense - ROA check results may change anyway */
     if (strcmp(((struct f_inst_roa_check *) f1)->rtc->name,
 	       ((struct f_inst_roa_check *) f2)->rtc->name))
       return 0;
     break;
+  case FI_FORMAT: ONEARG; break;
+  case FI_ASSERT: ONEARG; break;
   default:
     bug( "Unknown instruction %d in same (%c)", f1->fi_code, f1->fi_code & 0xff);
   }
@@ -1691,7 +1733,6 @@ i_same(struct f_inst *f1, struct f_inst *f2)
  * f_run - run a filter for a route
  * @filter: filter to run
  * @rte: route being filtered, may be modified
- * @tmp_attrs: temporary attributes, prepared by caller or generated by f_run()
  * @tmp_pool: all filter allocations go from this pool
  * @flags: flags
  *
@@ -1713,7 +1754,7 @@ i_same(struct f_inst *f1, struct f_inst *f2)
  * modified in place, old cached rta is possibly freed.
  */
 int
-f_run(struct filter *filter, struct rte **rte, struct ea_list **tmp_attrs, struct linpool *tmp_pool, int flags)
+f_run(struct filter *filter, struct rte **rte, struct linpool *tmp_pool, int flags)
 {
   if (filter == FILTER_ACCEPT)
     return F_ACCEPT;
@@ -1725,8 +1766,8 @@ f_run(struct filter *filter, struct rte **rte, struct ea_list **tmp_attrs, struc
   DBG( "Running filter `%s'...", filter->name );
 
   f_rte = rte;
+  f_eattrs = NULL;
   f_old_rta = NULL;
-  f_tmp_attrs = tmp_attrs;
   f_pool = tmp_pool;
   f_flags = flags;
 
@@ -1768,11 +1809,10 @@ f_run(struct filter *filter, struct rte **rte, struct ea_list **tmp_attrs, struc
 struct f_val
 f_eval_rte(struct f_inst *expr, struct rte **rte, struct linpool *tmp_pool)
 {
-  struct ea_list *tmp_attrs = NULL;
 
   f_rte = rte;
+  f_eattrs = NULL;
   f_old_rta = NULL;
-  f_tmp_attrs = &tmp_attrs;
   f_pool = tmp_pool;
   f_flags = 0;
 
@@ -1781,9 +1821,6 @@ f_eval_rte(struct f_inst *expr, struct rte **rte, struct linpool *tmp_pool)
   /* Note that in this function we assume that rte->attrs is private / uncached */
   struct f_val res = interpret(expr);
 
-  /* Hack to include EAF_TEMP attributes to the main list */
-  (*rte)->attrs->eattrs = ea_append(tmp_attrs, (*rte)->attrs->eattrs);
-
   return res;
 }
 
@@ -1791,7 +1828,7 @@ struct f_val
 f_eval(struct f_inst *expr, struct linpool *tmp_pool)
 {
   f_flags = 0;
-  f_tmp_attrs = NULL;
+  f_eattrs = NULL;
   f_rte = NULL;
   f_pool = tmp_pool;
 

@@ -14,7 +14,7 @@
 struct ospf_hello2_packet
 {
   struct ospf_packet hdr;
-  union ospf_auth auth;
+  union ospf_auth2 auth;
 
   u32 netmask;
   u16 helloint;
@@ -32,10 +32,7 @@ struct ospf_hello3_packet
   struct ospf_packet hdr;
 
   u32 iface_id;
-  u8 priority;
-  u8 options3;
-  u8 options2;
-  u8 options;
+  u32 options;
   u16 helloint;
   u16 deadint;
   u32 dr;
@@ -44,6 +41,13 @@ struct ospf_hello3_packet
   u32 neighbors[];
 };
 
+
+uint
+ospf_hello3_options(struct ospf_packet *pkt)
+{
+  struct ospf_hello3_packet *ps = (void *) pkt;
+  return ntohl(ps->options) & 0x00FFFFFF;
+}
 
 void
 ospf_send_hello(struct ospf_iface *ifa, int kind, struct ospf_neighbor *dirn)
@@ -74,7 +78,7 @@ ospf_send_hello(struct ospf_iface *ifa, int kind, struct ospf_neighbor *dirn)
 	((ifa->type == OSPF_IT_PTP) && !ifa->ptp_netmask))
       ps->netmask = 0;
     else
-      ps->netmask = htonl(u32_mkmask(ifa->addr->pxlen));
+      ps->netmask = htonl(u32_mkmask(ifa->addr->prefix.pxlen));
 
     ps->helloint = ntohs(ifa->helloint);
     ps->options = ifa->oa->options;
@@ -89,12 +93,10 @@ ospf_send_hello(struct ospf_iface *ifa, int kind, struct ospf_neighbor *dirn)
   else
   {
     struct ospf_hello3_packet *ps = (void *) pkt;
+    u32 options = ifa->oa->options | (ifa->autype == OSPF_AUTH_CRYPT ? OPT_AT : 0);
 
     ps->iface_id = htonl(ifa->iface_id);
-    ps->priority = ifa->priority;
-    ps->options3 = ifa->oa->options >> 16;
-    ps->options2 = ifa->oa->options >> 8;
-    ps->options = ifa->oa->options;
+    ps->options = ntohl(options | (ifa->priority << 24));
     ps->helloint = ntohs(ifa->helloint);
     ps->deadint = htons(ifa->deadint);
     ps->dr = htonl(ifa->drid);
@@ -190,7 +192,8 @@ ospf_receive_hello(struct ospf_packet *pkt, struct ospf_iface *ifa,
   struct ospf_proto *p = ifa->oa->po;
   const char *err_dsc = NULL;
   u32 rcv_iface_id, rcv_helloint, rcv_deadint, rcv_dr, rcv_bdr;
-  u8 rcv_options, rcv_priority;
+  uint rcv_options, rcv_priority;
+  uint loc_options = ifa->oa->options;
   u32 *neighbors;
   u32 neigh_count;
   uint plen, i, err_val = 0;
@@ -198,7 +201,7 @@ ospf_receive_hello(struct ospf_packet *pkt, struct ospf_iface *ifa,
   /* RFC 2328 10.5 */
 
   /*
-   * We may not yet havethe associate neighbor, so we use Router ID from the
+   * We may not yet have the associate neighbor, so we use Router ID from the
    * packet instead of one from the neighbor structure for log messages.
    */
   u32 rcv_rid = ntohl(pkt->routerid);
@@ -227,7 +230,7 @@ ospf_receive_hello(struct ospf_packet *pkt, struct ospf_iface *ifa,
 
     if ((ifa->type != OSPF_IT_VLINK) &&
 	(ifa->type != OSPF_IT_PTP) &&
-	((uint) pxlen != ifa->addr->pxlen))
+	((uint) pxlen != ifa->addr->prefix.pxlen))
       DROP("prefix length mismatch", pxlen);
 
     neighbors = ps->neighbors;
@@ -245,8 +248,8 @@ ospf_receive_hello(struct ospf_packet *pkt, struct ospf_iface *ifa,
     rcv_deadint = ntohs(ps->deadint);
     rcv_dr = ntohl(ps->dr);
     rcv_bdr = ntohl(ps->bdr);
-    rcv_options = ps->options;
-    rcv_priority = ps->priority;
+    rcv_options = ntohl(ps->options) & 0x00FFFFFF;
+    rcv_priority = ntohl(ps->options) >> 24;
 
     neighbors = ps->neighbors;
     neigh_count = (plen - sizeof(struct ospf_hello3_packet)) / sizeof(u32);
@@ -259,8 +262,12 @@ ospf_receive_hello(struct ospf_packet *pkt, struct ospf_iface *ifa,
     DROP("dead interval mismatch", rcv_deadint);
 
   /* Check whether bits E, N match */
-  if ((rcv_options ^ ifa->oa->options) & (OPT_E | OPT_N))
+  if ((rcv_options ^ loc_options) & (OPT_E | OPT_N))
     DROP("area type mismatch", rcv_options);
+
+  /* RFC 5838 2.4 - AF-bit check unless on IPv6 unicast */
+  if ((loc_options & OPT_AF) && !(loc_options & OPT_V6) && !(rcv_options & OPT_AF))
+    DROP("AF-bit mismatch", rcv_options);
 
   /* Check consistency of existing neighbor entry */
   if (n)
@@ -334,7 +341,6 @@ ospf_receive_hello(struct ospf_packet *pkt, struct ospf_iface *ifa,
   n->bdr = rcv_bdr;
   n->priority = rcv_priority;
   n->iface_id = rcv_iface_id;
-
 
   /* Update inactivity timer */
   ospf_neigh_sm(n, INM_HELLOREC);

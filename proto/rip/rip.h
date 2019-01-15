@@ -27,12 +27,6 @@
 #include "lib/timer.h"
 
 
-#ifdef IPV6
-#define RIP_IS_V2 0
-#else
-#define RIP_IS_V2 1
-#endif
-
 #define RIP_V1			1
 #define RIP_V2			2
 
@@ -44,9 +38,9 @@
 
 #define RIP_DEFAULT_ECMP_LIMIT	16
 #define RIP_DEFAULT_INFINITY	16
-#define RIP_DEFAULT_UPDATE_TIME	30
-#define RIP_DEFAULT_TIMEOUT_TIME 180
-#define RIP_DEFAULT_GARBAGE_TIME 120
+#define RIP_DEFAULT_UPDATE_TIME	  (30 S_)
+#define RIP_DEFAULT_TIMEOUT_TIME (180 S_)
+#define RIP_DEFAULT_GARBAGE_TIME (120 S_)
 
 
 struct rip_config
@@ -58,8 +52,8 @@ struct rip_config
   u8 ecmp;				/* Maximum number of nexthops in ECMP route, or 0 */
   u8 infinity;				/* Maximum metric value, representing infinity */
 
-  u32 min_timeout_time;			/* Minimum of interface timeout_time */
-  u32 max_garbage_time;			/* Maximum of interface garbage_time */
+  btime min_timeout_time;		/* Minimum of interface timeout_time */
+  btime max_garbage_time;		/* Maximum of interface garbage_time */
 };
 
 struct rip_iface_config
@@ -84,9 +78,9 @@ struct rip_iface_config
   u16 tx_length;			/* TX packet length limit (including headers), 0 for MTU */
   int tx_tos;
   int tx_priority;
-  u32 update_time;			/* Periodic update interval */
-  u32 timeout_time;			/* Route expiration timeout */
-  u32 garbage_time;			/* Unreachable entry GC timeout */
+  btime update_time;			/* Periodic update interval */
+  btime timeout_time;			/* Route expiration timeout */
+  btime garbage_time;			/* Unreachable entry GC timeout */
   list *passwords;			/* Passwords for authentication */
 };
 
@@ -98,6 +92,7 @@ struct rip_proto
   slab *rte_slab;			/* Slab for internal routes (struct rip_rte) */
   timer *timer;				/* Main protocol timer */
 
+  u8 rip2;				/* RIPv2 (IPv4) or RIPng (IPv6) */
   u8 ecmp;				/* Maximum number of nexthops in ECMP route, or 0 */
   u8 infinity;				/* Maximum metric value, representing infinity */
   u8 triggered;				/* Logical AND of interface want_triggered values */
@@ -125,14 +120,14 @@ struct rip_iface
   list neigh_list;			/* List of iface neighbors (struct rip_neighbor) */
 
   /* Update scheduling */
-  bird_clock_t next_regular;		/* Next time when regular update should be called */
-  bird_clock_t next_triggered;		/* Next time when triggerd update may be called */
-  bird_clock_t want_triggered;		/* Nonzero if triggered update is scheduled */
+  btime next_regular;			/* Next time when regular update should be called */
+  btime next_triggered;			/* Next time when triggerd update may be called */
+  btime want_triggered;			/* Nonzero if triggered update is scheduled */
 
   /* Active update */
   int tx_active;			/* Update session is active */
   ip_addr tx_addr;			/* Update session destination address */
-  bird_clock_t tx_changed;		/* Minimal changed time for triggered update */
+  btime tx_changed;			/* Minimal changed time for triggered update */
   struct fib_iterator tx_fit;		/* FIB iterator in RIP routing table (p.rtable) */
 };
 
@@ -142,14 +137,13 @@ struct rip_neighbor
   struct rip_iface *ifa;		/* Associated interface, may be NULL if stale */
   struct neighbor *nbr;			/* Associaded core neighbor, may be NULL if stale */
   struct bfd_request *bfd_req;		/* BFD request, if BFD is used */
-  bird_clock_t last_seen;		/* Time of last received and accepted message */
+  btime last_seen;			/* Time of last received and accepted message */
   u32 uc;				/* Use count, number of routes linking the neighbor */
   u32 csn;				/* Last received crypto sequence number */
 };
 
 struct rip_entry
 {
-  struct fib_node n;
   struct rip_rte *routes;		/* List of incoming routes */
 
   u8 valid;				/* Entry validity state (RIP_ENTRY_*) */
@@ -159,7 +153,9 @@ struct rip_entry
   struct iface *iface;			/* Outgoing route iface (for next hop) */
   ip_addr next_hop;			/* Outgoing route next hop */
 
-  bird_clock_t changed;			/* Last time when the outgoing route metric changed */
+  btime changed;			/* Last time when the outgoing route metric changed */
+
+  struct fib_node n;
 };
 
 struct rip_rte
@@ -171,7 +167,7 @@ struct rip_rte
   u16 metric;				/* Route metric (after increase) */
   u16 tag;				/* Route tag */
 
-  bird_clock_t expires;			/* Time of route expiration */
+  btime expires;			/* Time of route expiration */
 };
 
 
@@ -186,19 +182,14 @@ struct rip_rte
 #define RIP_ENTRY_VALID		1	/* Valid outgoing route */
 #define RIP_ENTRY_STALE		2	/* Stale outgoing route, waiting for GC */
 
-#define EA_RIP_METRIC		EA_CODE(EAP_RIP, 0)
-#define EA_RIP_TAG		EA_CODE(EAP_RIP, 1)
+#define EA_RIP_METRIC		EA_CODE(PROTOCOL_RIP, 0)
+#define EA_RIP_TAG		EA_CODE(PROTOCOL_RIP, 1)
 
-#define rip_is_v2(X) RIP_IS_V2
-#define rip_is_ng(X) (!RIP_IS_V2)
-
-/*
 static inline int rip_is_v2(struct rip_proto *p)
 { return p->rip2; }
 
 static inline int rip_is_ng(struct rip_proto *p)
 { return ! p->rip2; }
-*/
 
 static inline void
 rip_reset_tx_session(struct rip_proto *p, struct rip_iface *ifa)
@@ -211,8 +202,8 @@ rip_reset_tx_session(struct rip_proto *p, struct rip_iface *ifa)
 }
 
 /* rip.c */
-void rip_update_rte(struct rip_proto *p, ip_addr *prefix, int pxlen, struct rip_rte *new);
-void rip_withdraw_rte(struct rip_proto *p, ip_addr *prefix, int pxlen, struct rip_neighbor *from);
+void rip_update_rte(struct rip_proto *p, net_addr *n, struct rip_rte *new);
+void rip_withdraw_rte(struct rip_proto *p, net_addr *n, struct rip_neighbor *from);
 struct rip_neighbor * rip_get_neighbor(struct rip_proto *p, ip_addr *a, struct rip_iface *ifa);
 void rip_update_bfd(struct rip_proto *p, struct rip_neighbor *n);
 void rip_show_interfaces(struct proto *P, char *iff);
@@ -220,7 +211,7 @@ void rip_show_neighbors(struct proto *P, char *iff);
 
 /* packets.c */
 void rip_send_request(struct rip_proto *p, struct rip_iface *ifa);
-void rip_send_table(struct rip_proto *p, struct rip_iface *ifa, ip_addr addr, bird_clock_t changed);
+void rip_send_table(struct rip_proto *p, struct rip_iface *ifa, ip_addr addr, btime changed);
 int rip_open_socket(struct rip_iface *ifa);
 
 

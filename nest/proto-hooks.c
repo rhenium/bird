@@ -190,7 +190,7 @@ void ifa_notify(struct proto *p, unsigned flags, struct ifa *a)
 /**
  * rt_notify - notify instance about routing table change
  * @p: protocol instance
- * @table: a routing table 
+ * @channel: notifying channel
  * @net: a network entry
  * @new: new route for the network
  * @old: old route for the network
@@ -258,16 +258,16 @@ void store_tmp_attrs(rte *e, ea_list *attrs)
 { DUMMY; }
 
 /**
- * import_control - pre-filtering decisions on route import
- * @p: protocol instance the route is going to be imported to
+ * preexport - pre-filtering decisions before route export
+ * @p: protocol instance the route is going to be exported to
  * @e: the route in question
  * @attrs: extended attributes of the route
  * @pool: linear pool for allocation of all temporary data
  *
- * The import_control() hook is called as the first step of a exporting
+ * The preexport() hook is called as the first step of a exporting
  * a route from a routing table to the protocol instance. It can modify
- * route attributes and force acceptance or rejection of the route regardless
- * of user-specified filters. See rte_announce() for a complete description
+ * route attributes and force acceptance or rejection of the route before
+ * the user-specified filters are run. See rte_announce() for a complete description
  * of the route distribution process.
  *
  * The standard use of this hook is to reject routes having originated
@@ -276,12 +276,12 @@ void store_tmp_attrs(rte *e, ea_list *attrs)
  * Result: 1 if the route has to be accepted, -1 if rejected and 0 if it
  * should be passed to the filters.
  */
-int import_control(struct proto *p, rte **e, ea_list **attrs, struct linpool *pool)
+int preexport(struct proto *p, rte **e, ea_list **attrs, struct linpool *pool)
 { DUMMY; }
 
 /**
  * rte_recalculate - prepare routes for comparison
- * @table: a routing table 
+ * @table: a routing table
  * @net: a network entry
  * @new: new route for the network
  * @old: old route for the network

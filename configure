@@ -627,8 +627,11 @@ CLIENT
 EGREP
 GREP
 protocols
+DAEMON_LIBS
 iproutedir
 sysdep_dirs
+BISONFLAGS
+M4FLAGS
 RANLIB
 INSTALL_DATA
 INSTALL_SCRIPT
@@ -651,8 +654,7 @@ CFLAGS
 CC
 CONTROL_SOCKET
 CONFIG_FILE
-SUFFIX
-srcdir_rel_mf
+srcdir
 exedir
 objdir
 M4
@@ -702,11 +704,11 @@ ac_user_opts='
 enable_option_checking
 enable_client
 enable_debug
-enable_ipv6
 enable_memcheck
 enable_pthreads
+enable_libssh
+enable_mpls_kernel
 with_protocols
-with_suffix
 with_sysconfig
 with_runtimedir
 with_iproutedir
@@ -1347,15 +1349,15 @@ Optional Features:
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
   --enable-client         enable building of BIRD client [yes]
   --enable-debug          enable internal debugging routines [no]
-  --enable-ipv6           enable building of IPv6 version [no]
   --enable-memcheck       check memory allocations when debugging [yes]
   --enable-pthreads       enable POSIX threads support [try]
+  --enable-libssh         enable LibSSH support together with RPKI [try]
+  --enable-mpls-kernel    enable MPLS support in kernel protocol [try]
 
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-protocols=LIST   include specified routing protocols [all]
-  --with-suffix=STRING    use specified suffix for BIRD files [6 for IPv6]
   --with-sysconfig=FILE   use specified BIRD system configuration file
 
   --with-runtimedir=PATH  run-state data, obsolete variant of --runstatedir
@@ -1704,6 +1706,93 @@ $as_echo "$ac_res" >&6; }
   eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
 
 } # ac_fn_c_check_member
+
+# ac_fn_c_check_header_mongrel LINENO HEADER VAR INCLUDES
+# -------------------------------------------------------
+# Tests whether HEADER exists, giving a warning if it cannot be compiled using
+# the include files in INCLUDES and setting the cache variable VAR
+# accordingly.
+ac_fn_c_check_header_mongrel ()
+{
+  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
+  if eval \${$3+:} false; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $2" >&5
+$as_echo_n "checking for $2... " >&6; }
+if eval \${$3+:} false; then :
+  $as_echo_n "(cached) " >&6
+fi
+eval ac_res=\$$3
+	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+$as_echo "$ac_res" >&6; }
+else
+  # Is the header compilable?
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking $2 usability" >&5
+$as_echo_n "checking $2 usability... " >&6; }
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+$4
+#include <$2>
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  ac_header_compiler=yes
+else
+  ac_header_compiler=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_header_compiler" >&5
+$as_echo "$ac_header_compiler" >&6; }
+
+# Is the header present?
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking $2 presence" >&5
+$as_echo_n "checking $2 presence... " >&6; }
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <$2>
+_ACEOF
+if ac_fn_c_try_cpp "$LINENO"; then :
+  ac_header_preproc=yes
+else
+  ac_header_preproc=no
+fi
+rm -f conftest.err conftest.i conftest.$ac_ext
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_header_preproc" >&5
+$as_echo "$ac_header_preproc" >&6; }
+
+# So?  What about this header?
+case $ac_header_compiler:$ac_header_preproc:$ac_c_preproc_warn_flag in #((
+  yes:no: )
+    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: $2: accepted by the compiler, rejected by the preprocessor!" >&5
+$as_echo "$as_me: WARNING: $2: accepted by the compiler, rejected by the preprocessor!" >&2;}
+    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: $2: proceeding with the compiler's result" >&5
+$as_echo "$as_me: WARNING: $2: proceeding with the compiler's result" >&2;}
+    ;;
+  no:yes:* )
+    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: $2: present but cannot be compiled" >&5
+$as_echo "$as_me: WARNING: $2: present but cannot be compiled" >&2;}
+    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: $2:     check for missing prerequisite headers?" >&5
+$as_echo "$as_me: WARNING: $2:     check for missing prerequisite headers?" >&2;}
+    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: $2: see the Autoconf documentation" >&5
+$as_echo "$as_me: WARNING: $2: see the Autoconf documentation" >&2;}
+    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: $2:     section \"Present But Cannot Be Compiled\"" >&5
+$as_echo "$as_me: WARNING: $2:     section \"Present But Cannot Be Compiled\"" >&2;}
+    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: $2: proceeding with the compiler's result" >&5
+$as_echo "$as_me: WARNING: $2: proceeding with the compiler's result" >&2;}
+    ;;
+esac
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $2" >&5
+$as_echo_n "checking for $2... " >&6; }
+if eval \${$3+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  eval "$3=\$ac_header_compiler"
+fi
+eval ac_res=\$$3
+	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+$as_echo "$ac_res" >&6; }
+fi
+  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
+
+} # ac_fn_c_check_header_mongrel
 cat >config.log <<_ACEOF
 This file contains any messages produced by compilers while
 running configure, to aid debugging if configure makes a mistake.
@@ -2107,15 +2196,6 @@ else
 fi
 
 
-# Check whether --enable-ipv6 was given.
-if test "${enable_ipv6+set}" = set; then :
-  enableval=$enable_ipv6;
-else
-  enable_ipv6=no
-
-fi
-
-
 # Check whether --enable-memcheck was given.
 if test "${enable_memcheck+set}" = set; then :
   enableval=$enable_memcheck;
@@ -2134,20 +2214,30 @@ else
 fi
 
 
+# Check whether --enable-libssh was given.
+if test "${enable_libssh+set}" = set; then :
+  enableval=$enable_libssh;
+else
+  enable_libssh=try
+
+fi
+
+
+# Check whether --enable-mpls-kernel was given.
+if test "${enable_mpls_kernel+set}" = set; then :
+  enableval=$enable_mpls_kernel;
+else
+  enable_mpls_kernel=try
+
+fi
+
+
 
 # Check whether --with-protocols was given.
 if test "${with_protocols+set}" = set; then :
   withval=$with_protocols;
 else
   with_protocols="all"
-
-fi
-
-
-
-# Check whether --with-suffix was given.
-if test "${with_suffix+set}" = set; then :
-  withval=$with_suffix; given_suffix="yes"
 
 fi
 
@@ -2183,22 +2273,12 @@ fi
 if test "$srcdir" = . ; then
   # Building in current directory => create obj directory holding all objects
   objdir=obj
-  mkdir -p obj
-  srcdir_rel=..
-  makefiles="Makefile:tools/Makefile-top.in obj/Makefile:tools/Makefile.in obj/Rules:tools/Rules.in"
-  exedir=..
 else
   # Building in separate directory
   objdir=.
-  srcdir_rel=$srcdir
-  makefiles="Makefile:tools/Makefile.in Rules:tools/Rules.in"
-  exedir=.
 fi
 
-case $srcdir_rel in
-  /*)	srcdir_rel_mf=$srcdir_rel ;;
-  *)	srcdir_rel_mf="\$(root-rel)$srcdir_rel" ;;
-esac
+exedir=.
 
 
 
@@ -2210,29 +2290,10 @@ if test -z "${runstatedir}"; then :
 fi
 
 
-
-if test "$enable_ipv6" = yes ; then
-  ip=ipv6
-  SUFFIX=6
-  proto_radv=radv
-else
-  ip=ipv4
-  SUFFIX=""
-fi
-
-if test "$given_suffix" = yes ; then
-  SUFFIX="$with_suffix"
-fi
+CONFIG_FILE="\$(sysconfdir)/bird.conf"
 
 
-if test "$enable_debug" = yes ; then
-  CONFIG_FILE="bird$SUFFIX.conf"
-  CONTROL_SOCKET="bird$SUFFIX.ctl"
-else
-  CONFIG_FILE="\$(sysconfdir)/bird$SUFFIX.conf"
-  CONTROL_SOCKET="\$(runstatedir)/bird$SUFFIX.ctl"
-fi
-
+CONTROL_SOCKET="\$(runstatedir)/bird.ctl"
 
 
 ac_ext=c
@@ -3701,6 +3762,183 @@ ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
 ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
 ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
+   { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $CC option to accept ISO C99" >&5
+$as_echo_n "checking for $CC option to accept ISO C99... " >&6; }
+if ${ac_cv_prog_cc_c99+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_cv_prog_cc_c99=no
+ac_save_CC=$CC
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <wchar.h>
+#include <stdio.h>
+
+// Check varargs macros.  These examples are taken from C99 6.10.3.5.
+#define debug(...) fprintf (stderr, __VA_ARGS__)
+#define showlist(...) puts (#__VA_ARGS__)
+#define report(test,...) ((test) ? puts (#test) : printf (__VA_ARGS__))
+static void
+test_varargs_macros (void)
+{
+  int x = 1234;
+  int y = 5678;
+  debug ("Flag");
+  debug ("X = %d\n", x);
+  showlist (The first, second, and third items.);
+  report (x>y, "x is %d but y is %d", x, y);
+}
+
+// Check long long types.
+#define BIG64 18446744073709551615ull
+#define BIG32 4294967295ul
+#define BIG_OK (BIG64 / BIG32 == 4294967297ull && BIG64 % BIG32 == 0)
+#if !BIG_OK
+  your preprocessor is broken;
+#endif
+#if BIG_OK
+#else
+  your preprocessor is broken;
+#endif
+static long long int bignum = -9223372036854775807LL;
+static unsigned long long int ubignum = BIG64;
+
+struct incomplete_array
+{
+  int datasize;
+  double data[];
+};
+
+struct named_init {
+  int number;
+  const wchar_t *name;
+  double average;
+};
+
+typedef const char *ccp;
+
+static inline int
+test_restrict (ccp restrict text)
+{
+  // See if C++-style comments work.
+  // Iterate through items via the restricted pointer.
+  // Also check for declarations in for loops.
+  for (unsigned int i = 0; *(text+i) != '\0'; ++i)
+    continue;
+  return 0;
+}
+
+// Check varargs and va_copy.
+static void
+test_varargs (const char *format, ...)
+{
+  va_list args;
+  va_start (args, format);
+  va_list args_copy;
+  va_copy (args_copy, args);
+
+  const char *str;
+  int number;
+  float fnumber;
+
+  while (*format)
+    {
+      switch (*format++)
+	{
+	case 's': // string
+	  str = va_arg (args_copy, const char *);
+	  break;
+	case 'd': // int
+	  number = va_arg (args_copy, int);
+	  break;
+	case 'f': // float
+	  fnumber = va_arg (args_copy, double);
+	  break;
+	default:
+	  break;
+	}
+    }
+  va_end (args_copy);
+  va_end (args);
+}
+
+int
+main ()
+{
+
+  // Check bool.
+  _Bool success = false;
+
+  // Check restrict.
+  if (test_restrict ("String literal") == 0)
+    success = true;
+  char *restrict newvar = "Another string";
+
+  // Check varargs.
+  test_varargs ("s, d' f .", "string", 65, 34.234);
+  test_varargs_macros ();
+
+  // Check flexible array members.
+  struct incomplete_array *ia =
+    malloc (sizeof (struct incomplete_array) + (sizeof (double) * 10));
+  ia->datasize = 10;
+  for (int i = 0; i < ia->datasize; ++i)
+    ia->data[i] = i * 1.234;
+
+  // Check named initializers.
+  struct named_init ni = {
+    .number = 34,
+    .name = L"Test wide string",
+    .average = 543.34343,
+  };
+
+  ni.number = 58;
+
+  int dynamic_array[ni.number];
+  dynamic_array[ni.number - 1] = 543;
+
+  // work around unused variable warnings
+  return (!success || bignum == 0LL || ubignum == 0uLL || newvar[0] == 'x'
+	  || dynamic_array[ni.number - 1] != 543);
+
+  ;
+  return 0;
+}
+_ACEOF
+for ac_arg in '' -std=gnu99 -std=c99 -c99 -AC99 -D_STDC_C99= -qlanglvl=extc99
+do
+  CC="$ac_save_CC $ac_arg"
+  if ac_fn_c_try_compile "$LINENO"; then :
+  ac_cv_prog_cc_c99=$ac_arg
+fi
+rm -f core conftest.err conftest.$ac_objext
+  test "x$ac_cv_prog_cc_c99" != "xno" && break
+done
+rm -f conftest.$ac_ext
+CC=$ac_save_CC
+
+fi
+# AC_CACHE_VAL
+case "x$ac_cv_prog_cc_c99" in
+  x)
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: none needed" >&5
+$as_echo "none needed" >&6; } ;;
+  xno)
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: unsupported" >&5
+$as_echo "unsupported" >&6; } ;;
+  *)
+    CC="$CC $ac_cv_prog_cc_c99"
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_prog_cc_c99" >&5
+$as_echo "$ac_cv_prog_cc_c99" >&6; } ;;
+esac
+if test "x$ac_cv_prog_cc_c99" != xno; then :
+
+fi
+
+
 if test -z "$GCC" ; then
   as_fn_error $? "This program requires the GNU C Compiler." "$LINENO" 5
 fi
@@ -4385,6 +4623,40 @@ test -z "$FLEX"	 && as_fn_error $? "Flex is missing." "$LINENO" 5
 test -z "$BISON" && as_fn_error $? "Bison is missing." "$LINENO" 5
 test -z "$M4"	 && as_fn_error $? "M4 is missing." "$LINENO" 5
 
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking bison version" >&5
+$as_echo_n "checking bison version... " >&6; }
+
+  BISON_VERSION=`bison --version | ( read line; echo ${line##* } )`
+  case "$BISON_VERSION" in
+    1.* | 2.0* | 2.1* | 2.2* | 2.3*)
+      as_fn_error $? "Provided Bison version $BISON_VERSION is too old, need at least 2.4" "$LINENO" 5
+      ;;
+    2.*)
+      bird_bison_synclines=no
+      bird_bison_enhanced_error=no
+      ;;
+    3.* | 4.* | 5.* | 6.* | 7.* | 8.* | 9.*)
+      bird_bison_synclines=yes
+      bird_bison_enhanced_error=yes
+      ;;
+    *)
+      as_fn_error $? "Couldn't parse Bison version $BISON_VERSION. Call the developers for help." "$LINENO" 5
+      ;;
+  esac
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $BISON_VERSION" >&5
+$as_echo "$BISON_VERSION" >&6; }
+if test "$bird_bison_synclines" = yes; then
+  M4FLAGS="$M4FLAGS -s"
+fi
+
+if test "$bird_bison_enhanced_error" = yes; then
+  BISONFLAGS="$BISONFLAGS -Dparse.lac=full -Dparse.error=verbose"
+fi
+
+
+
+
 
   # Check for GNU $M4
   case `"$M4" --version 2>&1` in
@@ -4412,58 +4684,35 @@ if test -n "$with_sysconfig" -a "$with_sysconfig" != no ; then
 elif test -f sysconfig.h ; then
   sysdesc=sysconfig
 else
-  case "$ip:$host_os" in
-    ipv6:linux*)
-      sysdesc=linux-v6
-      default_iproutedir="/etc/iproute2"
-      ;;
-    ipv4:linux*)
+  case "$host_os" in
+    linux*)
       sysdesc=linux
       default_iproutedir="/etc/iproute2"
       ;;
-    ipv6:netbsd*)
-      sysdesc=bsd-v6
-      CPPFLAGS="$CPPFLAGS -I/usr/pkg/include"
-      LDFLAGS="$LDFLAGS -L/usr/pkg/lib -R/usr/pkg/lib"
-      ;;
-    ipv4:netbsd*)
-      sysdesc=bsd
-      CPPFLAGS="$CPPFLAGS -I/usr/pkg/include"
-      LDFLAGS="$LDFLAGS -L/usr/pkg/lib -R/usr/pkg/lib"
-      ;;
-    ipv6:freebsd*)
-      sysdesc=bsd-v6
-      CPPFLAGS="$CPPFLAGS -I/usr/local/include"
-      LDFLAGS="$LDFLAGS -L/usr/local/lib"
-      ;;
-    ipv4:freebsd*)
+    freebsd*)
       sysdesc=bsd
       CPPFLAGS="$CPPFLAGS -I/usr/local/include"
       LDFLAGS="$LDFLAGS -L/usr/local/lib"
       ;;
-    ipv6:dragonfly*)
-      sysdesc=bsd-v6
-      ;;
-    ipv4:dragonfly*)
+    kfreebsd*)
       sysdesc=bsd
       ;;
-    ipv6:kfreebsd*)
-      sysdesc=bsd-v6
+    netbsd*)
+      sysdesc=bsd
+      CPPFLAGS="$CPPFLAGS -I/usr/pkg/include"
+      LDFLAGS="$LDFLAGS -L/usr/pkg/lib -R/usr/pkg/lib"
       ;;
-    ipv4:kfreebsd*)
+    openbsd*)
       sysdesc=bsd
       ;;
-    ipv6:openbsd*)
-      sysdesc=bsd-v6
-      ;;
-    ipv4:openbsd*)
+    dragonfly*)
       sysdesc=bsd
       ;;
     *)
       as_fn_error $? "Cannot determine correct system configuration. Please use --with-sysconfig to set it manually." "$LINENO" 5
       ;;
-  esac
-  sysdesc=$srcdir/sysdep/cf/$sysdesc.h
+    esac
+    sysdesc=$srcdir/sysdep/cf/$sysdesc.h
 fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking which OS configuration should we use" >&5
 $as_echo_n "checking which OS configuration should we use... " >&6; }
@@ -4481,7 +4730,7 @@ _ACEOF
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking system-dependent directories" >&5
 $as_echo_n "checking system-dependent directories... " >&6; }
-sysdep_dirs="`sed <$sysdesc '/^Link: /!d;s/^Link: \(.*\)$/\1/' | tr '\012' ' '` lib"
+sysdep_dirs="`sed <$sysdesc '/^Link: /!d;s/^Link: \(.*\)$/\1/' | tr '\012' ' '`"
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $sysdep_dirs" >&5
 $as_echo "$sysdep_dirs" >&6; }
 
@@ -4495,15 +4744,149 @@ fi
 
 
 
-all_protocols="$proto_bfd bgp mrt ospf pipe $proto_radv rip static"
-if test "$ip" = ipv6 ; then
-   all_protocols="$all_protocols babel"
+DAEMON_LIBS=
+
+
+if test "$enable_libssh" != no ; then
+  ac_fn_c_check_header_compile "$LINENO" "libssh/libssh.h" "ac_cv_header_libssh_libssh_h" "
+"
+if test "x$ac_cv_header_libssh_libssh_h" = xyes; then :
+  true
+else
+  fail=yes
 fi
+
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ssh_connect in -lssh" >&5
+$as_echo_n "checking for ssh_connect in -lssh... " >&6; }
+if ${ac_cv_lib_ssh_ssh_connect+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lssh  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char ssh_connect ();
+int
+main ()
+{
+return ssh_connect ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_ssh_ssh_connect=yes
+else
+  ac_cv_lib_ssh_ssh_connect=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_ssh_ssh_connect" >&5
+$as_echo "$ac_cv_lib_ssh_ssh_connect" >&6; }
+if test "x$ac_cv_lib_ssh_ssh_connect" = xyes; then :
+  true
+else
+  fail=yes
+fi
+
+
+  if test "$fail" != yes ; then
+
+$as_echo "#define HAVE_LIBSSH 1" >>confdefs.h
+
+    DAEMON_LIBS="-lssh $DAEMON_LIBS"
+    proto_rpki=rpki
+    enable_libssh=yes
+  else
+    if test "$enable_libssh" = yes ; then
+      as_fn_error $? "LibSSH not available." "$LINENO" 5
+    else
+      enable_libssh=no
+    fi
+  fi
+fi
+
+if test "$enable_mpls_kernel" != no ; then
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for Linux MPLS headers" >&5
+$as_echo_n "checking for Linux MPLS headers... " >&6; }
+if ${bird_cv_mpls_kernel+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+
+      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+
+	      #include <linux/lwtunnel.h>
+	      #include <linux/netlink.h>
+	      #include <linux/rtnetlink.h>
+	      #include <sys/socket.h>
+	      void t(int arg);
+
+int
+main ()
+{
+
+	      t(AF_MPLS);
+	      t(RTA_VIA);
+	      t(RTA_NEWDST);
+	      t(RTA_ENCAP_TYPE);
+	      t(RTA_ENCAP);
+	      struct rtvia rtvia;
+	      t(LWTUNNEL_ENCAP_MPLS);
+
+
+  ;
+  return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  bird_cv_mpls_kernel=yes
+else
+  bird_cv_mpls_kernel=no
+
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $bird_cv_mpls_kernel" >&5
+$as_echo "$bird_cv_mpls_kernel" >&6; }
+
+
+  if test "$bird_cv_mpls_kernel" = yes ; then
+
+$as_echo "#define HAVE_MPLS_KERNEL 1" >>confdefs.h
+
+  elif test "$enable_mpls_kernel" = yes ; then
+    as_fn_error $? "Kernel MPLS support not found." "$LINENO" 5
+  fi
+
+  if test "$enable_mpls_kernel" = try ; then
+    enable_mpls_kernel="$bird_cv_mpls_kernel"
+  fi
+fi
+
+all_protocols="$proto_bfd babel bgp mrt ospf perf pipe radv rip $proto_rpki static"
+
 all_protocols=`echo $all_protocols | sed 's/ /,/g'`
 
 if test "$with_protocols" = all ; then
   with_protocols="$all_protocols"
 fi
+
 
 
 
@@ -4535,7 +4918,7 @@ $as_echo "ok" >&6; }
 
 
 case $sysdesc in
-  */linux*|*/linux-v6*)
+  */linux*)
     ac_fn_c_check_header_compile "$LINENO" "linux/rtnetlink.h" "ac_cv_header_linux_rtnetlink_h" "
 		#include <asm/types.h>
 	#include <sys/socket.h>
@@ -5214,6 +5597,122 @@ if test "$enable_debug" = yes ; then
 
 $as_echo "#define DEBUGGING 1" >>confdefs.h
 
+  LDFLAGS="$LDFLAGS -rdynamic"
+  CFLAGS="$CFLAGS -O0 -ggdb -g3"
+
+
+  bird_tmp_cflags="$CFLAGS"
+  CFLAGS=" -gdwarf-4"
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether CC supports -gdwarf-4" >&5
+$as_echo_n "checking whether CC supports -gdwarf-4... " >&6; }
+if ${bird_cv_c_option_dwarf4+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+
+      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  bird_cv_c_option_dwarf4=yes
+else
+  bird_cv_c_option_dwarf4=no
+
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $bird_cv_c_option_dwarf4" >&5
+$as_echo "$bird_cv_c_option_dwarf4" >&6; }
+
+  CFLAGS="$bird_tmp_cflags"
+
+
+  if test "$bird_cv_c_option_dwarf4" = yes ; then
+    CFLAGS="$CFLAGS -gdwarf-4"
+  fi
+
+
+  ac_fn_c_check_header_mongrel "$LINENO" "execinfo.h" "ac_cv_header_execinfo_h" "$ac_includes_default"
+if test "x$ac_cv_header_execinfo_h" = xyes; then :
+
+
+$as_echo "#define HAVE_EXECINFO_H 1" >>confdefs.h
+
+      { $as_echo "$as_me:${as_lineno-$LINENO}: checking for library containing backtrace" >&5
+$as_echo_n "checking for library containing backtrace... " >&6; }
+if ${ac_cv_search_backtrace+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_func_search_save_LIBS=$LIBS
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char backtrace ();
+int
+main ()
+{
+return backtrace ();
+  ;
+  return 0;
+}
+_ACEOF
+for ac_lib in '' execinfo; do
+  if test -z "$ac_lib"; then
+    ac_res="none required"
+  else
+    ac_res=-l$ac_lib
+    LIBS="-l$ac_lib  $ac_func_search_save_LIBS"
+  fi
+  if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_search_backtrace=$ac_res
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext
+  if ${ac_cv_search_backtrace+:} false; then :
+  break
+fi
+done
+if ${ac_cv_search_backtrace+:} false; then :
+
+else
+  ac_cv_search_backtrace=no
+fi
+rm conftest.$ac_ext
+LIBS=$ac_func_search_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_search_backtrace" >&5
+$as_echo "$ac_cv_search_backtrace" >&6; }
+ac_res=$ac_cv_search_backtrace
+if test "$ac_res" != no; then :
+  test "$ac_res" = "none required" || LIBS="$ac_res $LIBS"
+
+else
+  as_fn_error $? "Function backtrace not available." "$LINENO" 5
+
+fi
+
+
+
+fi
+
+
+
   if test "$enable_memcheck" = yes ; then
     { $as_echo "$as_me:${as_lineno-$LINENO}: checking for dmalloc_debug in -ldmalloc" >&5
 $as_echo_n "checking for dmalloc_debug in -ldmalloc... " >&6; }
@@ -5310,10 +5809,10 @@ fi
   fi
 fi
 
-CLIENT=
+CLIENT=birdcl
 CLIENT_LIBS=
 if test "$enable_client" = yes ; then
-  CLIENT=birdc
+  CLIENT="$CLIENT birdc"
   BASE_LIBS="$LIBS"
   LIBS=""
 
@@ -5568,9 +6067,7 @@ fi
 mkdir -p $objdir/sysdep
 ac_config_headers="$ac_config_headers $objdir/sysdep/autoconf.h:sysdep/autoconf.h.in"
 
-ac_config_commands="$ac_config_commands merge"
-
-ac_config_files="$ac_config_files $makefiles"
+ac_config_files="$ac_config_files Makefile:Makefile.in"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -6106,7 +6603,6 @@ cat >>$CONFIG_STATUS <<_ACEOF || ac_write_fail=1
 # Files that config.status was made for.
 config_files="$ac_config_files"
 config_headers="$ac_config_headers"
-config_commands="$ac_config_commands"
 
 _ACEOF
 
@@ -6135,9 +6631,6 @@ $config_files
 
 Configuration headers:
 $config_headers
-
-Configuration commands:
-$config_commands
 
 Report bugs to the package provider."
 
@@ -6259,17 +6752,6 @@ _ASBOX
 
 _ACEOF
 cat >>$CONFIG_STATUS <<_ACEOF || ac_write_fail=1
-#
-# INIT-COMMANDS
-#
-
-    srcdir=$srcdir
-    srcdir_rel=$srcdir_rel
-    objdir=$objdir
-    sysdep_dirs="$sysdep_dirs"
-
-
-
 _ACEOF
 
 cat >>$CONFIG_STATUS <<\_ACEOF || ac_write_fail=1
@@ -6279,8 +6761,7 @@ for ac_config_target in $ac_config_targets
 do
   case $ac_config_target in
     "$objdir/sysdep/autoconf.h") CONFIG_HEADERS="$CONFIG_HEADERS $objdir/sysdep/autoconf.h:sysdep/autoconf.h.in" ;;
-    "merge") CONFIG_COMMANDS="$CONFIG_COMMANDS merge" ;;
-    "$makefiles") CONFIG_FILES="$CONFIG_FILES $makefiles" ;;
+    "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile:Makefile.in" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
   esac
@@ -6294,7 +6775,6 @@ done
 if $ac_need_defaults; then
   test "${CONFIG_FILES+set}" = set || CONFIG_FILES=$config_files
   test "${CONFIG_HEADERS+set}" = set || CONFIG_HEADERS=$config_headers
-  test "${CONFIG_COMMANDS+set}" = set || CONFIG_COMMANDS=$config_commands
 fi
 
 # Have a temporary directory for convenience.  Make it in the build tree
@@ -6591,7 +7071,7 @@ cat >>$CONFIG_STATUS <<\_ACEOF || ac_write_fail=1
 fi # test -n "$CONFIG_HEADERS"
 
 
-eval set X "  :F $CONFIG_FILES  :H $CONFIG_HEADERS    :C $CONFIG_COMMANDS"
+eval set X "  :F $CONFIG_FILES  :H $CONFIG_HEADERS    "
 shift
 for ac_tag
 do
@@ -6829,16 +7309,9 @@ $as_echo "$as_me: $ac_file is unchanged" >&6;}
   fi
  ;;
 
-  :C)  { $as_echo "$as_me:${as_lineno-$LINENO}: executing $ac_file commands" >&5
-$as_echo "$as_me: executing $ac_file commands" >&6;}
- ;;
-  esac
-
-
-  case $ac_file$ac_mode in
-    "merge":C)  export CPP="$CPP"; sh $srcdir/tools/mergedirs $srcdir $srcdir_rel $objdir $sysdep_dirs  ;;
 
   esac
+
 done # for ac_tag
 
 
@@ -6876,8 +7349,6 @@ $as_echo "$as_me: WARNING: unrecognized options: $ac_unrecognized_opts" >&2;}
 fi
 
 
-rm -f $objdir/sysdep/paths.h
-
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: " >&5
 $as_echo "" >&6; }
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: BIRD was configured with the following options:" >&5
@@ -6896,6 +7367,8 @@ $as_echo "        Debugging:		$enable_debug" >&6; }
 $as_echo "        POSIX threads:		$enable_pthreads" >&6; }
 { $as_echo "$as_me:${as_lineno-$LINENO}: result:         Routing protocols:	$protocols" >&5
 $as_echo "        Routing protocols:	$protocols" >&6; }
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result:         Kernel MPLS support:	$enable_mpls_kernel" >&5
+$as_echo "        Kernel MPLS support:	$enable_mpls_kernel" >&6; }
 { $as_echo "$as_me:${as_lineno-$LINENO}: result:         Client:			$enable_client" >&5
 $as_echo "        Client:			$enable_client" >&6; }
 

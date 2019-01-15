@@ -1,6 +1,6 @@
-source=pipe.c
-root-rel=../../
-dir-name=proto/pipe
+src := pipe.c
+obj := $(src-o-files)
+$(all-daemon)
+$(cf-local)
 
-include ../../Rules
-
+tests_objs := $(tests_objs) $(src-o-files)

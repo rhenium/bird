@@ -18,12 +18,6 @@ AC_ARG_ENABLE([debug],
   [enable_debug=no]
 )
 
-AC_ARG_ENABLE([ipv6],
-  [AS_HELP_STRING([--enable-ipv6], [enable building of IPv6 version @<:@no@:>@])],
-  [],
-  [enable_ipv6=no]
-)
-
 AC_ARG_ENABLE([memcheck],
   [AS_HELP_STRING([--enable-memcheck], [check memory allocations when debugging @<:@yes@:>@])],
   [],
@@ -36,15 +30,22 @@ AC_ARG_ENABLE([pthreads],
   [enable_pthreads=try]
 )
 
+AC_ARG_ENABLE([libssh],
+  [AS_HELP_STRING([--enable-libssh], [enable LibSSH support together with RPKI @<:@try@:>@])],
+  [],
+  [enable_libssh=try]
+)
+
+AC_ARG_ENABLE([mpls-kernel],
+  [AS_HELP_STRING([--enable-mpls-kernel], [enable MPLS support in kernel protocol @<:@try@:>@])],
+  [],
+  [enable_mpls_kernel=try]
+)
+
 AC_ARG_WITH([protocols],
   [AS_HELP_STRING([--with-protocols=LIST], [include specified routing protocols @<:@all@:>@])],
   [],
   [with_protocols="all"]
-)
-
-AC_ARG_WITH([suffix],
-  [AS_HELP_STRING([--with-suffix=STRING], [use specified suffix for BIRD files @<:@6 for IPv6@:>@])],
-  [given_suffix="yes"]
 )
 
 AC_ARG_WITH([sysconfig],
@@ -69,54 +70,25 @@ AC_ARG_VAR([M4], [location of the M4 program])
 if test "$srcdir" = . ; then
   # Building in current directory => create obj directory holding all objects
   objdir=obj
-  mkdir -p obj
-  srcdir_rel=..
-  makefiles="Makefile:tools/Makefile-top.in obj/Makefile:tools/Makefile.in obj/Rules:tools/Rules.in"
-  exedir=..
 else
   # Building in separate directory
   objdir=.
-  srcdir_rel=$srcdir
-  makefiles="Makefile:tools/Makefile.in Rules:tools/Rules.in"
-  exedir=.
 fi
 
-case $srcdir_rel in
-  /*)	srcdir_rel_mf=$srcdir_rel ;;
-  *)	srcdir_rel_mf="\$(root-rel)$srcdir_rel" ;;
-esac
+exedir=.
 
 AC_SUBST([objdir])
 AC_SUBST([exedir])
-AC_SUBST([srcdir_rel_mf])
+AC_SUBST([srcdir])
 
 # Workaround for older Autoconfs that do not define runstatedir
 AS_IF([test -z "${runstatedir}"], [runstatedir='${localstatedir}/run'])
 AC_SUBST([runstatedir])
 
-
-if test "$enable_ipv6" = yes ; then
-  ip=ipv6
-  SUFFIX=6
-  proto_radv=radv
-else
-  ip=ipv4
-  SUFFIX=""
-fi
-
-if test "$given_suffix" = yes ; then
-  SUFFIX="$with_suffix"
-fi
-AC_SUBST([SUFFIX])
-
-if test "$enable_debug" = yes ; then
-  CONFIG_FILE="bird$SUFFIX.conf"
-  CONTROL_SOCKET="bird$SUFFIX.ctl"
-else
-  CONFIG_FILE="\$(sysconfdir)/bird$SUFFIX.conf"
-  CONTROL_SOCKET="\$(runstatedir)/bird$SUFFIX.ctl"
-fi
+CONFIG_FILE="\$(sysconfdir)/bird.conf"
 AC_SUBST([CONFIG_FILE])
+
+CONTROL_SOCKET="\$(runstatedir)/bird.ctl"
 AC_SUBST([CONTROL_SOCKET])
 
 AC_SEARCH_LIBS([clock_gettime], [rt posix4],
@@ -132,6 +104,7 @@ if test "$ac_test_CFLAGS" != set ; then
 fi
 
 AC_PROG_CC
+AC_PROG_CC_C99
 if test -z "$GCC" ; then
   AC_MSG_ERROR([This program requires the GNU C Compiler.])
 fi
@@ -180,6 +153,20 @@ test -z "$FLEX"	 && AC_MSG_ERROR([Flex is missing.])
 test -z "$BISON" && AC_MSG_ERROR([Bison is missing.])
 test -z "$M4"	 && AC_MSG_ERROR([M4 is missing.])
 
+AC_MSG_CHECKING([bison version])
+BIRD_CHECK_BISON_VERSION(BISON_VERSION)
+AC_MSG_RESULT([$BISON_VERSION])
+if test "$bird_bison_synclines" = yes; then
+  M4FLAGS="$M4FLAGS -s"
+fi
+
+if test "$bird_bison_enhanced_error" = yes; then
+  BISONFLAGS="$BISONFLAGS -Dparse.lac=full -Dparse.error=verbose"
+fi
+
+AC_SUBST([M4FLAGS])
+AC_SUBST([BISONFLAGS])
+
 BIRD_CHECK_PROG_FLAVOR_GNU([$M4],
   [],
   [AC_MSG_ERROR([Provided M4 is not GNU M4.])]
@@ -197,58 +184,35 @@ if test -n "$with_sysconfig" -a "$with_sysconfig" != no ; then
 elif test -f sysconfig.h ; then
   sysdesc=sysconfig
 else
-  case "$ip:$host_os" in
-    ipv6:linux*)
-      sysdesc=linux-v6
-      default_iproutedir="/etc/iproute2"
-      ;;
-    ipv4:linux*)
+  case "$host_os" in
+    linux*)
       sysdesc=linux
       default_iproutedir="/etc/iproute2"
       ;;
-    ipv6:netbsd*)
-      sysdesc=bsd-v6
-      CPPFLAGS="$CPPFLAGS -I/usr/pkg/include"
-      LDFLAGS="$LDFLAGS -L/usr/pkg/lib -R/usr/pkg/lib"
-      ;;
-    ipv4:netbsd*)
-      sysdesc=bsd
-      CPPFLAGS="$CPPFLAGS -I/usr/pkg/include"
-      LDFLAGS="$LDFLAGS -L/usr/pkg/lib -R/usr/pkg/lib"
-      ;;
-    ipv6:freebsd*)
-      sysdesc=bsd-v6
-      CPPFLAGS="$CPPFLAGS -I/usr/local/include"
-      LDFLAGS="$LDFLAGS -L/usr/local/lib"
-      ;;
-    ipv4:freebsd*)
+    freebsd*)
       sysdesc=bsd
       CPPFLAGS="$CPPFLAGS -I/usr/local/include"
       LDFLAGS="$LDFLAGS -L/usr/local/lib"
       ;;
-    ipv6:dragonfly*)
-      sysdesc=bsd-v6
-      ;;
-    ipv4:dragonfly*)
+    kfreebsd*)
       sysdesc=bsd
       ;;
-    ipv6:kfreebsd*)
-      sysdesc=bsd-v6
+    netbsd*)
+      sysdesc=bsd
+      CPPFLAGS="$CPPFLAGS -I/usr/pkg/include"
+      LDFLAGS="$LDFLAGS -L/usr/pkg/lib -R/usr/pkg/lib"
       ;;
-    ipv4:kfreebsd*)
+    openbsd*)
       sysdesc=bsd
       ;;
-    ipv6:openbsd*)
-      sysdesc=bsd-v6
-      ;;
-    ipv4:openbsd*)
+    dragonfly*)
       sysdesc=bsd
       ;;
     *)
       AC_MSG_ERROR([Cannot determine correct system configuration. Please use --with-sysconfig to set it manually.])
       ;;
-  esac
-  sysdesc=$srcdir/sysdep/cf/$sysdesc.h
+    esac
+    sysdesc=$srcdir/sysdep/cf/$sysdesc.h
 fi
 AC_MSG_CHECKING([which OS configuration should we use])
 AC_MSG_RESULT([$sysdesc])
@@ -259,7 +223,7 @@ sysname=`echo $sysdesc | sed 's/\.h$//'`
 AC_DEFINE_UNQUOTED([SYSCONF_INCLUDE], ["$sysdesc"], [Which sysdep header to include])
 
 AC_MSG_CHECKING([system-dependent directories])
-sysdep_dirs="`sed <$sysdesc '/^Link: /!d;s/^Link: \(.*\)$/\1/' | tr '\012' ' '` lib"
+sysdep_dirs="`sed <$sysdesc '/^Link: /!d;s/^Link: \(.*\)$/\1/' | tr '\012' ' '`"
 AC_MSG_RESULT([$sysdep_dirs])
 AC_SUBST([sysdep_dirs])
 
@@ -272,10 +236,43 @@ fi
 
 AC_SUBST([iproutedir])
 
-all_protocols="$proto_bfd bgp mrt ospf pipe $proto_radv rip static"
-if test "$ip" = ipv6 ; then
-   all_protocols="$all_protocols babel"
+DAEMON_LIBS=
+AC_SUBST(DAEMON_LIBS)
+
+if test "$enable_libssh" != no ; then
+  AC_CHECK_HEADER([libssh/libssh.h], [true], [fail=yes], [ ])
+  AC_CHECK_LIB([ssh], [ssh_connect], [true], [fail=yes])
+
+  if test "$fail" != yes ; then
+    AC_DEFINE([HAVE_LIBSSH], [1], [Define to 1 if you have the `ssh' library (-lssh).])
+    DAEMON_LIBS="-lssh $DAEMON_LIBS"
+    proto_rpki=rpki
+    enable_libssh=yes
+  else
+    if test "$enable_libssh" = yes ; then
+      AC_MSG_ERROR([LibSSH not available.])
+    else
+      enable_libssh=no
+    fi
+  fi
 fi
+
+if test "$enable_mpls_kernel" != no ; then
+  BIRD_CHECK_MPLS_KERNEL
+
+  if test "$bird_cv_mpls_kernel" = yes ; then
+    AC_DEFINE([HAVE_MPLS_KERNEL], [1], [Define to 1 if kernel is MPLS capable])
+  elif test "$enable_mpls_kernel" = yes ; then
+    AC_MSG_ERROR([Kernel MPLS support not found.])
+  fi
+
+  if test "$enable_mpls_kernel" = try ; then
+    enable_mpls_kernel="$bird_cv_mpls_kernel"
+  fi
+fi
+
+all_protocols="$proto_bfd babel bgp mrt ospf perf pipe radv rip $proto_rpki static"
+
 all_protocols=`echo $all_protocols | sed 's/ /,/g'`
 
 if test "$with_protocols" = all ; then
@@ -290,6 +287,7 @@ AH_TEMPLATE([CONFIG_OSPF],	[OSPF protocol])
 AH_TEMPLATE([CONFIG_PIPE],	[Pipe protocol])
 AH_TEMPLATE([CONFIG_RADV],	[RAdv protocol])
 AH_TEMPLATE([CONFIG_RIP],	[RIP protocol])
+AH_TEMPLATE([CONFIG_RPKI],	[RPKI protocol])
 AH_TEMPLATE([CONFIG_STATIC],	[Static protocol])
 
 AC_MSG_CHECKING([protocols])
@@ -306,7 +304,7 @@ AC_MSG_RESULT([ok])
 AC_SUBST([protocols])
 
 case $sysdesc in
-  */linux*|*/linux-v6*)
+  */linux*)
     AC_CHECK_HEADER([linux/rtnetlink.h],
       [],
       [AC_MSG_ERROR([Appropriate version of Linux kernel headers not found.])],
@@ -344,6 +342,22 @@ fi
 
 if test "$enable_debug" = yes ; then
   AC_DEFINE([DEBUGGING], [1], [Define to 1 if debugging is enabled])
+  LDFLAGS="$LDFLAGS -rdynamic"
+  CFLAGS="$CFLAGS -O0 -ggdb -g3"
+
+  BIRD_CHECK_GCC_OPTION([bird_cv_c_option_dwarf4], [-gdwarf-4], [])
+  BIRD_ADD_GCC_OPTION([bird_cv_c_option_dwarf4], [-gdwarf-4])
+
+  AC_CHECK_HEADER([execinfo.h],
+    [
+      AC_DEFINE([HAVE_EXECINFO_H], [1], [Define to 1 if you have the <execinfo.h> header file.])
+      AC_SEARCH_LIBS([backtrace], [execinfo],
+	[],
+	[AC_MSG_ERROR([Function backtrace not available.])]
+      )
+    ]
+  )
+
   if test "$enable_memcheck" = yes ; then
     AC_CHECK_LIB([dmalloc], [dmalloc_debug])
     if test $ac_cv_lib_dmalloc_dmalloc_debug != yes ; then
@@ -352,10 +366,10 @@ if test "$enable_debug" = yes ; then
   fi
 fi
 
-CLIENT=
+CLIENT=birdcl
 CLIENT_LIBS=
 if test "$enable_client" = yes ; then
-  CLIENT=birdc
+  CLIENT="$CLIENT birdc"
   BASE_LIBS="$LIBS"
   LIBS=""
 
@@ -402,19 +416,8 @@ AC_SUBST([CLIENT_LIBS])
 
 mkdir -p $objdir/sysdep
 AC_CONFIG_HEADERS([$objdir/sysdep/autoconf.h:sysdep/autoconf.h.in])
-AC_CONFIG_COMMANDS([merge],
-  [ export CPP="$CPP"; sh $srcdir/tools/mergedirs $srcdir $srcdir_rel $objdir $sysdep_dirs ],
-  [
-    srcdir=$srcdir
-    srcdir_rel=$srcdir_rel
-    objdir=$objdir
-    sysdep_dirs="$sysdep_dirs"
-  ]
-)
-AC_CONFIG_FILES([$makefiles])
+AC_CONFIG_FILES([Makefile:Makefile.in])
 AC_OUTPUT
-
-rm -f $objdir/sysdep/paths.h
 
 AC_MSG_RESULT()
 AC_MSG_RESULT([BIRD was configured with the following options:])
@@ -425,6 +428,7 @@ AC_MSG_RESULT([        System configuration:	$sysdesc])
 AC_MSG_RESULT([        Debugging:		$enable_debug])
 AC_MSG_RESULT([        POSIX threads:		$enable_pthreads])
 AC_MSG_RESULT([        Routing protocols:	$protocols])
+AC_MSG_RESULT([        Kernel MPLS support:	$enable_mpls_kernel])
 AC_MSG_RESULT([        Client:			$enable_client])
 
 rm -f $objdir/.*-stamp

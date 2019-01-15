@@ -56,6 +56,7 @@
 #include "conf/conf.h"
 #include "filter/filter.h"
 
+
 static jmp_buf conf_jmpbuf;
 
 struct config *config, *new_config;
@@ -85,10 +86,10 @@ int undo_available;			/* Undo was not requested from last reconfiguration */
  * further use. Returns a pointer to the structure.
  */
 struct config *
-config_alloc(const byte *name)
+config_alloc(const char *name)
 {
   pool *p = rp_new(&root_pool, "Config");
-  linpool *l = lp_new(p, 4080);
+  linpool *l = lp_new_default(p);
   struct config *c = lp_allocz(l, sizeof(struct config));
 
   /* Duplication of name string in local linear pool */
@@ -96,13 +97,14 @@ config_alloc(const byte *name)
   char *ndup = lp_allocu(l, nlen);
   memcpy(ndup, name, nlen);
 
+  init_list(&c->tests);
   c->mrtdump_file = -1; /* Hack, this should be sysdep-specific */
   c->pool = p;
   c->mem = l;
   c->file_name = ndup;
-  c->load_time = now;
-  c->tf_route = c->tf_proto = (struct timeformat){"%T", "%F", 20*3600};
-  c->tf_base = c->tf_log = (struct timeformat){"%F %T", NULL, 0};
+  c->load_time = current_time();
+  c->tf_route = c->tf_proto = TM_ISO_SHORT_MS;
+  c->tf_base = c->tf_log = TM_ISO_LONG_MS;
   c->gr_wait = DEFAULT_GR_WAIT;
 
   return c;
@@ -135,15 +137,16 @@ config_parse(struct config *c)
   sysdep_preconfig(c);
   protos_preconfig(c);
   rt_preconfig(c);
-  roa_preconfig(c);
   cf_parse();
-  protos_postconfig(c);
+
   if (EMPTY_LIST(c->protos))
     cf_error("No protocol is specified in the config file");
-#ifdef IPV6
+
+  /*
   if (!c->router_id)
-    cf_error("Router ID must be configured manually on IPv6 routers");
-#endif
+    cf_error("Router ID must be configured manually");
+  */
+
   done = 1;
 
 cleanup:
@@ -216,11 +219,6 @@ global_commit(struct config *new, struct config *old)
   if (!old)
     return 0;
 
-  if (!ipa_equal(old->listen_bgp_addr, new->listen_bgp_addr) ||
-      (old->listen_bgp_port != new->listen_bgp_port) ||
-      (old->listen_bgp_flags != new->listen_bgp_flags))
-    log(L_WARN "Reconfiguration of BGP listening socket not implemented, please restart BIRD.");
-
   if (!new->router_id)
     {
       new->router_id = old->router_id;
@@ -266,7 +264,6 @@ config_do_commit(struct config *c, int type)
   force_restart |= global_commit(c, old_config);
   DBG("rt_commit\n");
   rt_commit(c, old_config);
-  roa_commit(c, old_config);
   DBG("protos_commit\n");
   protos_commit(c, old_config, force_restart, type);
 
@@ -305,7 +302,7 @@ config_done(void *unused UNUSED)
  * config_commit - commit a configuration
  * @c: new configuration
  * @type: type of reconfiguration (RECONFIG_SOFT or RECONFIG_HARD)
- * @timeout: timeout for undo (or 0 for no timeout)
+ * @timeout: timeout for undo (in seconds; or 0 for no timeout)
  *
  * When a configuration is parsed and prepared for use, the
  * config_commit() function starts the process of reconfiguration.
@@ -329,7 +326,7 @@ config_done(void *unused UNUSED)
  * are accepted.
  */
 int
-config_commit(struct config *c, int type, int timeout)
+config_commit(struct config *c, int type, uint timeout)
 {
   if (shutting_down)
     {
@@ -338,8 +335,8 @@ config_commit(struct config *c, int type, int timeout)
     }
 
   undo_available = 1;
-  if (timeout > 0)
-    tm_start(config_timer, timeout);
+  if (timeout)
+    tm_start(config_timer, timeout S);
   else
     tm_stop(config_timer);
 
@@ -450,7 +447,7 @@ config_undo(void)
 extern void cmd_reconfig_undo_notify(void);
 
 static void
-config_timeout(struct timer *t UNUSED)
+config_timeout(timer *t UNUSED)
 {
   log(L_INFO "Config timeout expired, starting undo");
   cmd_reconfig_undo_notify();
@@ -504,7 +501,7 @@ order_shutdown(void)
  * error in the configuration.
  */
 void
-cf_error(char *msg, ...)
+cf_error(const char *msg, ...)
 {
   char buf[1024];
   va_list args;

@@ -1,5 +1,6 @@
-source=babel.c packets.c
-root-rel=../../
-dir-name=proto/babel
+src := babel.c packets.c
+obj := $(src-o-files)
+$(all-daemon)
+$(cf-local)
 
-include ../../Rules
+tests_objs := $(tests_objs) $(src-o-files)

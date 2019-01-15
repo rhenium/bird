@@ -34,14 +34,15 @@
 #include "nest/bird.h"
 #include "lib/lists.h"
 #include "lib/resource.h"
-#include "lib/timer.h"
 #include "lib/socket.h"
 #include "lib/event.h"
+#include "lib/timer.h"
 #include "lib/string.h"
 #include "nest/iface.h"
+#include "conf/conf.h"
 
-#include "lib/unix.h"
-#include "lib/sysio.h"
+#include "sysdep/unix/unix.h"
+#include CONFIG_INCLUDE_SYSIO_H
 
 /* Maximum number of calls of tx handler for one socket in one
  * poll iteration. Should be small enough to not monopolize CPU by
@@ -115,395 +116,59 @@ rf_fileno(struct rfile *f)
 }
 
 
-/**
- * DOC: Timers
- *
- * Timers are resources which represent a wish of a module to call
- * a function at the specified time. The platform dependent code
- * doesn't guarantee exact timing, only that a timer function
- * won't be called before the requested time.
- *
- * In BIRD, time is represented by values of the &bird_clock_t type
- * which are integral numbers interpreted as a relative number of seconds since
- * some fixed time point in past. The current time can be read
- * from variable @now with reasonable accuracy and is monotonic. There is also
- * a current 'absolute' time in variable @now_real reported by OS.
- *
- * Each timer is described by a &timer structure containing a pointer
- * to the handler function (@hook), data private to this function (@data),
- * time the function should be called at (@expires, 0 for inactive timers),
- * for the other fields see |timer.h|.
+/*
+ *	Time clock
  */
 
-#define NEAR_TIMER_LIMIT 4
+btime boot_time;
 
-static list near_timers, far_timers;
-static bird_clock_t first_far_timer = TIME_INFINITY;
-
-/* now must be different from 0, because 0 is a special value in timer->expires */
-bird_clock_t now = 1, now_real, boot_time;
-
-static void
-update_times_plain(void)
-{
-  bird_clock_t new_time = time(NULL);
-  int delta = new_time - now_real;
-
-  if ((delta >= 0) && (delta < 60))
-    now += delta;
-  else if (now_real != 0)
-   log(L_WARN "Time jump, delta %d s", delta);
-
-  now_real = new_time;
-}
-
-static void
-update_times_gettime(void)
+void
+times_init(struct timeloop *loop)
 {
   struct timespec ts;
   int rv;
 
   rv = clock_gettime(CLOCK_MONOTONIC, &ts);
-  if (rv != 0)
+  if (rv < 0)
+    die("Monotonic clock is missing");
+
+  if ((ts.tv_sec < 0) || (((s64) ts.tv_sec) > ((s64) 1 << 40)))
+    log(L_WARN "Monotonic clock is crazy");
+
+  loop->last_time = ts.tv_sec S + ts.tv_nsec NS;
+  loop->real_time = 0;
+}
+
+void
+times_update(struct timeloop *loop)
+{
+  struct timespec ts;
+  int rv;
+
+  rv = clock_gettime(CLOCK_MONOTONIC, &ts);
+  if (rv < 0)
     die("clock_gettime: %m");
 
-  if (ts.tv_sec != now) {
-    if (ts.tv_sec < now)
-      log(L_ERR "Monotonic timer is broken");
+  btime new_time = ts.tv_sec S + ts.tv_nsec NS;
 
-    now = ts.tv_sec;
-    now_real = time(NULL);
-  }
-}
+  if (new_time < loop->last_time)
+    log(L_ERR "Monotonic clock is broken");
 
-static int clock_monotonic_available;
-
-static inline void
-update_times(void)
-{
-  if (clock_monotonic_available)
-    update_times_gettime();
-  else
-    update_times_plain();
-}
-
-static inline void
-init_times(void)
-{
- struct timespec ts;
- clock_monotonic_available = (clock_gettime(CLOCK_MONOTONIC, &ts) == 0);
- if (!clock_monotonic_available)
-   log(L_WARN "Monotonic timer is missing");
-}
-
-
-static void
-tm_free(resource *r)
-{
-  timer *t = (timer *) r;
-
-  tm_stop(t);
-}
-
-static void
-tm_dump(resource *r)
-{
-  timer *t = (timer *) r;
-
-  debug("(code %p, data %p, ", t->hook, t->data);
-  if (t->randomize)
-    debug("rand %d, ", t->randomize);
-  if (t->recurrent)
-    debug("recur %d, ", t->recurrent);
-  if (t->expires)
-    debug("expires in %d sec)\n", t->expires - now);
-  else
-    debug("inactive)\n");
-}
-
-static struct resclass tm_class = {
-  "Timer",
-  sizeof(timer),
-  tm_free,
-  tm_dump,
-  NULL,
-  NULL
-};
-
-/**
- * tm_new - create a timer
- * @p: pool
- *
- * This function creates a new timer resource and returns
- * a pointer to it. To use the timer, you need to fill in
- * the structure fields and call tm_start() to start timing.
- */
-timer *
-tm_new(pool *p)
-{
-  timer *t = ralloc(p, &tm_class);
-  return t;
-}
-
-static inline void
-tm_insert_near(timer *t)
-{
-  node *n = HEAD(near_timers);
-
-  while (n->next && (SKIP_BACK(timer, n, n)->expires < t->expires))
-    n = n->next;
-  insert_node(&t->n, n->prev);
-}
-
-/**
- * tm_start - start a timer
- * @t: timer
- * @after: number of seconds the timer should be run after
- *
- * This function schedules the hook function of the timer to
- * be called after @after seconds. If the timer has been already
- * started, it's @expire time is replaced by the new value.
- *
- * You can have set the @randomize field of @t, the timeout
- * will be increased by a random number of seconds chosen
- * uniformly from range 0 .. @randomize.
- *
- * You can call tm_start() from the handler function of the timer
- * to request another run of the timer. Also, you can set the @recurrent
- * field to have the timer re-added automatically with the same timeout.
- */
-void
-tm_start(timer *t, unsigned after)
-{
-  bird_clock_t when;
-
-  if (t->randomize)
-    after += random() % (t->randomize + 1);
-  when = now + after;
-  if (t->expires == when)
-    return;
-  if (t->expires)
-    rem_node(&t->n);
-  t->expires = when;
-  if (after <= NEAR_TIMER_LIMIT)
-    tm_insert_near(t);
-  else
-    {
-      if (!first_far_timer || first_far_timer > when)
-	first_far_timer = when;
-      add_tail(&far_timers, &t->n);
-    }
-}
-
-/**
- * tm_stop - stop a timer
- * @t: timer
- *
- * This function stops a timer. If the timer is already stopped,
- * nothing happens.
- */
-void
-tm_stop(timer *t)
-{
-  if (t->expires)
-    {
-      rem_node(&t->n);
-      t->expires = 0;
-    }
-}
-
-static void
-tm_dump_them(char *name, list *l)
-{
-  node *n;
-  timer *t;
-
-  debug("%s timers:\n", name);
-  WALK_LIST(n, *l)
-    {
-      t = SKIP_BACK(timer, n, n);
-      debug("%p ", t);
-      tm_dump(&t->r);
-    }
-  debug("\n");
+  loop->last_time = new_time;
+  loop->real_time = 0;
 }
 
 void
-tm_dump_all(void)
+times_update_real_time(struct timeloop *loop)
 {
-  tm_dump_them("Near", &near_timers);
-  tm_dump_them("Far", &far_timers);
-}
+  struct timespec ts;
+  int rv;
 
-static inline time_t
-tm_first_shot(void)
-{
-  time_t x = first_far_timer;
+  rv = clock_gettime(CLOCK_REALTIME, &ts);
+  if (rv < 0)
+    die("clock_gettime: %m");
 
-  if (!EMPTY_LIST(near_timers))
-    {
-      timer *t = SKIP_BACK(timer, n, HEAD(near_timers));
-      if (t->expires < x)
-	x = t->expires;
-    }
-  return x;
-}
-
-void io_log_event(void *hook, void *data);
-
-static void
-tm_shot(void)
-{
-  timer *t;
-  node *n, *m;
-
-  if (first_far_timer <= now)
-    {
-      bird_clock_t limit = now + NEAR_TIMER_LIMIT;
-      first_far_timer = TIME_INFINITY;
-      n = HEAD(far_timers);
-      while (m = n->next)
-	{
-	  t = SKIP_BACK(timer, n, n);
-	  if (t->expires <= limit)
-	    {
-	      rem_node(n);
-	      tm_insert_near(t);
-	    }
-	  else if (t->expires < first_far_timer)
-	    first_far_timer = t->expires;
-	  n = m;
-	}
-    }
-  while ((n = HEAD(near_timers)) -> next)
-    {
-      int delay;
-      t = SKIP_BACK(timer, n, n);
-      if (t->expires > now)
-	break;
-      rem_node(n);
-      delay = t->expires - now;
-      t->expires = 0;
-      if (t->recurrent)
-	{
-	  int i = t->recurrent - delay;
-	  if (i < 0)
-	    i = 0;
-	  tm_start(t, i);
-	}
-      io_log_event(t->hook, t->data);
-      t->hook(t);
-    }
-}
-
-/**
- * tm_parse_datetime - parse a date and time
- * @x: datetime string
- *
- * tm_parse_datetime() takes a textual representation of
- * a date and time (dd-mm-yyyy hh:mm:ss)
- * and converts it to the corresponding value of type &bird_clock_t.
- */
-bird_clock_t
-tm_parse_datetime(char *x)
-{
-  struct tm tm;
-  int n;
-  time_t t;
-
-  if (sscanf(x, "%d-%d-%d %d:%d:%d%n", &tm.tm_mday, &tm.tm_mon, &tm.tm_year, &tm.tm_hour, &tm.tm_min, &tm.tm_sec, &n) != 6 || x[n])
-    return tm_parse_date(x);
-  tm.tm_mon--;
-  tm.tm_year -= 1900;
-  t = mktime(&tm);
-  if (t == (time_t) -1)
-    return 0;
-  return t;
-}
-/**
- * tm_parse_date - parse a date
- * @x: date string
- *
- * tm_parse_date() takes a textual representation of a date (dd-mm-yyyy)
- * and converts it to the corresponding value of type &bird_clock_t.
- */
-bird_clock_t
-tm_parse_date(char *x)
-{
-  struct tm tm;
-  int n;
-  time_t t;
-
-  if (sscanf(x, "%d-%d-%d%n", &tm.tm_mday, &tm.tm_mon, &tm.tm_year, &n) != 3 || x[n])
-    return 0;
-  tm.tm_mon--;
-  tm.tm_year -= 1900;
-  tm.tm_hour = tm.tm_min = tm.tm_sec = 0;
-  t = mktime(&tm);
-  if (t == (time_t) -1)
-    return 0;
-  return t;
-}
-
-static void
-tm_format_reltime(char *x, struct tm *tm, bird_clock_t delta)
-{
-  static char *month_names[12] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-				   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-
-  if (delta < 20*3600)
-    bsprintf(x, "%02d:%02d", tm->tm_hour, tm->tm_min);
-  else if (delta < 360*86400)
-    bsprintf(x, "%s%02d", month_names[tm->tm_mon], tm->tm_mday);
-  else
-    bsprintf(x, "%d", tm->tm_year+1900);
-}
-
-#include "conf/conf.h"
-
-/**
- * tm_format_datetime - convert date and time to textual representation
- * @x: destination buffer of size %TM_DATETIME_BUFFER_SIZE
- * @fmt_spec: specification of resulting textual representation of the time
- * @t: time
- *
- * This function formats the given relative time value @t to a textual
- * date/time representation (dd-mm-yyyy hh:mm:ss) in real time.
- */
-void
-tm_format_datetime(char *x, struct timeformat *fmt_spec, bird_clock_t t)
-{
-  const char *fmt_used;
-  struct tm *tm;
-  bird_clock_t delta = now - t;
-  t = now_real - delta;
-  tm = localtime(&t);
-
-  if (fmt_spec->fmt1 == NULL)
-    return tm_format_reltime(x, tm, delta);
-
-  if ((fmt_spec->limit == 0) || (delta < fmt_spec->limit))
-    fmt_used = fmt_spec->fmt1;
-  else
-    fmt_used = fmt_spec->fmt2;
-
-  int rv = strftime(x, TM_DATETIME_BUFFER_SIZE, fmt_used, tm);
-  if (((rv == 0) && fmt_used[0]) || (rv == TM_DATETIME_BUFFER_SIZE))
-    strcpy(x, "<too-long>");
-}
-
-int
-tm_format_real_time(char *x, size_t max, const char *fmt, bird_clock_t t)
-{
-  struct tm tm;
-
-  if (!localtime_r(&t, &tm))
-    return 0;
-
-  if (!strftime(x, max, fmt, &tm))
-    return 0;
-
-  return 1;
+  loop->real_time = ts.tv_sec S + ts.tv_nsec NS;
 }
 
 
@@ -1099,26 +764,63 @@ sk_free_bufs(sock *s)
   }
 }
 
+#ifdef HAVE_LIBSSH
+static void
+sk_ssh_free(sock *s)
+{
+  struct ssh_sock *ssh = s->ssh;
+
+  if (s->ssh == NULL)
+    return;
+
+  s->ssh = NULL;
+
+  if (ssh->channel)
+  {
+    if (ssh_channel_is_open(ssh->channel))
+      ssh_channel_close(ssh->channel);
+    ssh_channel_free(ssh->channel);
+    ssh->channel = NULL;
+  }
+
+  if (ssh->session)
+  {
+    ssh_disconnect(ssh->session);
+    ssh_free(ssh->session);
+    ssh->session = NULL;
+  }
+}
+#endif
+
 static void
 sk_free(resource *r)
 {
   sock *s = (sock *) r;
 
   sk_free_bufs(s);
-  if (s->fd >= 0)
+
+#ifdef HAVE_LIBSSH
+  if (s->type == SK_SSH || s->type == SK_SSH_ACTIVE)
+    sk_ssh_free(s);
+#endif
+
+  if (s->fd < 0)
+    return;
+
+  /* FIXME: we should call sk_stop() for SKF_THREAD sockets */
+  if (!(s->flags & SKF_THREAD))
   {
-    close(s->fd);
-
-    /* FIXME: we should call sk_stop() for SKF_THREAD sockets */
-    if (s->flags & SKF_THREAD)
-      return;
-
     if (s == current_sock)
       current_sock = sk_next(s);
     if (s == stored_sock)
       stored_sock = sk_next(s);
     rem_node(&s->n);
   }
+
+  if (s->type != SK_SSH && s->type != SK_SSH_ACTIVE)
+    close(s->fd);
+
+  s->fd = -1;
 }
 
 void
@@ -1169,7 +871,7 @@ static void
 sk_dump(resource *r)
 {
   sock *s = (sock *) r;
-  static char *sk_type_names[] = { "TCP<", "TCP>", "TCP", "UDP", NULL, "IP", NULL, "MAGIC", "UNIX<", "UNIX", "DEL!" };
+  static char *sk_type_names[] = { "TCP<", "TCP>", "TCP", "UDP", NULL, "IP", NULL, "MAGIC", "UNIX<", "UNIX", "SSH>", "SSH", "DEL!" };
 
   debug("(%s, ud=%p, sa=%I, sp=%d, da=%I, dp=%d, tos=%d, ttl=%d, if=%s)\n",
 	sk_type_names[s->type],
@@ -1219,6 +921,9 @@ sk_setup(sock *s)
 {
   int y = 1;
   int fd = s->fd;
+
+  if (s->type == SK_SSH_ACTIVE)
+    return 0;
 
   if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
     ERR("O_NONBLOCK");
@@ -1291,7 +996,7 @@ sk_setup(sock *s)
 
   if (sk_is_ipv6(s))
   {
-    if (s->flags & SKF_V6ONLY)
+    if ((s->type == SK_TCP_PASSIVE) || (s->type == SK_TCP_ACTIVE) || (s->type == SK_UDP))
       if (setsockopt(fd, SOL_IPV6, IPV6_V6ONLY, &y, sizeof(y)) < 0)
 	ERR("IPV6_V6ONLY");
 
@@ -1345,6 +1050,16 @@ sk_tcp_connected(sock *s)
   s->tx_hook(s);
 }
 
+#ifdef HAVE_LIBSSH
+static void
+sk_ssh_connected(sock *s)
+{
+  sk_alloc_bufs(s);
+  s->type = SK_SSH;
+  s->tx_hook(s);
+}
+#endif
+
 static int
 sk_passive_connected(sock *s, int type)
 {
@@ -1362,8 +1077,9 @@ sk_passive_connected(sock *s, int type)
 
   sock *t = sk_new(s->pool);
   t->type = type;
-  t->fd = fd;
+  t->data = s->data;
   t->af = s->af;
+  t->fd = fd;
   t->ttl = s->ttl;
   t->tos = s->tos;
   t->rbsize = s->rbsize;
@@ -1397,6 +1113,201 @@ sk_passive_connected(sock *s, int type)
   return 1;
 }
 
+#ifdef HAVE_LIBSSH
+/*
+ * Return SSH_OK or SSH_AGAIN or SSH_ERROR
+ */
+static int
+sk_ssh_connect(sock *s)
+{
+  s->fd = ssh_get_fd(s->ssh->session);
+
+  /* Big fall thru automata */
+  switch (s->ssh->state)
+  {
+  case SK_SSH_CONNECT:
+  {
+    switch (ssh_connect(s->ssh->session))
+    {
+    case SSH_AGAIN:
+      /* A quick look into libSSH shows that ssh_get_fd() should return non-(-1)
+       * after SSH_AGAIN is returned by ssh_connect(). This is however nowhere
+       * documented but our code relies on that.
+       */
+      return SSH_AGAIN;
+
+    case SSH_OK:
+      break;
+
+    default:
+      return SSH_ERROR;
+    }
+  } /* fallthrough */
+
+  case SK_SSH_SERVER_KNOWN:
+  {
+    s->ssh->state = SK_SSH_SERVER_KNOWN;
+
+    if (s->ssh->server_hostkey_path)
+    {
+      int server_identity_is_ok = 1;
+
+      /* Check server identity */
+      switch (ssh_is_server_known(s->ssh->session))
+      {
+#define LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s,msg,args...) log(L_WARN "SSH Identity %s@%s:%u: " msg, (s)->ssh->username, (s)->host, (s)->dport, ## args);
+      case SSH_SERVER_KNOWN_OK:
+	/* The server is known and has not changed. */
+	break;
+
+      case SSH_SERVER_NOT_KNOWN:
+	LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "The server is unknown, its public key was not found in the known host file %s", s->ssh->server_hostkey_path);
+	break;
+
+      case SSH_SERVER_KNOWN_CHANGED:
+	LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "The server key has changed. Either you are under attack or the administrator changed the key.");
+	server_identity_is_ok = 0;
+	break;
+
+      case SSH_SERVER_FILE_NOT_FOUND:
+	LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "The known host file %s does not exist", s->ssh->server_hostkey_path);
+	server_identity_is_ok = 0;
+	break;
+
+      case SSH_SERVER_ERROR:
+	LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "Some error happened");
+	server_identity_is_ok = 0;
+	break;
+
+      case SSH_SERVER_FOUND_OTHER:
+	LOG_WARN_ABOUT_SSH_SERVER_VALIDATION(s, "The server gave use a key of a type while we had an other type recorded. " \
+					     "It is a possible attack.");
+	server_identity_is_ok = 0;
+	break;
+      }
+
+      if (!server_identity_is_ok)
+	return SSH_ERROR;
+    }
+  } /* fallthrough */
+
+  case SK_SSH_USERAUTH:
+  {
+    s->ssh->state = SK_SSH_USERAUTH;
+    switch (ssh_userauth_publickey_auto(s->ssh->session, NULL, NULL))
+    {
+    case SSH_AUTH_AGAIN:
+      return SSH_AGAIN;
+
+    case SSH_AUTH_SUCCESS:
+      break;
+
+    default:
+      return SSH_ERROR;
+    }
+  } /* fallthrough */
+
+  case SK_SSH_CHANNEL:
+  {
+    s->ssh->state = SK_SSH_CHANNEL;
+    s->ssh->channel = ssh_channel_new(s->ssh->session);
+    if (s->ssh->channel == NULL)
+      return SSH_ERROR;
+  } /* fallthrough */
+
+  case SK_SSH_SESSION:
+  {
+    s->ssh->state = SK_SSH_SESSION;
+    switch (ssh_channel_open_session(s->ssh->channel))
+    {
+    case SSH_AGAIN:
+      return SSH_AGAIN;
+
+    case SSH_OK:
+      break;
+
+    default:
+      return SSH_ERROR;
+    }
+  } /* fallthrough */
+
+  case SK_SSH_SUBSYSTEM:
+  {
+    s->ssh->state = SK_SSH_SUBSYSTEM;
+    if (s->ssh->subsystem)
+    {
+      switch (ssh_channel_request_subsystem(s->ssh->channel, s->ssh->subsystem))
+      {
+      case SSH_AGAIN:
+	return SSH_AGAIN;
+
+      case SSH_OK:
+	break;
+
+      default:
+	return SSH_ERROR;
+      }
+    }
+  } /* fallthrough */
+
+  case SK_SSH_ESTABLISHED:
+    s->ssh->state = SK_SSH_ESTABLISHED;
+  }
+
+  return SSH_OK;
+}
+
+/*
+ * Return file descriptor number if success
+ * Return -1 if failed
+ */
+static int
+sk_open_ssh(sock *s)
+{
+  if (!s->ssh)
+    bug("sk_open() sock->ssh is not allocated");
+
+  ssh_session sess = ssh_new();
+  if (sess == NULL)
+    ERR2("Cannot create a ssh session");
+  s->ssh->session = sess;
+
+  const int verbosity = SSH_LOG_NOLOG;
+  ssh_options_set(sess, SSH_OPTIONS_LOG_VERBOSITY, &verbosity);
+  ssh_options_set(sess, SSH_OPTIONS_HOST, s->host);
+  ssh_options_set(sess, SSH_OPTIONS_PORT, &(s->dport));
+  /* TODO: Add SSH_OPTIONS_BINDADDR */
+  ssh_options_set(sess, SSH_OPTIONS_USER, s->ssh->username);
+
+  if (s->ssh->server_hostkey_path)
+    ssh_options_set(sess, SSH_OPTIONS_KNOWNHOSTS, s->ssh->server_hostkey_path);
+
+  if (s->ssh->client_privkey_path)
+    ssh_options_set(sess, SSH_OPTIONS_IDENTITY, s->ssh->client_privkey_path);
+
+  ssh_set_blocking(sess, 0);
+
+  switch (sk_ssh_connect(s))
+  {
+  case SSH_AGAIN:
+    break;
+
+  case SSH_OK:
+    sk_ssh_connected(s);
+    break;
+
+  case SSH_ERROR:
+    ERR2(ssh_get_error(sess));
+    break;
+  }
+
+  return ssh_get_fd(sess);
+
+ err:
+  return -1;
+}
+#endif
+
 /**
  * sk_open - open a socket
  * @s: socket
@@ -1410,12 +1321,45 @@ sk_passive_connected(sock *s, int type)
 int
 sk_open(sock *s)
 {
-  int af = BIRD_AF;
+  int af = AF_UNSPEC;
   int fd = -1;
   int do_bind = 0;
   int bind_port = 0;
   ip_addr bind_addr = IPA_NONE;
   sockaddr sa;
+
+  if (s->type <= SK_IP)
+  {
+    /*
+     * For TCP/IP sockets, Address family (IPv4 or IPv6) can be specified either
+     * explicitly (SK_IPV4 or SK_IPV6) or implicitly (based on saddr, daddr).
+     * But the specifications have to be consistent.
+     */
+
+    switch (s->subtype)
+    {
+    case 0:
+      ASSERT(ipa_zero(s->saddr) || ipa_zero(s->daddr) ||
+	     (ipa_is_ip4(s->saddr) == ipa_is_ip4(s->daddr)));
+      af = (ipa_is_ip4(s->saddr) || ipa_is_ip4(s->daddr)) ? AF_INET : AF_INET6;
+      break;
+
+    case SK_IPV4:
+      ASSERT(ipa_zero(s->saddr) || ipa_is_ip4(s->saddr));
+      ASSERT(ipa_zero(s->daddr) || ipa_is_ip4(s->daddr));
+      af = AF_INET;
+      break;
+
+    case SK_IPV6:
+      ASSERT(ipa_zero(s->saddr) || !ipa_is_ip4(s->saddr));
+      ASSERT(ipa_zero(s->daddr) || !ipa_is_ip4(s->daddr));
+      af = AF_INET6;
+      break;
+
+    default:
+      bug("Invalid subtype %d", s->subtype);
+    }
+  }
 
   switch (s->type)
   {
@@ -1428,6 +1372,13 @@ sk_open(sock *s)
     bind_addr = s->saddr;
     do_bind = bind_port || ipa_nonzero(bind_addr);
     break;
+
+#ifdef HAVE_LIBSSH
+  case SK_SSH_ACTIVE:
+    s->ttx = "";			/* Force s->ttx != s->tpos */
+    fd = sk_open_ssh(s);
+    break;
+#endif
 
   case SK_UDP:
     fd = socket(af, SOCK_DGRAM, IPPROTO_UDP);
@@ -1484,7 +1435,7 @@ sk_open(sock *s)
 	if (sk_set_high_port(s) < 0)
 	  log(L_WARN "Socket error: %s%#m", s->err);
 
-    sockaddr_fill(&sa, af, bind_addr, s->iface, bind_port);
+    sockaddr_fill(&sa, s->af, bind_addr, s->iface, bind_port);
     if (bind(fd, &sa.sa, SA_LEN(sa)) < 0)
       ERR2("bind");
   }
@@ -1496,7 +1447,7 @@ sk_open(sock *s)
   switch (s->type)
   {
   case SK_TCP_ACTIVE:
-    sockaddr_fill(&sa, af, s->daddr, s->iface, s->dport);
+    sockaddr_fill(&sa, s->af, s->daddr, s->iface, s->dport);
     if (connect(fd, &sa.sa, SA_LEN(sa)) >= 0)
       sk_tcp_connected(s);
     else if (errno != EINTR && errno != EAGAIN && errno != EINPROGRESS &&
@@ -1509,6 +1460,7 @@ sk_open(sock *s)
       ERR2("listen");
     break;
 
+  case SK_SSH_ACTIVE:
   case SK_MAGIC:
     break;
 
@@ -1518,6 +1470,7 @@ sk_open(sock *s)
 
   if (!(s->flags & SKF_THREAD))
     sk_insert(s);
+
   return 0;
 
 err:
@@ -1708,6 +1661,28 @@ sk_maybe_write(sock *s)
     reset_tx_buffer(s);
     return 1;
 
+#ifdef HAVE_LIBSSH
+  case SK_SSH:
+    while (s->ttx != s->tpos)
+    {
+      e = ssh_channel_write(s->ssh->channel, s->ttx, s->tpos - s->ttx);
+
+      if (e < 0)
+      {
+	s->err = ssh_get_error(s->ssh->session);
+	s->err_hook(s, ssh_get_error_code(s->ssh->session));
+
+	reset_tx_buffer(s);
+	/* EPIPE is just a connection close notification during TX */
+	s->err_hook(s, (errno != EPIPE) ? errno : 0);
+	return -1;
+      }
+      s->ttx += e;
+    }
+    reset_tx_buffer(s);
+    return 1;
+#endif
+
   case SK_UDP:
   case SK_IP:
     {
@@ -1732,6 +1707,7 @@ sk_maybe_write(sock *s)
       reset_tx_buffer(s);
       return 1;
     }
+
   default:
     bug("sk_maybe_write: unknown socket type %d", s->type);
   }
@@ -1811,6 +1787,64 @@ sk_send_full(sock *s, unsigned len, struct iface *ifa,
 }
 */
 
+static void
+call_rx_hook(sock *s, int size)
+{
+  if (s->rx_hook(s, size))
+  {
+    /* We need to be careful since the socket could have been deleted by the hook */
+    if (current_sock == s)
+      s->rpos = s->rbuf;
+  }
+}
+
+#ifdef HAVE_LIBSSH
+static int
+sk_read_ssh(sock *s)
+{
+  ssh_channel rchans[2] = { s->ssh->channel, NULL };
+  struct timeval timev = { 1, 0 };
+
+  if (ssh_channel_select(rchans, NULL, NULL, &timev) == SSH_EINTR)
+    return 1; /* Try again */
+
+  if (ssh_channel_is_eof(s->ssh->channel) != 0)
+  {
+    /* The remote side is closing the connection */
+    s->err_hook(s, 0);
+    return 0;
+  }
+
+  if (rchans[0] == NULL)
+    return 0; /* No data is available on the socket */
+
+  const uint used_bytes = s->rpos - s->rbuf;
+  const int read_bytes = ssh_channel_read_nonblocking(s->ssh->channel, s->rpos, s->rbsize - used_bytes, 0);
+  if (read_bytes > 0)
+  {
+    /* Received data */
+    s->rpos += read_bytes;
+    call_rx_hook(s, used_bytes + read_bytes);
+    return 1;
+  }
+  else if (read_bytes == 0)
+  {
+    if (ssh_channel_is_eof(s->ssh->channel) != 0)
+    {
+	/* The remote side is closing the connection */
+	s->err_hook(s, 0);
+    }
+  }
+  else
+  {
+    s->err = ssh_get_error(s->ssh->session);
+    s->err_hook(s, ssh_get_error_code(s->ssh->session));
+  }
+
+  return 0; /* No data is available on the socket */
+}
+#endif
+
  /* sk_read() and sk_write() are called from BFD's event loop */
 
 int
@@ -1844,16 +1878,16 @@ sk_read(sock *s, int revents)
       else
       {
 	s->rpos += c;
-	if (s->rx_hook(s, s->rpos - s->rbuf))
-	{
-	  /* We need to be careful since the socket could have been deleted by the hook */
-	  if (current_sock == s)
-	    s->rpos = s->rbuf;
-	}
+	call_rx_hook(s, s->rpos - s->rbuf);
 	return 1;
       }
       return 0;
     }
+
+#ifdef HAVE_LIBSSH
+  case SK_SSH:
+    return sk_read_ssh(s);
+#endif
 
   case SK_MAGIC:
     return s->rx_hook(s, 0);
@@ -1893,6 +1927,27 @@ sk_write(sock *s)
       return 0;
     }
 
+#ifdef HAVE_LIBSSH
+  case SK_SSH_ACTIVE:
+    {
+      switch (sk_ssh_connect(s))
+      {
+	case SSH_OK:
+	  sk_ssh_connected(s);
+	  break;
+
+	case SSH_AGAIN:
+	  return 1;
+
+	case SSH_ERROR:
+	  s->err = ssh_get_error(s->ssh->session);
+	  s->err_hook(s, ssh_get_error_code(s->ssh->session));
+	  break;
+      }
+      return 0;
+    }
+#endif
+
   default:
     if (s->ttx != s->tpos && sk_maybe_write(s) > 0)
     {
@@ -1903,6 +1958,12 @@ sk_write(sock *s)
     return 0;
   }
 }
+
+int sk_is_ipv4(sock *s)
+{ return s->af == AF_INET; }
+
+int sk_is_ipv6(sock *s)
+{ return s->af == AF_INET6; }
 
 void
 sk_err(sock *s, int revents)
@@ -1961,9 +2022,6 @@ io_update_time(void)
   struct timespec ts;
   int rv;
 
-  if (!clock_monotonic_available)
-    return;
-
   /*
    * This is third time-tracking procedure (after update_times() above and
    * times_update() in BFD), dedicated to internal event log and latency
@@ -1974,7 +2032,7 @@ io_update_time(void)
   if (rv < 0)
     die("clock_gettime: %m");
 
-  last_time = ((s64) ts.tv_sec S) + (ts.tv_nsec / 1000);
+  last_time = ts.tv_sec S + ts.tv_nsec NS;
 
   if (event_open)
   {
@@ -2102,15 +2160,15 @@ volatile int async_shutdown_flag;
 void
 io_init(void)
 {
-  init_list(&near_timers);
-  init_list(&far_timers);
   init_list(&sock_list);
   init_list(&global_event_list);
   krt_io_init();
-  init_times();
-  update_times();
-  boot_time = now;
-  srandom((int) now_real);
+  // XXX init_times();
+  // XXX update_times();
+  boot_time = current_time();
+
+  u64 now = (u64) current_real_time();
+  srandom((uint) (now ^ (now >> 32)));
 }
 
 static int short_loops = 0;
@@ -2119,9 +2177,9 @@ static int short_loops = 0;
 void
 io_loop(void)
 {
-  int poll_tout;
-  time_t tout;
+  int poll_tout, timeout;
   int nfds, events, pout;
+  timer *t;
   sock *s;
   node *n;
   int fdmax = 256;
@@ -2130,18 +2188,19 @@ io_loop(void)
   watchdog_start1();
   for(;;)
     {
+      times_update(&main_timeloop);
       events = ev_run_list(&global_event_list);
-    timers:
-      update_times();
-      tout = tm_first_shot();
-      if (tout <= now)
-	{
-	  tm_shot();
-	  goto timers;
-	}
-      poll_tout = (events ? 0 : MIN(tout - now, 3)) * 1000; /* Time in milliseconds */
-
+      timers_fire(&main_timeloop);
       io_close_event();
+
+      // FIXME
+      poll_tout = (events ? 0 : 3000); /* Time in milliseconds */
+      if (t = timers_first(&main_timeloop))
+      {
+	times_update(&main_timeloop);
+	timeout = (tm_remains(t) TO_MS) + 1;
+	poll_tout = MIN(poll_tout, timeout);
+      }
 
       nfds = 0;
       WALK_LIST(n, sock_list)
@@ -2213,6 +2272,8 @@ io_loop(void)
 	}
       if (pout)
 	{
+	  times_update(&main_timeloop);
+
 	  /* guaranteed to be non-empty */
 	  current_sock = SKIP_BACK(sock, n, HEAD(sock_list));
 

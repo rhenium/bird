@@ -28,7 +28,7 @@
  * processes asynchronous events (specified by RA_EV_* codes), and radv_timer(),
  * which triggers sending RAs and computes the next timeout.
  *
- * The RAdv protocol could receive routes (through radv_import_control() and
+ * The RAdv protocol could receive routes (through radv_preexport() and
  * radv_rt_notify()), but only the configured trigger route is tracked (in
  * &active var).  When a radv protocol is reconfigured, the connected routing
  * table is examined (in radv_check_active()) to have proper &active value in
@@ -52,6 +52,7 @@ radv_timer(timer *tm)
 {
   struct radv_iface *ifa = tm->data;
   struct radv_proto *p = ifa->ra;
+  btime now = current_time();
 
   RADV_TRACE(D_EVENTS, "Timer fired on %s", ifa->iface->name);
 
@@ -68,16 +69,17 @@ radv_timer(timer *tm)
 
   /* Update timer */
   ifa->last = now;
-  unsigned after = ifa->cf->min_ra_int;
-  after += random() % (ifa->cf->max_ra_int - ifa->cf->min_ra_int + 1);
+  btime t = ifa->cf->min_ra_int S;
+  btime r = (ifa->cf->max_ra_int - ifa->cf->min_ra_int) S;
+  t += random() % (r + 1);
 
   if (ifa->initial)
+  {
+    t = MIN(t, MAX_INITIAL_RTR_ADVERT_INTERVAL);
     ifa->initial--;
+  }
 
-  if (ifa->initial)
-    after = MIN(after, MAX_INITIAL_RTR_ADVERT_INTERVAL);
-
-  tm_start(ifa->timer, after);
+  tm_start(ifa->timer, t);
 }
 
 static struct radv_prefix_config default_prefix = {
@@ -92,21 +94,18 @@ static struct radv_prefix_config dead_prefix = {
 
 /* Find a corresponding config for the given prefix */
 static struct radv_prefix_config *
-radv_prefix_match(struct radv_iface *ifa, struct ifa *a)
+radv_prefix_match(struct radv_iface *ifa, net_addr_ip6 *px)
 {
   struct radv_proto *p = ifa->ra;
   struct radv_config *cf = (struct radv_config *) (p->p.cf);
   struct radv_prefix_config *pc;
 
-  if (a->scope <= SCOPE_LINK)
-    return NULL;
-
   WALK_LIST(pc, ifa->cf->pref_list)
-    if ((a->pxlen >= pc->pxlen) && ipa_in_net(a->prefix, pc->prefix, pc->pxlen))
+    if (net_in_net_ip6(px, &pc->prefix))
       return pc;
 
   WALK_LIST(pc, cf->pref_list)
-    if ((a->pxlen >= pc->pxlen) && ipa_in_net(a->prefix, pc->prefix, pc->pxlen))
+    if (net_in_net_ip6(px, &pc->prefix))
       return pc;
 
   return &default_prefix;
@@ -121,6 +120,7 @@ radv_prepare_prefixes(struct radv_iface *ifa)
 {
   struct radv_proto *p = ifa->ra;
   struct radv_prefix *pfx, *next;
+  btime now = current_time();
 
   /* First mark all the prefixes as unused */
   WALK_LIST(pfx, ifa->prefixes)
@@ -130,7 +130,12 @@ radv_prepare_prefixes(struct radv_iface *ifa)
   struct ifa *addr;
   WALK_LIST(addr, ifa->iface->addrs)
   {
-    struct radv_prefix_config *pc = radv_prefix_match(ifa, addr);
+    if ((addr->prefix.type != NET_IP6) ||
+	(addr->scope <= SCOPE_LINK))
+      continue;
+
+    net_addr_ip6 *prefix = (void *) &addr->prefix;
+    struct radv_prefix_config *pc = radv_prefix_match(ifa, prefix);
 
     if (!pc || pc->skip)
       continue;
@@ -138,7 +143,7 @@ radv_prepare_prefixes(struct radv_iface *ifa)
     /* Do we have it already? */
     struct radv_prefix *existing = NULL;
     WALK_LIST(pfx, ifa->prefixes)
-      if ((pfx->len == addr->pxlen) && ipa_equal(pfx->prefix, addr->prefix))
+      if (net_equal_ip6(&pfx->prefix, prefix))
       {
 	existing = pfx;
 	break;
@@ -146,12 +151,11 @@ radv_prepare_prefixes(struct radv_iface *ifa)
 
     if (!existing)
     {
-      RADV_TRACE(D_EVENTS, "Adding new prefix %I/%d on %s",
-		 addr->prefix, addr->pxlen, ifa->iface->name);
+      RADV_TRACE(D_EVENTS, "Adding new prefix %N on %s",
+		 prefix, ifa->iface->name);
 
       existing = mb_allocz(ifa->pool, sizeof *existing);
-      existing->prefix = addr->prefix;
-      existing->len = addr->pxlen;
+      net_copy_ip6(&existing->prefix, prefix);
       add_tail(&ifa->prefixes, NODE existing);
     }
 
@@ -169,8 +173,8 @@ radv_prepare_prefixes(struct radv_iface *ifa)
   {
     if (pfx->valid && !pfx->mark)
     {
-      RADV_TRACE(D_EVENTS, "Invalidating prefix %I/%d on %s",
-		 pfx->prefix, pfx->len, ifa->iface->name);
+      RADV_TRACE(D_EVENTS, "Invalidating prefix %N on %s",
+		 &pfx->prefix, ifa->iface->name);
 
       pfx->valid = 0;
       pfx->changed = now;
@@ -183,20 +187,21 @@ static void
 radv_prune_prefixes(struct radv_iface *ifa)
 {
   struct radv_proto *p = ifa->ra;
-  bird_clock_t next = TIME_INFINITY;
-  bird_clock_t expires = 0;
+  btime now = current_time();
+  btime next = TIME_INFINITY;
+  btime expires = 0;
 
   struct radv_prefix *px, *pxn;
   WALK_LIST_DELSAFE(px, pxn, ifa->prefixes)
   {
     if (!px->valid)
     {
-      expires = px->changed + ifa->cf->prefix_linger_time;
+      expires = px->changed + ifa->cf->prefix_linger_time S;
 
       if (expires <= now)
       {
-	RADV_TRACE(D_EVENTS, "Removing prefix %I/%d on %s",
-		   px->prefix, px->len, ifa->iface->name);
+	RADV_TRACE(D_EVENTS, "Removing prefix %N on %s",
+		   &px->prefix, ifa->iface->name);
 
 	rem_node(NODE px);
 	mb_free(px);
@@ -225,6 +230,7 @@ radv_iface_notify(struct radv_iface *ifa, int event)
   {
   case RA_EV_CHANGE:
     radv_invalidate(ifa);
+    /* fallthrough */
   case RA_EV_INIT:
     ifa->initial = MAX_INITIAL_RTR_ADVERTISEMENTS;
     radv_prepare_prefixes(ifa);
@@ -236,13 +242,8 @@ radv_iface_notify(struct radv_iface *ifa, int event)
   }
 
   /* Update timer */
-  unsigned delta = now - ifa->last;
-  unsigned after = 0;
-
-  if (delta < ifa->cf->min_delay)
-    after = ifa->cf->min_delay - delta;
-
-  tm_start(ifa->timer, after);
+  btime t = ifa->last + ifa->cf->min_delay S - current_time();
+  tm_start(ifa->timer, t);
 }
 
 static void
@@ -300,12 +301,7 @@ radv_iface_new(struct radv_proto *p, struct iface *iface, struct radv_iface_conf
 
   add_tail(&p->iface_list, NODE ifa);
 
-  timer *tm = tm_new(pool);
-  tm->hook = radv_timer;
-  tm->data = ifa;
-  tm->randomize = 0;
-  tm->recurrent = 0;
-  ifa->timer = tm;
+  ifa->timer = tm_new_init(pool, radv_timer, ifa, 0, 0);
 
   struct object_lock *lock = olock_new(pool);
   lock->type = OBJLOCK_IP;
@@ -334,34 +330,37 @@ radv_if_notify(struct proto *P, unsigned flags, struct iface *iface)
 {
   struct radv_proto *p = (struct radv_proto *) P;
   struct radv_config *cf = (struct radv_config *) (P->cf);
+  struct radv_iface *ifa = radv_iface_find(p, iface);
 
   if (iface->flags & IF_IGNORE)
     return;
 
-  if (flags & IF_CHANGE_UP)
+  /* Add, remove or restart interface */
+  if (flags & (IF_CHANGE_UPDOWN | IF_CHANGE_LLV6))
   {
-    struct radv_iface_config *ic = (struct radv_iface_config *)
-      iface_patt_find(&cf->patt_list, iface, NULL);
+    if (ifa)
+      radv_iface_remove(ifa);
+
+    if (!(iface->flags & IF_UP))
+      return;
+
+    /* Ignore non-multicast ifaces */
+    if (!(iface->flags & IF_MULTICAST))
+      return;
 
     /* Ignore ifaces without link-local address */
     if (!iface->llv6)
       return;
 
+    struct radv_iface_config *ic = (void *) iface_patt_find(&cf->patt_list, iface, NULL);
     if (ic)
       radv_iface_new(p, iface, ic);
 
     return;
   }
 
-  struct radv_iface *ifa = radv_iface_find(p, iface);
   if (!ifa)
     return;
-
-  if (flags & IF_CHANGE_DOWN)
-  {
-    radv_iface_remove(ifa);
-    return;
-  }
 
   if ((flags & IF_CHANGE_LINK) && (iface->flags & IF_LINK_UP))
     radv_iface_notify(ifa, RA_EV_INIT);
@@ -384,15 +383,20 @@ radv_ifa_notify(struct proto *P, unsigned flags UNUSED, struct ifa *a)
     radv_iface_notify(ifa, RA_EV_CHANGE);
 }
 
-static inline int radv_net_match_trigger(struct radv_config *cf, net *n)
+static inline int
+radv_trigger_valid(struct radv_config *cf)
 {
-  return cf->trigger_valid &&
-    (n->n.pxlen == cf->trigger_pxlen) &&
-    ipa_equal(n->n.prefix, cf->trigger_prefix);
+  return cf->trigger.type != 0;
+}
+
+static inline int
+radv_net_match_trigger(struct radv_config *cf, net *n)
+{
+  return radv_trigger_valid(cf) && net_equal(n->n.addr, &cf->trigger);
 }
 
 int
-radv_import_control(struct proto *P, rte **new, ea_list **attrs UNUSED, struct linpool *pool UNUSED)
+radv_preexport(struct proto *P, rte **new, struct linpool *pool UNUSED)
 {
   // struct radv_proto *p = (struct radv_proto *) P;
   struct radv_config *cf = (struct radv_config *) (P->cf);
@@ -407,7 +411,7 @@ radv_import_control(struct proto *P, rte **new, ea_list **attrs UNUSED, struct l
 }
 
 static void
-radv_rt_notify(struct proto *P, rtable *tbl UNUSED, net *n, rte *new, rte *old UNUSED, ea_list *attrs)
+radv_rt_notify(struct proto *P, struct channel *ch UNUSED, net *n, rte *new, rte *old UNUSED)
 {
   struct radv_proto *p = (struct radv_proto *) P;
   struct radv_config *cf = (struct radv_config *) (P->cf);
@@ -445,11 +449,11 @@ radv_rt_notify(struct proto *P, rtable *tbl UNUSED, net *n, rte *new, rte *old U
   {
     /* Update */
 
-    ea = ea_find(attrs, EA_RA_PREFERENCE);
+    ea = ea_find(new->attrs->eattrs, EA_RA_PREFERENCE);
     uint preference = ea ? ea->u.data : RA_PREF_MEDIUM;
     uint preference_set = !!ea;
 
-    ea = ea_find(attrs, EA_RA_LIFETIME);
+    ea = ea_find(new->attrs->eattrs, EA_RA_LIFETIME);
     uint lifetime = ea ? ea->u.data : 0;
     uint lifetime_set = !!ea;
 
@@ -457,15 +461,15 @@ radv_rt_notify(struct proto *P, rtable *tbl UNUSED, net *n, rte *new, rte *old U
 	(preference != RA_PREF_MEDIUM) &&
 	(preference != RA_PREF_HIGH))
     {
-      log(L_WARN "%s: Invalid ra_preference value %u on route %I/%d",
-	  p->p.name, preference, n->n.prefix, n->n.pxlen);
+      log(L_WARN "%s: Invalid ra_preference value %u on route %N",
+	  p->p.name, preference, n->n.addr);
       preference = RA_PREF_MEDIUM;
       preference_set = 1;
       lifetime = 0;
       lifetime_set = 1;
     }
 
-    rt = fib_get(&p->routes, &n->n.prefix, n->n.pxlen);
+    rt = fib_get(&p->routes, n->n.addr);
 
     /* Ignore update if nothing changed */
     if (rt->valid &&
@@ -479,7 +483,7 @@ radv_rt_notify(struct proto *P, rtable *tbl UNUSED, net *n, rte *new, rte *old U
       log(L_WARN "%s: More than 17 routes exported to RAdv", p->p.name);
 
     rt->valid = 1;
-    rt->changed = now;
+    rt->changed = current_time();
     rt->preference = preference;
     rt->preference_set = preference_set;
     rt->lifetime = lifetime;
@@ -488,17 +492,17 @@ radv_rt_notify(struct proto *P, rtable *tbl UNUSED, net *n, rte *new, rte *old U
   else
   {
     /* Withdraw */
-    rt = fib_find(&p->routes, &n->n.prefix, n->n.pxlen);
+    rt = fib_find(&p->routes, n->n.addr);
 
     if (!rt || !rt->valid)
       return;
 
     /* Invalidate the route */
     rt->valid = 0;
-    rt->changed = now;
+    rt->changed = current_time();
 
     /* Invalidated route will be pruned eventually */
-    bird_clock_t expires = rt->changed + cf->max_linger_time;
+    btime expires = rt->changed + cf->max_linger_time S;
     p->prune_time = MIN(p->prune_time, expires);
   }
 
@@ -513,8 +517,9 @@ static void
 radv_prune_routes(struct radv_proto *p)
 {
   struct radv_config *cf = (struct radv_config *) (p->p.cf);
-  bird_clock_t next = TIME_INFINITY;
-  bird_clock_t expires = 0;
+  btime now = current_time();
+  btime next = TIME_INFINITY;
+  btime expires = 0;
 
   /* Should not happen */
   if (!p->fib_up)
@@ -524,26 +529,24 @@ radv_prune_routes(struct radv_proto *p)
   FIB_ITERATE_INIT(&fit, &p->routes);
 
 again:
-  FIB_ITERATE_START(&p->routes, &fit, node)
+  FIB_ITERATE_START(&p->routes, &fit, struct radv_route, rt)
   {
-    struct radv_route *rt = (void *) node;
-
     if (!rt->valid)
     {
-      expires = rt->changed + cf->max_linger_time;
+      expires = rt->changed + cf->max_linger_time S;
 
       /* Delete expired nodes */
       if (expires <= now)
       {
-	FIB_ITERATE_PUT(&fit, node);
-	fib_delete(&p->routes, node);
+	FIB_ITERATE_PUT(&fit);
+	fib_delete(&p->routes, rt);
 	goto again;
       }
       else
 	next = MIN(next, expires);
     }
   }
-  FIB_ITERATE_END(node);
+  FIB_ITERATE_END;
 
   p->prune_time = next;
 }
@@ -553,20 +556,31 @@ radv_check_active(struct radv_proto *p)
 {
   struct radv_config *cf = (struct radv_config *) (p->p.cf);
 
-  if (! cf->trigger_valid)
+  if (!radv_trigger_valid(cf))
     return 1;
 
-  return rt_examine(p->p.table, cf->trigger_prefix, cf->trigger_pxlen,
-		    &(p->p), p->p.cf->out_filter);
+  struct channel *c = p->p.main_channel;
+  return rt_examine(c->table, &cf->trigger, &p->p, c->out_filter);
+}
+
+static void
+radv_postconfig(struct proto_config *CF)
+{
+  // struct radv_config *cf = (void *) CF;
+
+  /* Define default channel */
+  if (EMPTY_LIST(CF->channels))
+    channel_config_new(NULL, net_label[NET_IP6], NET_IP6, CF);
 }
 
 static struct proto *
-radv_init(struct proto_config *c)
+radv_init(struct proto_config *CF)
 {
-  struct proto *P = proto_new(c, sizeof(struct radv_proto));
+  struct proto *P = proto_new(CF);
 
-  P->accept_ra_types = RA_OPTIMAL;
-  P->import_control = radv_import_control;
+  P->main_channel = proto_add_channel(P, proto_cf_main_channel(CF));
+
+  P->preexport = radv_preexport;
   P->rt_notify = radv_rt_notify;
   P->if_notify = radv_if_notify;
   P->ifa_notify = radv_ifa_notify;
@@ -581,7 +595,8 @@ radv_set_fib(struct radv_proto *p, int up)
     return;
 
   if (up)
-    fib_init(&p->routes, p->p.pool, sizeof(struct radv_route), 4, NULL);
+    fib_init(&p->routes, p->p.pool, NET_IP6, sizeof(struct radv_route),
+	     OFFSETOF(struct radv_route, n), 4, NULL);
   else
     fib_free(&p->routes);
 
@@ -597,7 +612,7 @@ radv_start(struct proto *P)
 
   init_list(&(p->iface_list));
   p->valid = 1;
-  p->active = !cf->trigger_valid;
+  p->active = !radv_trigger_valid(cf);
 
   p->fib_up = 0;
   radv_set_fib(p, cf->propagate_routes);
@@ -631,13 +646,16 @@ radv_shutdown(struct proto *P)
 }
 
 static int
-radv_reconfigure(struct proto *P, struct proto_config *c)
+radv_reconfigure(struct proto *P, struct proto_config *CF)
 {
   struct radv_proto *p = (struct radv_proto *) P;
   struct radv_config *old = (struct radv_config *) (P->cf);
-  struct radv_config *new = (struct radv_config *) c;
+  struct radv_config *new = (struct radv_config *) CF;
 
-  P->cf = c; /* radv_check_active() requires proper P->cf */
+  if (!proto_configure_channel(P, &P->main_channel, proto_cf_main_channel(CF)))
+    return 0;
+
+  P->cf = CF; /* radv_check_active() requires proper P->cf */
   p->active = radv_check_active(p);
 
   /* Allocate or free FIB */
@@ -645,11 +663,22 @@ radv_reconfigure(struct proto *P, struct proto_config *c)
 
   /* We started to accept routes so we need to refeed them */
   if (!old->propagate_routes && new->propagate_routes)
-    proto_request_feeding(&p->p);
+    channel_request_feeding(p->p.main_channel);
 
   struct iface *iface;
   WALK_LIST(iface, iface_list)
   {
+    if (!(iface->flags & IF_UP))
+      continue;
+
+    /* Ignore non-multicast ifaces */
+    if (!(iface->flags & IF_MULTICAST))
+      continue;
+
+    /* Ignore ifaces without link-local address */
+    if (!iface->llv6)
+      continue;
+
     struct radv_iface *ifa = radv_iface_find(p, iface);
     struct radv_iface_config *ic = (struct radv_iface_config *)
       iface_patt_find(&new->patt_list, iface, NULL);
@@ -734,8 +763,11 @@ radv_get_attr(eattr *a, byte *buf, int buflen UNUSED)
 struct protocol proto_radv = {
   .name =		"RAdv",
   .template =		"radv%d",
-  .attr_class =		EAP_RADV,
+  .class =		PROTOCOL_RADV,
+  .channel_mask =	NB_IP6,
+  .proto_size =		sizeof(struct radv_proto),
   .config_size =	sizeof(struct radv_config),
+  .postconfig =		radv_postconfig,
   .init =		radv_init,
   .start =		radv_start,
   .shutdown =		radv_shutdown,

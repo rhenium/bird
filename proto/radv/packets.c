@@ -39,7 +39,7 @@ struct radv_opt_prefix
   u32 valid_lifetime;
   u32 preferred_lifetime;
   u32 reserved;
-  ip_addr prefix;
+  ip6_addr prefix;
 };
 
 #define OPT_PX_ONLINK 0x80
@@ -68,7 +68,7 @@ struct radv_opt_rdnss
   u8 length;
   u16 reserved;
   u32 lifetime;
-  ip_addr servers[];
+  ip6_addr servers[];
 };
 
 struct radv_opt_dnssl
@@ -85,7 +85,7 @@ radv_prepare_route(struct radv_iface *ifa, struct radv_route *rt,
 		   char **buf, char *bufend)
 {
   struct radv_proto *p = ifa->ra;
-  u8 px_blocks = (rt->n.pxlen + 63) / 64;
+  u8 px_blocks = (net6_pxlen(rt->n.addr) + 63) / 64;
   u8 opt_len = 8 * (1 + px_blocks);
 
   if (*buf + opt_len > bufend)
@@ -103,17 +103,17 @@ radv_prepare_route(struct radv_iface *ifa, struct radv_route *rt,
   *buf += opt_len;
   opt->type = OPT_ROUTE;
   opt->length = 1 + px_blocks;
-  opt->pxlen = rt->n.pxlen;
+  opt->pxlen = net6_pxlen(rt->n.addr);
   opt->flags = preference;
   opt->lifetime = valid ? htonl(lifetime) : 0;
 
   /* Copy the relevant part of the prefix */
-  ip6_addr px_addr = ip6_hton(rt->n.prefix);
+  ip6_addr px_addr = ip6_hton(net6_prefix(rt->n.addr));
   memcpy(opt->prefix, &px_addr, 8 * px_blocks);
 
   /* Keeping track of first linger timeout */
   if (!rt->valid)
-    ifa->valid_time = MIN(ifa->valid_time, rt->changed + ifa->cf->route_linger_time);
+    ifa->valid_time = MIN(ifa->valid_time, rt->changed + ifa->cf->route_linger_time S);
 
   return 0;
 }
@@ -127,7 +127,7 @@ radv_prepare_rdnss(struct radv_iface *ifa, list *rdnss_list, char **buf, char *b
   {
     struct radv_rdnss_config *rcf_base = rcf;
     struct radv_opt_rdnss *op = (void *) *buf;
-    int max_i = (bufend - *buf - sizeof(struct radv_opt_rdnss)) / sizeof(ip_addr);
+    int max_i = (bufend - *buf - sizeof(struct radv_opt_rdnss)) / sizeof(ip6_addr);
     int i = 0;
 
     if (max_i < 1)
@@ -148,8 +148,7 @@ radv_prepare_rdnss(struct radv_iface *ifa, list *rdnss_list, char **buf, char *b
 	if (i >= max_i)
 	  goto too_much;
 
-	op->servers[i] = rcf->server;
-	ipa_hton(op->servers[i]);
+	op->servers[i] = ip6_hton(rcf->server);
 	i++;
 
 	rcf = NODE_NEXT(rcf);
@@ -254,10 +253,10 @@ radv_prepare_dnssl(struct radv_iface *ifa, list *dnssl_list, char **buf, char *b
 }
 
 static int
-radv_prepare_prefix(struct radv_iface *ifa, struct radv_prefix *prefix,
+radv_prepare_prefix(struct radv_iface *ifa, struct radv_prefix *px,
 		    char **buf, char *bufend)
 {
-  struct radv_prefix_config *pc = prefix->cf;
+  struct radv_prefix_config *pc = px->cf;
 
   if (*buf + sizeof(struct radv_opt_prefix) > bufend)
   {
@@ -269,7 +268,7 @@ radv_prepare_prefix(struct radv_iface *ifa, struct radv_prefix *prefix,
   struct radv_opt_prefix *op = (void *) *buf;
   op->type = OPT_PREFIX;
   op->length = 4;
-  op->pxlen = prefix->len;
+  op->pxlen = px->prefix.pxlen;
   op->flags = (pc->onlink ? OPT_PX_ONLINK : 0) |
     (pc->autonomous ? OPT_PX_AUTONOMOUS : 0);
   op->valid_lifetime = (ifa->ra->active || !pc->valid_lifetime_sensitive) ?
@@ -277,13 +276,12 @@ radv_prepare_prefix(struct radv_iface *ifa, struct radv_prefix *prefix,
   op->preferred_lifetime = (ifa->ra->active || !pc->preferred_lifetime_sensitive) ?
     htonl(pc->preferred_lifetime) : 0;
   op->reserved = 0;
-  op->prefix = prefix->prefix;
-  ipa_hton(op->prefix);
+  op->prefix = ip6_hton(px->prefix.prefix);
   *buf += sizeof(*op);
 
   /* Keeping track of first linger timeout */
-  if (!prefix->valid)
-    ifa->valid_time = MIN(ifa->valid_time, prefix->changed + ifa->cf->prefix_linger_time);
+  if (!px->valid)
+    ifa->valid_time = MIN(ifa->valid_time, px->changed + ifa->cf->prefix_linger_time S);
 
   return 0;
 }
@@ -294,6 +292,7 @@ radv_prepare_ra(struct radv_iface *ifa)
   struct radv_proto *p = ifa->ra;
   struct radv_config *cf = (struct radv_config *) (p->p.cf);
   struct radv_iface_config *ic = ifa->cf;
+  btime now = current_time();
 
   char *buf = ifa->sk->tbuf;
   char *bufstart = buf;
@@ -330,7 +329,7 @@ radv_prepare_ra(struct radv_iface *ifa)
   WALK_LIST(px, ifa->prefixes)
   {
     /* Skip invalid prefixes that are past linger timeout but still not pruned */
-    if (!px->valid && (px->changed + ic->prefix_linger_time <= now))
+    if (!px->valid && ((px->changed + ic->prefix_linger_time S) <= now))
 	continue;
 
     if (radv_prepare_prefix(ifa, px, &buf, bufend) < 0)
@@ -353,12 +352,10 @@ radv_prepare_ra(struct radv_iface *ifa)
 
   if (p->fib_up)
   {
-    FIB_WALK(&p->routes, n)
+    FIB_WALK(&p->routes, struct radv_route, rt)
     {
-      struct radv_route *rt = (void *) n;
-
       /* Skip invalid routes that are past linger timeout but still not pruned */
-      if (!rt->valid && (rt->changed + ic->route_linger_time <= now))
+      if (!rt->valid && ((rt->changed + ic->route_linger_time S) <= now))
 	continue;
 
       if (radv_prepare_route(ifa, rt, &buf, bufend) < 0)
@@ -396,7 +393,7 @@ radv_rx_hook(sock *sk, uint size)
   if (sk->lifindex != sk->iface->index)
     return 1;
 
-  if (ipa_equal(sk->faddr, ifa->addr->ip))
+  if (ipa_equal(sk->faddr, sk->saddr))
     return 1;
 
   if (size < 8)
@@ -448,6 +445,7 @@ radv_sk_open(struct radv_iface *ifa)
 {
   sock *sk = sk_new(ifa->pool);
   sk->type = SK_IP;
+  sk->subtype = SK_IPV6;
   sk->dport = ICMPV6_PROTO;
   sk->saddr = ifa->addr->ip;
   sk->vrf = ifa->ra->p.vrf;

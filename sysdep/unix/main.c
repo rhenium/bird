@@ -27,6 +27,7 @@
 #include "lib/resource.h"
 #include "lib/socket.h"
 #include "lib/event.h"
+#include "lib/timer.h"
 #include "lib/string.h"
 #include "nest/route.h"
 #include "nest/protocol.h"
@@ -43,12 +44,6 @@
  *	Debugging
  */
 
-#ifdef DEBUGGING
-static int debug_flag = 1;
-#else
-static int debug_flag = 0;
-#endif
-
 void
 async_dump(void)
 {
@@ -56,7 +51,7 @@ async_dump(void)
 
   rdump(&root_pool);
   sk_dump_all();
-  tm_dump_all();
+  // XXXX tm_dump_all();
   if_dump_all();
   neigh_dump_all();
   rta_dump_all();
@@ -71,7 +66,7 @@ async_dump(void)
  */
 
 #ifdef CONFIG_RESTRICTED_PRIVILEGES
-#include "lib/syspriv.h"
+#include CONFIG_INCLUDE_SYSPRIV_H
 #else
 
 static inline void
@@ -131,7 +126,7 @@ read_iproute_table(char *file, char *prefix, int max)
 
     if (*p == '#' || *p == '\n' || *p == 0)
       continue;
-   
+
     if (sscanf(p, "0x%x %s\n", &val, name) != 2 &&
 	sscanf(p, "0x%x %s #", &val, name) != 2 &&
 	sscanf(p, "%d %s\n", &val, name) != 2 &&
@@ -184,7 +179,7 @@ sysdep_preconfig(struct config *c)
 int
 sysdep_commit(struct config *new, struct config *old UNUSED)
 {
-  log_switch(debug_flag, &new->logfiles, new->syslog_name);
+  log_switch(0, &new->logfiles, new->syslog_name);
   return 0;
 }
 
@@ -302,7 +297,7 @@ cmd_reconfig_undo_notify(void)
 }
 
 void
-cmd_reconfig(char *name, int type, int timeout)
+cmd_reconfig(char *name, int type, uint timeout)
 {
   if (cli_access_restricted())
     return;
@@ -521,7 +516,7 @@ write_pid_file(void)
   rv = ftruncate(pid_fd, 0);
   if (rv < 0)
     die("fruncate: %m");
-    
+
   rv = write(pid_fd, ps, pl);
   if(rv < 0)
     die("write: %m");
@@ -571,6 +566,10 @@ sysdep_shutdown_done(void)
  *	Signals
  */
 
+volatile int async_config_flag;
+volatile int async_dump_flag;
+volatile int async_shutdown_flag;
+
 static void
 handle_sighup(int sig UNUSED)
 {
@@ -619,7 +618,7 @@ signal_init(void)
  *	Parsing of command-line arguments
  */
 
-static char *opt_list = "c:dD:ps:P:u:g:flRh";
+static char *opt_list = "bc:dD:ps:P:u:g:flRh";
 static int parse_and_exit;
 char *bird_name;
 static char *use_user;
@@ -640,15 +639,15 @@ display_help(void)
   fprintf(stderr,
     "\n"
     "Options: \n"
-    "  -c <config-file>     Use given configuration file instead\n"
-    "                       of prefix/etc/bird.conf\n"
+    "  -c <config-file>     Use given configuration file instead of\n"
+    "                       "  PATH_CONFIG_FILE "\n"
     "  -d                   Enable debug messages and run bird in foreground\n"
     "  -D <debug-file>      Log debug messages to given file instead of stderr\n"
     "  -f                   Run bird in foreground\n"
     "  -g <group>           Use given group ID\n"
     "  -h, --help           Display this information\n"
-    "  -l                   Look for a configuration file and a communication socket\n"
-    "                       file in the current working directory\n"
+    "  -l                   Look for a configuration file and a control socket\n"
+    "                       in the current working directory\n"
     "  -p                   Test configuration file and exit without start\n"
     "  -P <pid-file>        Create a PID file with given filename\n"
     "  -R                   Apply graceful restart recovery after start\n"
@@ -749,11 +748,11 @@ parse_args(int argc, char **argv)
 	config_changed = 1;
 	break;
       case 'd':
-	debug_flag |= 1;
+	log_init_debug("");
+	run_in_foreground = 1;
 	break;
       case 'D':
 	log_init_debug(optarg);
-	debug_flag |= 2;
 	break;
       case 'p':
 	parse_and_exit = 1;
@@ -811,16 +810,16 @@ main(int argc, char **argv)
 #endif
 
   parse_args(argc, argv);
-  if (debug_flag == 1)
-    log_init_debug("");
-  log_switch(debug_flag, NULL, NULL);
+  log_switch(1, NULL, NULL);
 
+  net_init();
   resource_init();
+  timer_init();
   olock_init();
   io_init();
   rt_init();
   if_init();
-  roa_init();
+//  roa_init();
   config_init();
 
   uid_t use_uid = get_uid(use_user);
@@ -850,7 +849,7 @@ main(int argc, char **argv)
   if (parse_and_exit)
     exit(0);
 
-  if (!(debug_flag||run_in_foreground))
+  if (!run_in_foreground)
     {
       pid_t pid = fork();
       if (pid < 0)

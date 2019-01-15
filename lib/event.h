@@ -37,7 +37,7 @@ ev_active(event *e)
 }
 
 static inline event*
-ev_new_set(pool *p, void (*hook)(void *), void *data)
+ev_new_init(pool *p, void (*hook)(void *), void *data)
 {
   event *e = ev_new(p);
   e->hook = hook;

@@ -8,30 +8,32 @@
 
 CF_HDR
 
-#include "lib/unix.h"
+#include "sysdep/unix/unix.h"
 #include <stdio.h>
+
+CF_DEFINES
+
+static struct log_config *this_log;
 
 CF_DECLS
 
 CF_KEYWORDS(LOG, SYSLOG, ALL, DEBUG, TRACE, INFO, REMOTE, WARNING, ERROR, AUTH, FATAL, BUG, STDERR, SOFT)
-CF_KEYWORDS(TIMEFORMAT, ISO, OLD, SHORT, LONG, BASE, NAME, CONFIRM, UNDO, CHECK, TIMEOUT)
-CF_KEYWORDS(DEBUG, LATENCY, LIMIT, WATCHDOG, WARNING, TIMEOUT)
+CF_KEYWORDS(NAME, CONFIRM, UNDO, CHECK, TIMEOUT, DEBUG, LATENCY, LIMIT, WATCHDOG, WARNING)
 
 %type <i> log_mask log_mask_list log_cat cfg_timeout
-%type <g> log_file
 %type <t> cfg_name
 %type <tf> timeformat_which
 %type <t> syslog_name
 
 CF_GRAMMAR
 
-CF_ADDTO(conf, log_config)
+conf: log_config ;
 
-log_config: LOG log_file log_mask ';' {
-    struct log_config *c = cfg_allocz(sizeof(struct log_config));
-    c->fh = $2;
-    c->mask = $3;
-    add_tail(&new_config->logfiles, &c->n);
+log_begin: { this_log = cfg_allocz(sizeof(struct log_config)); };
+
+log_config: LOG log_begin log_file log_mask ';' {
+    this_log->mask = $4;
+    add_tail(&new_config->logfiles, &this_log->n);
   }
  ;
 
@@ -40,14 +42,21 @@ syslog_name:
  | { $$ = bird_name; }
  ;
 
+log_limit:
+   /* empty */
+ | expr text { this_log->limit = $1; this_log->backup = $2; }
+ ;
+
 log_file:
-   text {
-     struct rfile *f = rf_open(new_config->pool, $1, "a");
-     if (!f) cf_error("Unable to open log file `%s': %m", $1);
-     $$ = rf_file(f);
+   text log_limit {
+     this_log->rf = rf_open(new_config->pool, $1, "a");
+     if (!this_log->rf) cf_error("Unable to open log file '%s': %m", $1);
+     this_log->fh = rf_file(this_log->rf);
+     this_log->pos = -1;
+     this_log->filename = $1;
    }
- | SYSLOG syslog_name { $$ = NULL; new_config->syslog_name = $2; }
- | STDERR { $$ = stderr; }
+ | SYSLOG syslog_name { this_log->fh = NULL; new_config->syslog_name = $2; }
+ | STDERR { this_log->fh = stderr; }
  ;
 
 log_mask:
@@ -73,7 +82,7 @@ log_cat:
  ;
 
 
-CF_ADDTO(conf, mrtdump_base)
+conf: mrtdump_base ;
 
 mrtdump_base:
    MRTDUMP PROTOCOLS mrtdump_mask ';' { new_config->proto_default_mrtdump = $3; }
@@ -85,29 +94,7 @@ mrtdump_base:
  ;
 
 
-CF_ADDTO(conf, timeformat_base)
-
-timeformat_which:
-   ROUTE { $$ = &new_config->tf_route; }
- | PROTOCOL { $$ = &new_config->tf_proto; }
- | BASE { $$ = &new_config->tf_base; }
- | LOG { $$ = &new_config->tf_log; }
-
-timeformat_spec:
-   timeformat_which TEXT { *$1 = (struct timeformat){$2, NULL, 0}; }
- | timeformat_which TEXT expr TEXT { *$1 = (struct timeformat){$2, $4, $3}; }
- | timeformat_which ISO SHORT { *$1 = (struct timeformat){"%T", "%F", 20*3600}; }
- | timeformat_which ISO LONG  { *$1 = (struct timeformat){"%F %T", NULL, 0}; }
- | timeformat_which OLD SHORT { *$1 = (struct timeformat){NULL, NULL, 0}; }
- | timeformat_which OLD LONG  { *$1 = (struct timeformat){"%d-%m-%Y %T", NULL, 0}; }
- ;
-
-timeformat_base:
-   TIMEFORMAT timeformat_spec ';'
- ;
-
-
-CF_ADDTO(conf, debug_unix)
+conf: debug_unix ;
 
 debug_unix:
    DEBUG LATENCY bool { new_config->latency_debug = $3; }

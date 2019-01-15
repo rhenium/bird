@@ -14,7 +14,7 @@
 #include "nest/bird.h"
 
 #include "lib/checksum.h"
-#include "lib/ip.h"
+#include "lib/idm.h"
 #include "lib/lists.h"
 #include "lib/slists.h"
 #include "lib/socket.h"
@@ -37,14 +37,6 @@
 #endif
 
 
-#ifdef IPV6
-#define OSPF_IS_V2 0
-#else
-#define OSPF_IS_V2 1
-#endif
-
-// FIXME: MAX_PREFIX_LENGTH
-
 #define OSPF_TRACE(flags, msg, args...) \
   do { if ((p->p.debug & flags) || OSPF_FORCE_DEBUG) \
     log(L_TRACE "%s: " msg, p->p.name , ## args ); } while(0)
@@ -66,16 +58,19 @@
   log_rl(&p->log_lsa_tbf, L_REMOTE "%s: " msg, p->p.name, args)
 
 #define LOG_LSA2(msg, args...) \
-  do { if (! p->log_lsa_tbf.mark) \
+  do { if (! p->log_lsa_tbf.drop) \
     log(L_REMOTE "%s: " msg, p->p.name, args); } while(0)
 
 
 #define OSPF_PROTO 89
 
-#define LSREFRESHTIME 1800	/* 30 minutes */
-#define MINLSINTERVAL 5
-#define MINLSARRIVAL 1
-#define LSINFINITY 0xffffff
+#define LSREFRESHTIME		1800	/* 30 minutes */
+#define MINLSINTERVAL		(5 S_)
+#define MINLSARRIVAL		(1 S_)
+#define LSINFINITY		0xffffff
+
+#define OSPF_PKT_TYPES		5	/* HELLO_P .. LSACK_P */
+#define OSPF3_CRYPTO_ID		1	/* OSPFv3 Cryptographic Protocol ID */
 
 #define OSPF_DEFAULT_TICK 1
 #define OSPF_DEFAULT_STUB_COST 1000
@@ -87,16 +82,18 @@
 
 #define OSPF_VLINK_ID_OFFSET 0x80000000
 
-
 struct ospf_config
 {
   struct proto_config c;
   uint tick;
   u8 ospf2;
+  u8 af_ext;
+  u8 af_mc;
   u8 rfc1583;
   u8 stub_router;
   u8 merge_external;
   u8 instance_id;
+  u8 instance_id_set;
   u8 abr;
   u8 asbr;
   int ecmp;
@@ -125,24 +122,24 @@ struct ospf_area_config
 struct area_net_config
 {
   node n;
-  struct prefix px;
+  net_addr prefix;
   u32 tag;
   u8 hidden;
 };
 
 struct area_net
 {
-  struct fib_node fn;
   u32 metric;			/* With possible LSA_EXT3_EBIT for NSSA area nets */
   u32 tag;
   u8 hidden;
   u8 active;
+  struct fib_node fn;
 };
 
 struct ospf_stubnet_config
 {
   node n;
-  struct prefix px;
+  net_addr prefix;
   u32 cost;
   u8 hidden;
   u8 summary;
@@ -177,9 +174,9 @@ struct ospf_iface_patt
   int tx_priority;
   u16 tx_length;
   u16 rx_buffer;
-
 #define OSPF_RXBUF_MINSIZE 256	/* Minimal allowed size */
   u8 instance_id;
+  u8 instance_id_set;
   u8 autype;			/* OSPF_AUTH_*, not really used in OSPFv3 */
   u8 strictnbma;
   u8 check_link;
@@ -189,7 +186,6 @@ struct ospf_iface_patt
   u8 ptp_netmask;		/* bool + 2 for unspecified */
   u8 ttl_security;		/* bool + 2 for TX only */
   u8 bfd;
-  u8 bsd_secondary;
   list *passwords;
 };
 
@@ -220,12 +216,16 @@ struct ospf_proto
   int areano;			/* Number of area I belong to */
   int padj;			/* Number of neighbors in Exchange or Loading state */
   struct fib rtf;		/* Routing table */
-  byte ospf2;			/* OSPF v2 or v3 */
-  byte rfc1583;			/* RFC1583 compatibility */
-  byte stub_router;		/* Do not forward transit traffic */
-  byte merge_external;		/* Should i merge external routes? */
-  byte asbr;			/* May i originate any ext/NSSA lsa? */
-  byte ecmp;			/* Maximal number of nexthops in ECMP route, or 0 */
+  struct idm idm;		/* OSPFv3 LSA ID map */
+  u8 ospf2;			/* OSPF v2 or v3 */
+  u8 af_ext;			/* OSPFv3-AF extension */
+  u8 af_mc;			/* OSPFv3-AF multicast */
+  u8 rfc1583;			/* RFC1583 compatibility */
+  u8 stub_router;		/* Do not forward transit traffic */
+  u8 merge_external;		/* Should i merge external routes? */
+  u8 asbr;			/* May i originate any ext/NSSA lsa? */
+  u8 ecmp;			/* Maximal number of nexthops in ECMP route, or 0 */
+  u64 csn64;			/* Last used cryptographic sequence number */
   struct ospf_area *backbone;	/* If exists */
   event *flood_event;		/* Event for flooding LS updates */
   void *lsab;			/* LSA buffer used when originating router LSAs */
@@ -258,8 +258,6 @@ struct ospf_area
   struct fib rtr;		/* Routing tables for routers */
 };
 
-
-
 struct ospf_iface
 {
   node n;
@@ -273,10 +271,10 @@ struct ospf_iface
   sock *sk;			/* IP socket */
   list neigh_list;		/* List of neighbors (struct ospf_neighbor) */
   u32 cost;			/* Cost of iface */
-  u32 waitint;			/* number of sec before changing state from wait */
-  u32 rxmtint;			/* number of seconds between LSA retransmissions */
-  u32 pollint;			/* Poll interval */
-  u32 deadint;			/* after "deadint" missing hellos is router dead */
+  u32 waitint;			/* Number of seconds before changing state from wait */
+  u32 rxmtint;			/* Number of seconds between LSA retransmissions */
+  u32 pollint;			/* Poll interval in seconds */
+  u32 deadint;			/* After deadint seconds without hellos is router dead */
   u32 iface_id;			/* Interface ID (iface->index or new value for vlinks) */
   u32 vid;			/* ID of peer of virtual link */
   ip_addr vip;			/* IP of peer of virtual link */
@@ -287,8 +285,8 @@ struct ospf_iface
 				   interface.  LSAs contained in the update */
   u16 helloint;			/* number of seconds between hello sending */
   list *passwords;
-  u32 csn;                      /* Last used crypt seq number */
-  bird_clock_t csn_use;         /* Last time when packet with that CSN was sent */
+  u32 csn;			/* Last used crypt seq number */
+  btime csn_use;		/* Last time when packet with that CSN was sent */
   ip_addr all_routers;		/* Multicast (or broadcast) address for all routers */
   ip_addr des_routers;		/* Multicast (or NULL) address for designated routers */
   ip_addr drip;			/* Designated router IP */
@@ -391,7 +389,8 @@ struct ospf_neighbor
   struct bfd_request *bfd_req;	/* BFD request, if BFD is used */
   void *ldd_buffer;		/* Last database description packet */
   u32 ldd_bsize;		/* Buffer size for ldd_buffer */
-  u32 csn;                      /* Last received crypt seq number (for MD5) */
+  u32 csn;			/* OSPFv2: Last received crypt seq number */
+  u64 csn64[OSPF_PKT_TYPES];	/* OSPFv3: Last received CSN for each type of packet */
 };
 
 
@@ -426,6 +425,7 @@ struct ospf_neighbor
 #define OSPF_AUTH_SIMPLE 1
 #define OSPF_AUTH_CRYPT	2
 
+#define OSPF3_AUTH_HMAC 1	/* HMAC Cryptographic Authentication */
 
 /* OSPF neighbor states */
 #define NEIGHBOR_DOWN	0
@@ -458,14 +458,17 @@ struct ospf_neighbor
 
 
 /* Generic option flags */
-#define OPT_V6		0x01	/* OSPFv3, LSA relevant for IPv6 routing calculation */
-#define OPT_E		0x02	/* Related to AS-external LSAs */
-#define OPT_MC		0x04	/* Related to MOSPF, not used and obsolete */
-#define OPT_N		0x08	/* Related to NSSA */
-#define OPT_P		0x08	/* OSPFv2, flags P and N share position, see NSSA RFC */
-#define OPT_EA		0x10	/* OSPFv2, external attributes, not used and obsolete */
-#define OPT_R		0x10	/* OSPFv3, originator is active router */
-#define OPT_DC		0x20	/* Related to demand circuits, not used */
+#define OPT_V6		0x0001	/* OSPFv3, LSA relevant for IPv6 routing calculation */
+#define OPT_E		0x0002	/* Related to AS-external LSAs */
+#define OPT_MC		0x0004	/* Related to MOSPF, not used and obsolete */
+#define OPT_N		0x0008	/* Related to NSSA */
+#define OPT_P		0x0008	/* OSPFv2, flags P and N share position, see NSSA RFC */
+#define OPT_L_V2	0x0010	/* OSPFv2, link-local signaling, not used */
+#define OPT_R		0x0010	/* OSPFv3, originator is active router */
+#define OPT_DC		0x0020	/* Related to demand circuits, not used */
+#define OPT_AF		0x0100	/* OSPFv3 Address Families (RFC 5838) */
+#define OPT_L_V3	0x0200	/* OSPFv3, link-local signaling */
+#define OPT_AT          0x0400	/* OSPFv3, authentication trailer */
 
 /* Router-LSA VEB flags are are stored together with links (OSPFv2) or options (OSPFv3) */
 #define OPT_RT_B	(0x01 << 24)
@@ -492,19 +495,37 @@ struct ospf_packet
   u8 autype;			/* Undefined for OSPFv3 */
 };
 
+struct ospf_lls
+{
+  u16 checksum;
+  u16 length;
+  byte data[0];
+};
+
 struct ospf_auth_crypto
 {
   u16 zero;
   u8 keyid;
   u8 len;
-  u32 csn;
+  u32 csn;			/* Cryptographic sequence number (32-bit) */
 };
 
-union ospf_auth
+union ospf_auth2
 {
   u8 password[8];
   struct ospf_auth_crypto c32;
 };
+
+struct ospf_auth3
+{
+  u16 type;			/* Authentication type (OSPF3_AUTH_*) */
+  u16 length;			/* Authentication trailer length (header + data) */
+  u16 reserved;
+  u16 sa_id;			/* Security association identifier (key_id) */
+  u64 csn;			/* Cryptographic sequence number (64-bit) */
+  byte data[0];			/* Authentication data */
+};
+
 
 /* Packet types */
 #define HELLO_P		1	/* Hello */
@@ -682,8 +703,8 @@ struct ospf_lsa_ext3
 
 struct ospf_lsa_ext_local
 {
-  ip_addr ip, fwaddr;
-  int pxlen;
+  net_addr net;
+  ip_addr fwaddr;
   u32 metric, ebit, fbit, tag, propagate;
   u8 pxopts;
 };
@@ -721,73 +742,102 @@ lsa_net_count(struct ospf_lsa_header *lsa)
 /* In ospf_area->rtr we store paths to routers, but we use RID (and not IP address)
    as index, so we need to encapsulate RID to IP address */
 
-#define ipa_from_rid(x) ipa_from_u32(x)
-#define ipa_to_rid(x) ipa_to_u32(x)
+#define net_from_rid(x) NET_ADDR_IP4(ip4_from_u32(x), IP4_MAX_PREFIX_LENGTH)
+#define rid_from_net(x) ip4_to_u32(((net_addr_ip4 *) x)->prefix)
 
 #define IPV6_PREFIX_SPACE(x) ((((x) + 63) / 32) * 4)
 #define IPV6_PREFIX_WORDS(x) (((x) + 63) / 32)
 
-/* FIXME: these four functions should be significantly redesigned w.r.t. integration,
-   also should be named as ospf3_* instead of *_ipv6_* */
+
+static inline int
+ospf_valid_prefix(net_addr *n)
+{
+  /*
+   * In OSPFv2, prefix is stored as netmask; ip4_masklen() returns 255 for
+   * invalid one. But OSPFv3-AF may receive IPv4 net with 32 < pxlen < 128.
+   */
+  uint max = (n->type == NET_IP4) ? IP4_MAX_PREFIX_LENGTH : IP6_MAX_PREFIX_LENGTH;
+  return n->pxlen <= max;
+}
+
+/*
+ * In OSPFv3-AF (RFC 5835), IPv4 address is encoded by just placing it in the
+ * first 32 bits of IPv6 address and setting remaining bits to zero. Likewise
+ * for IPv4 prefix, where remaining bits do not matter. We use following
+ * functions to convert between IPv4 and IPv4-in-IPv6 representations:
+ */
+
+static inline ip4_addr ospf3_6to4(ip6_addr a)
+{ return _MI4(_I0(a)); }
+
+static inline ip6_addr ospf3_4to6(ip4_addr a)
+{ return _MI6(_I(a), 0, 0, 0); }
+
 
 static inline u32 *
-lsa_get_ipv6_prefix(u32 *buf, ip_addr *addr, int *pxlen, u8 *pxopts, u16 *rest)
+ospf3_get_prefix(u32 *buf, int af, net_addr *n, u8 *pxopts, u16 *rest)
 {
-  u8 pxl = (*buf >> 24);
-  *pxopts = (*buf >> 16);
-  *rest = *buf;
-  *pxlen = pxl;
+  ip6_addr px = IP6_NONE;
+  uint pxlen = (*buf >> 24);
+  *pxopts = (*buf >> 16) & 0xff;
+  if (rest) *rest = *buf & 0xffff;
   buf++;
 
-  *addr = IPA_NONE;
-
-#ifdef IPV6
-  if (pxl > 0)
-    _I0(*addr) = *buf++;
-  if (pxl > 32)
-    _I1(*addr) = *buf++;
-  if (pxl > 64)
-    _I2(*addr) = *buf++;
-  if (pxl > 96)
-    _I3(*addr) = *buf++;
+  if (pxlen > 0)
+    _I0(px) = *buf++;
+  if (pxlen > 32)
+    _I1(px) = *buf++;
+  if (pxlen > 64)
+    _I2(px) = *buf++;
+  if (pxlen > 96)
+    _I3(px) = *buf++;
 
   /* Clean up remaining bits */
-  if (pxl < 128)
-    addr->addr[pxl / 32] &= u32_mkmask(pxl % 32);
-#endif
+  if (pxlen < 128)
+    px.addr[pxlen / 32] &= u32_mkmask(pxlen % 32);
+
+  if (af == NET_IP4)
+    net_fill_ip4(n, ospf3_6to4(px), pxlen);
+  else
+    net_fill_ip6(n, px, pxlen);
 
   return buf;
 }
 
 static inline u32 *
-lsa_get_ipv6_addr(u32 *buf, ip_addr *addr)
+ospf3_put_prefix(u32 *buf, net_addr *n, u8 pxopts, u16 rest)
 {
-  *addr = *(ip_addr *) buf;
+  ip6_addr px = (n->type == NET_IP4) ? ospf3_4to6(net4_prefix(n)) : net6_prefix(n);
+  uint pxlen = n->pxlen;
+
+  *buf++ = ((pxlen << 24) | (pxopts << 16) | rest);
+
+  if (pxlen > 0)
+    *buf++ = _I0(px);
+  if (pxlen > 32)
+    *buf++ = _I1(px);
+  if (pxlen > 64)
+    *buf++ = _I2(px);
+  if (pxlen > 96)
+    *buf++ = _I3(px);
+
+  return buf;
+}
+
+static inline u32 *
+ospf3_get_addr(u32 *buf, int af, ip_addr *addr)
+{
+  ip6_addr a;
+  memcpy(&a, buf, 16);
+  *addr = (af == NET_IP4) ? ipa_from_ip4(ospf3_6to4(a)) : ipa_from_ip6(a);
   return buf + 4;
 }
 
 static inline u32 *
-put_ipv6_prefix(u32 *buf, ip_addr addr UNUSED4, u8 pxlen UNUSED4, u8 pxopts UNUSED4, u16 lh UNUSED4)
+ospf3_put_addr(u32 *buf, ip_addr addr)
 {
-#ifdef IPV6
-  *buf++ = ((pxlen << 24) | (pxopts << 16) | lh);
-
-  if (pxlen > 0)
-    *buf++ = _I0(addr);
-  if (pxlen > 32)
-    *buf++ = _I1(addr);
-  if (pxlen > 64)
-    *buf++ = _I2(addr);
-  if (pxlen > 96)
-    *buf++ = _I3(addr);
-#endif
-  return buf;
-}
-
-static inline u32 *
-put_ipv6_addr(u32 *buf, ip_addr addr)
-{
-  *(ip_addr *) buf = addr;
+  ip6_addr a = ipa_is_ip4(addr) ? ospf3_4to6(ipa_to_ip4(addr)) : ipa_to_ip6(addr);
+  memcpy(buf, &a, 16);
   return buf + 4;
 }
 
@@ -813,10 +863,10 @@ struct lsadb_show_data {
 };
 
 
-#define EA_OSPF_METRIC1	EA_CODE(EAP_OSPF, 0)
-#define EA_OSPF_METRIC2	EA_CODE(EAP_OSPF, 1)
-#define EA_OSPF_TAG	EA_CODE(EAP_OSPF, 2)
-#define EA_OSPF_ROUTER_ID EA_CODE(EAP_OSPF, 3)
+#define EA_OSPF_METRIC1	EA_CODE(PROTOCOL_OSPF, 0)
+#define EA_OSPF_METRIC2	EA_CODE(PROTOCOL_OSPF, 1)
+#define EA_OSPF_TAG	EA_CODE(PROTOCOL_OSPF, 2)
+#define EA_OSPF_ROUTER_ID EA_CODE(PROTOCOL_OSPF, 3)
 
 
 /* ospf.c */
@@ -831,18 +881,23 @@ static inline void ospf_notify_net_lsa(struct ospf_iface *ifa)
 static inline void ospf_notify_link_lsa(struct ospf_iface *ifa)
 { ifa->update_link_lsa = 1; }
 
-
-#define ospf_is_v2(X) OSPF_IS_V2
-#define ospf_is_v3(X) (!OSPF_IS_V2)
-/*
 static inline int ospf_is_v2(struct ospf_proto *p)
 { return p->ospf2; }
 
 static inline int ospf_is_v3(struct ospf_proto *p)
 { return ! p->ospf2; }
-*/
-static inline int ospf_get_version(struct ospf_proto *p UNUSED4 UNUSED6)
+
+static inline int ospf_get_version(struct ospf_proto *p)
 { return ospf_is_v2(p) ? 2 : 3; }
+
+static inline int ospf_is_ip4(struct ospf_proto *p)
+{ return p->p.net_type == NET_IP4; }
+
+static inline int ospf_is_ip6(struct ospf_proto *p)
+{ return p->p.net_type == NET_IP6; }
+
+static inline int ospf_get_af(struct ospf_proto *p)
+{ return p->p.net_type; }
 
 struct ospf_area *ospf_find_area(struct ospf_proto *p, u32 aid);
 
@@ -925,8 +980,8 @@ static inline void ospf_send_to_des(struct ospf_iface *ifa)
 #define SKIP(DSC) do { err_dsc = DSC; goto skip; } while(0)
 #endif
 
-static inline uint ospf_pkt_hdrlen(struct ospf_proto *p UNUSED4 UNUSED6)
-{ return ospf_is_v2(p) ? (sizeof(struct ospf_packet) + sizeof(union ospf_auth)) : sizeof(struct ospf_packet); }
+static inline uint ospf_pkt_hdrlen(struct ospf_proto *p)
+{ return ospf_is_v2(p) ? (sizeof(struct ospf_packet) + sizeof(union ospf_auth2)) : sizeof(struct ospf_packet); }
 
 static inline void * ospf_tx_buffer(struct ospf_iface *ifa)
 { return ifa->sk->tbuf; }
@@ -938,11 +993,13 @@ static inline void * ospf_tx_buffer(struct ospf_iface *ifa)
 
 void ospf_send_hello(struct ospf_iface *ifa, int kind, struct ospf_neighbor *dirn);
 void ospf_receive_hello(struct ospf_packet *pkt, struct ospf_iface *ifa, struct ospf_neighbor *n, ip_addr faddr);
+uint ospf_hello3_options(struct ospf_packet *pkt);
 
 /* dbdes.c */
 void ospf_send_dbdes(struct ospf_proto *p, struct ospf_neighbor *n);
 void ospf_rxmt_dbdes(struct ospf_proto *p, struct ospf_neighbor *n);
 void ospf_receive_dbdes(struct ospf_packet *pkt, struct ospf_iface *ifa, struct ospf_neighbor *n);
+uint ospf_dbdes3_options(struct ospf_packet *pkt);
 
 /* lsreq.c */
 void ospf_send_lsreq(struct ospf_proto *p, struct ospf_neighbor *n);

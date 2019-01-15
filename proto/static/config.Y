@@ -13,98 +13,119 @@ CF_HDR
 CF_DEFINES
 
 #define STATIC_CFG ((struct static_config *) this_proto)
-static struct static_route *this_srt, *this_srt_nh, *last_srt_nh;
+static struct static_route *this_srt, *this_snh;
 static struct f_inst **this_srt_last_cmd;
+
+static struct static_route *
+static_nexthop_new(void)
+{
+  struct static_route *nh = this_srt;
+
+  if (this_snh)
+  {
+    /* Additional next hop */
+    nh = cfg_allocz(sizeof(struct static_route));
+    nh->net = this_srt->net;
+    this_snh->mp_next = nh;
+  }
+
+  nh->dest = RTD_UNICAST;
+  nh->mp_head = this_srt;
+  return nh;
+};
 
 static void
 static_route_finish(void)
 {
-  struct static_route *r;
-
-  /* Update undefined use_bfd entries in multipath nexthops */
-  if (this_srt->dest == RTD_MULTIPATH)
-    for (r = this_srt->mp_next; r; r = r->mp_next)
-      if (r->use_bfd < 0)
-        r->use_bfd = this_srt->use_bfd;
+  if (net_type_match(this_srt->net, NB_DEST) == !this_srt->dest)
+    cf_error("Unexpected or missing nexthop/type");
 }
 
 CF_DECLS
 
 CF_KEYWORDS(STATIC, ROUTE, VIA, DROP, REJECT, PROHIBIT, PREFERENCE, CHECK, LINK)
-CF_KEYWORDS(MULTIPATH, WEIGHT, RECURSIVE, IGP, TABLE, BLACKHOLE, UNREACHABLE, BFD)
+CF_KEYWORDS(ONLINK, WEIGHT, RECURSIVE, IGP, TABLE, BLACKHOLE, UNREACHABLE, BFD, MPLS)
 
 
 CF_GRAMMAR
 
-CF_ADDTO(proto, static_proto '}')
+proto: static_proto '}' ;
 
-static_proto_start: proto_start STATIC {
-     this_proto = proto_config_new(&proto_static, $1);
-     static_init_config((struct static_config *) this_proto);
-  }
- ;
+static_proto_start: proto_start STATIC
+{
+  this_proto = proto_config_new(&proto_static, $1);
+  init_list(&STATIC_CFG->routes);
+};
 
 static_proto:
    static_proto_start proto_name '{'
  | static_proto proto_item ';'
+ | static_proto proto_channel ';' { this_proto->net_type = $2->net_type; }
  | static_proto CHECK LINK bool ';' { STATIC_CFG->check_link = $4; }
- | static_proto IGP TABLE rtable ';' { STATIC_CFG->igp_table = $4; }
+ | static_proto IGP TABLE rtable ';' {
+    if ($4->addr_type == NET_IP4)
+      STATIC_CFG->igp_table_ip4 = $4;
+    else if ($4->addr_type == NET_IP6)
+      STATIC_CFG->igp_table_ip6 = $4;
+    else
+      cf_error("Incompatible IGP table type");
+   }
  | static_proto stat_route stat_route_opt_list ';' { static_route_finish(); }
  ;
 
-stat_route0: ROUTE prefix {
+stat_nexthop:
+    VIA ipa ipa_scope {
+      this_snh = static_nexthop_new();
+      this_snh->via = $2;
+      this_snh->iface = $3;
+    }
+  | VIA TEXT {
+      this_snh = static_nexthop_new();
+      this_snh->via = IPA_NONE;
+      this_snh->iface = if_get_by_name($2);
+    }
+  | stat_nexthop MPLS label_stack {
+    this_snh->mls = $3;
+  }
+  | stat_nexthop ONLINK bool {
+    this_snh->onlink = $3;
+  }
+  | stat_nexthop WEIGHT expr {
+    this_snh->weight = $3 - 1;
+    if (($3<1) || ($3>256)) cf_error("Weight must be in range 1-256");
+  }
+  | stat_nexthop BFD bool {
+    this_snh->use_bfd = $3; cf_check_bfd($3);
+  }
+;
+
+stat_nexthops:
+    stat_nexthop
+  | stat_nexthops stat_nexthop
+;
+
+stat_route0: ROUTE net_any {
      this_srt = cfg_allocz(sizeof(struct static_route));
-     add_tail(&STATIC_CFG->other_routes, &this_srt->n);
-     this_srt->net = $2.addr;
-     this_srt->masklen = $2.len;
+     add_tail(&STATIC_CFG->routes, &this_srt->n);
+     this_srt->net = $2;
      this_srt_last_cmd = &(this_srt->cmds);
+     this_srt->mp_next = NULL;
+     this_snh = NULL;
   }
  ;
 
-stat_multipath1:
-   VIA ipa ipa_scope {
-     last_srt_nh = this_srt_nh;
-     this_srt_nh = cfg_allocz(sizeof(struct static_route));
-     this_srt_nh->dest = RTD_NONE;
-     this_srt_nh->via = $2;
-     this_srt_nh->via_if = $3;
-     this_srt_nh->if_name = (void *) this_srt; /* really */
-     this_srt_nh->use_bfd = -1; /* undefined */
-   }
- | stat_multipath1 WEIGHT expr {
-     this_srt_nh->masklen = $3 - 1; /* really */
-     if (($3<1) || ($3>256)) cf_error("Weight must be in range 1-256"); 
-   }
- | stat_multipath1 BFD bool {
-     this_srt_nh->use_bfd = $3; cf_check_bfd($3);
-   }
- ;
-
-stat_multipath:
-   stat_multipath1 { this_srt->mp_next = this_srt_nh; }
- | stat_multipath stat_multipath1 { last_srt_nh->mp_next = this_srt_nh; }
- ;
-
 stat_route:
-   stat_route0 VIA ipa ipa_scope {
-      this_srt->dest = RTD_ROUTER;
-      this_srt->via = $3;
-      this_srt->via_if = $4;
-   }
- | stat_route0 VIA TEXT {
-      this_srt->dest = RTD_DEVICE;
-      this_srt->if_name = $3;
-      rem_node(&this_srt->n);
-      add_tail(&STATIC_CFG->iface_routes, &this_srt->n);
-   }
- | stat_route0 MULTIPATH stat_multipath {
-      this_srt->dest = RTD_MULTIPATH;
-   }
+   stat_route0 stat_nexthops
  | stat_route0 RECURSIVE ipa {
       this_srt->dest = RTDX_RECURSIVE;
       this_srt->via = $3;
    }
-
+ | stat_route0 RECURSIVE ipa MPLS label_stack {
+      this_srt->dest = RTDX_RECURSIVE;
+      this_srt->via = $3;
+      this_srt->mls = $5;
+   }
+ | stat_route0			{ this_srt->dest = RTD_NONE; }
  | stat_route0 DROP		{ this_srt->dest = RTD_BLACKHOLE; }
  | stat_route0 REJECT		{ this_srt->dest = RTD_UNREACHABLE; }
  | stat_route0 BLACKHOLE	{ this_srt->dest = RTD_BLACKHOLE; }
@@ -114,7 +135,6 @@ stat_route:
 
 stat_route_item:
    cmd { *this_srt_last_cmd = $1; this_srt_last_cmd = &($1->next); }
- | BFD bool ';' { this_srt->use_bfd = $2; cf_check_bfd($2); }
  ;
 
 stat_route_opts:

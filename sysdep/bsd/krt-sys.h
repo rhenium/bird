@@ -31,7 +31,7 @@ static inline void kif_sys_copy_config(struct kif_config *d UNUSED, struct kif_c
 
 /* Kernel routes */
 
-extern int krt_max_tables;
+extern uint krt_max_tables;
 
 struct krt_params {
   int table_id;				/* Kernel table ID we sync with */
@@ -44,8 +44,9 @@ struct krt_state {
 
 static inline void krt_sys_io_init(void) { }
 static inline void krt_sys_init(struct krt_proto *p UNUSED) { }
+static inline void krt_sys_postconfig(struct krt_config *x UNUSED) { }
 
-static inline int krt_sys_get_attr(eattr *a UNUSED, byte *buf UNUSED, int buflen UNUSED) { return 0; }
+static inline int krt_sys_get_attr(eattr *a UNUSED, byte *buf UNUSED, int buflen UNUSED) { return GA_UNKNOWN; }
 
 
 #endif

@@ -87,8 +87,10 @@ struct bfd_proto
   sock *notify_ws;
   list notify_list;
 
-  sock *rx_1;
-  sock *rx_m;
+  sock *rx4_1;
+  sock *rx6_1;
+  sock *rx4_m;
+  sock *rx6_m;
   list iface_list;
 };
 
@@ -138,11 +140,11 @@ struct bfd_session
   btime last_tx;			/* Time of last sent periodic control packet */
   btime last_rx;			/* Time of last received valid control packet */
 
-  timer2 *tx_timer;			/* Periodic control packet timer */
-  timer2 *hold_timer;			/* Timer for session down detection time */
+  timer *tx_timer;			/* Periodic control packet timer */
+  timer *hold_timer;			/* Timer for session down detection time */
 
   list request_list;			/* List of client requests (struct bfd_request) */
-  bird_clock_t last_state_change;	/* Time of last state change */
+  btime last_state_change;		/* Time of last state change */
   u8 notify_running;			/* 1 if notify hooks are running */
 
   u8 rx_csn_known;			/* Received crypto sequence number is known */
@@ -201,7 +203,7 @@ void bfd_show_sessions(struct proto *P);
 
 /* packets.c */
 void bfd_send_ctl(struct bfd_proto *p, struct bfd_session *s, int final);
-sock * bfd_open_rx_sk(struct bfd_proto *p, int multihop);
+sock * bfd_open_rx_sk(struct bfd_proto *p, int multihop, int inet_version);
 sock * bfd_open_tx_sk(struct bfd_proto *p, ip_addr local, struct iface *ifa);
 
 

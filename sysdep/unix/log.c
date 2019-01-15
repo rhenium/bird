@@ -19,6 +19,8 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
 
@@ -27,7 +29,7 @@
 #include "conf/conf.h"
 #include "lib/string.h"
 #include "lib/lists.h"
-#include "lib/unix.h"
+#include "sysdep/unix/unix.h"
 
 static FILE *dbgf;
 static list *current_log_list;
@@ -86,6 +88,54 @@ static char *class_names[] = {
   "BUG"
 };
 
+static inline off_t
+log_size(struct log_config *l)
+{
+  struct stat st;
+  return (!fstat(rf_fileno(l->rf), &st) && S_ISREG(st.st_mode)) ? st.st_size : 0;
+}
+
+static void
+log_close(struct log_config *l)
+{
+  rfree(l->rf);
+  l->rf = NULL;
+  l->fh = NULL;
+}
+
+static int
+log_open(struct log_config *l)
+{
+  l->rf = rf_open(config->pool, l->filename, "a");
+  if (!l->rf)
+  {
+    /* Well, we cannot do much in case of error as log is closed */
+    l->mask = 0;
+    return -1;
+  }
+
+  l->fh = rf_file(l->rf);
+  l->pos = log_size(l);
+
+  return 0;
+}
+
+static int
+log_rotate(struct log_config *l)
+{
+  log_close(l);
+
+  /* If we cannot rename the logfile, we at least try to delete it
+     in order to continue logging and not exceeding logfile size */
+  if ((rename(l->filename, l->backup) < 0) &&
+      (unlink(l->filename) < 0))
+  {
+    l->mask = 0;
+    return -1;
+  }
+
+  return log_open(l);
+}
 
 /**
  * log_commit - commit a log message
@@ -120,7 +170,25 @@ log_commit(int class, buffer *buf)
 	  else
 	    {
 	      byte tbuf[TM_DATETIME_BUFFER_SIZE];
-	      tm_format_datetime(tbuf, &config->tf_log, now);
+	      const char *fmt = config ? config->tf_log.fmt1 : "%F %T.%3f";
+	      if (!tm_format_real_time(tbuf, sizeof(tbuf), fmt, current_real_time()))
+		strcpy(tbuf, "<error>");
+
+	      if (l->limit)
+	      {
+		off_t msg_len = strlen(tbuf) + strlen(class_names[class]) +
+		  (buf->pos - buf->start) + 5;
+
+		if (l->pos < 0)
+		  l->pos = log_size(l);
+
+		if (l->pos + msg_len > l->limit)
+		  if (log_rotate(l) < 0)
+		    continue;
+
+		l->pos += msg_len;
+	      }
+
 	      fprintf(l->fh, "%s <%s> ", tbuf, class_names[class]);
 	    }
 	  fputs(buf->start, l->fh);
@@ -180,19 +248,18 @@ log_msg(const char *msg, ...)
 void
 log_rl(struct tbf *f, const char *msg, ...)
 {
-  int last_hit = f->mark;
   int class = 1;
   va_list args;
 
   /* Rate limiting is a bit tricky here as it also logs '...' during the first hit */
-  if (tbf_limit(f) && last_hit)
+  if (tbf_limit(f) && (f->drop > 1))
     return;
 
   if (*msg >= 1 && *msg <= 8)
     class = *msg++;
 
   va_start(args, msg);
-  vlog(class, (f->mark ? "..." : msg), args);
+  vlog(class, (f->drop ? "..." : msg), args);
   va_end(args);
 }
 
@@ -256,36 +323,59 @@ debug(const char *msg, ...)
 }
 
 static list *
-default_log_list(int debug, int init, char **syslog_name)
+default_log_list(int initial, char **syslog_name)
 {
-  static list init_log_list;
-  init_list(&init_log_list);
+  static list log_list;
+  init_list(&log_list);
   *syslog_name = NULL;
 
 #ifdef HAVE_SYSLOG_H
-  if (!debug)
+  if (!dbgf)
     {
       static struct log_config lc_syslog = { .mask = ~0 };
-      add_tail(&init_log_list, &lc_syslog.n);
+      add_tail(&log_list, &lc_syslog.n);
       *syslog_name = bird_name;
-      if (!init)
-	return &init_log_list;
     }
 #endif
 
-  static struct log_config lc_stderr = { .mask = ~0, .terminal_flag = 1 };
-  lc_stderr.fh = stderr;
-  add_tail(&init_log_list, &lc_stderr.n);
-  return &init_log_list;
+  if (dbgf && (dbgf != stderr))
+    {
+      static struct log_config lc_debug = { .mask = ~0 };
+      lc_debug.fh = dbgf;
+      add_tail(&log_list, &lc_debug.n);
+    }
+
+  if (initial || (dbgf == stderr))
+    {
+      static struct log_config lc_stderr = { .mask = ~0, .terminal_flag = 1};
+      lc_stderr.fh = stderr;
+      add_tail(&log_list, &lc_stderr.n);
+    }
+
+  return &log_list;
 }
 
 void
-log_switch(int debug, list *l, char *new_syslog_name)
+log_switch(int initial, list *logs, char *new_syslog_name)
 {
-  if (!l || EMPTY_LIST(*l))
-    l = default_log_list(debug, !l, &new_syslog_name);
+  struct log_config *l;
 
-  current_log_list = l;
+  if (!logs || EMPTY_LIST(*logs))
+    logs = default_log_list(initial, &new_syslog_name);
+
+  /* Close the logs to avoid pinning them on disk when deleted */
+  if (current_log_list)
+    WALK_LIST(l, *current_log_list)
+      if (l->rf)
+	log_close(l);
+
+  /* Reopen the logs, needed for 'configure undo' */
+  if (logs)
+    WALK_LIST(l, *logs)
+      if (l->filename && !l->rf)
+	log_open(l);
+
+  current_log_list = logs;
 
 #ifdef HAVE_SYSLOG_H
   if (current_syslog_name && new_syslog_name &&
@@ -306,8 +396,6 @@ log_switch(int debug, list *l, char *new_syslog_name)
   }
 #endif
 }
-
-
 
 void
 log_init_debug(char *f)

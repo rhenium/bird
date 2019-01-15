@@ -13,9 +13,13 @@
 #include "lib/resource.h"
 #include "sysdep/config.h"
 
-#define BUFFER(type)		struct { type *data; uint used, size; }
-
+#define BUFFER_(type)		struct { type *data; uint used, size; }
+#define BUFFER_TYPE(v)		typeof(* (v).data)
 #define BUFFER_SIZE(v)		((v).size * sizeof(* (v).data))
+
+#ifndef PARSER
+#define BUFFER(type) BUFFER_(type)
+#endif
 
 #define BUFFER_INIT(v,pool,isize)					\
   ({									\
@@ -45,5 +49,15 @@
 #define BUFFER_POP(v)		BUFFER_DEC(v,1)
 
 #define BUFFER_FLUSH(v)		({ (v).used = 0; })
+
+#define BUFFER_WALK(v,n)						\
+  for (BUFFER_TYPE(v) *_n = (v).data, n; _n < ((v).data + (v).used) && (n = *_n, 1); _n++)
+
+#define BUFFER_SHALLOW_COPY(dst, src)					\
+  ({									\
+    (dst).used = (src).used;						\
+    (dst).size = (src).size;						\
+    (dst).data = (src).data;						\
+  })
 
 #endif /* _BIRD_BUFFER_H_ */

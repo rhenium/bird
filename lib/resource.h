@@ -37,7 +37,7 @@ struct resclass {
 typedef struct pool pool;
 
 void resource_init(void);
-pool *rp_new(pool *, char *);		/* Create new pool */
+pool *rp_new(pool *, const char *);	/* Create new pool */
 void rfree(void *);			/* Free single resource */
 void rdump(void *);			/* Dump to debug output */
 size_t rmemsize(void *res);		/* Return size of memory used by the resource */
@@ -59,11 +59,23 @@ void mb_free(void *);
 
 typedef struct linpool linpool;
 
+typedef struct lp_state {
+  void *current, *large;
+  byte *ptr;
+} lp_state;
+
 linpool *lp_new(pool *, unsigned blk);
 void *lp_alloc(linpool *, unsigned size);	/* Aligned */
 void *lp_allocu(linpool *, unsigned size);	/* Unaligned */
 void *lp_allocz(linpool *, unsigned size);	/* With clear */
 void lp_flush(linpool *);			/* Free everything, but leave linpool */
+void lp_save(linpool *m, lp_state *p);		/* Save state */
+void lp_restore(linpool *m, lp_state *p);	/* Restore state */
+
+extern const int lp_chunk_size;
+#define LP_GAS		    1024
+#define LP_GOOD_SIZE(x)	    (((x + LP_GAS - 1) & (~(LP_GAS - 1))) - lp_chunk_size)
+#define lp_new_default(p)   lp_new(p, LP_GOOD_SIZE(LP_GAS*4))
 
 /* Slabs */
 

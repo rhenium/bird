@@ -35,6 +35,7 @@ For compiling BIRD you need these programs and libraries:
 
  - ncurses library
  - GNU Readline library
+ - libssh library (optional, for RPKI-Router protocol)
 
 For compiling BIRD documentation you also need:
 

@@ -1,22 +1,112 @@
-Version 1.6.5 (2019-01-05)
+Version 2.0.3 (2019-01-05)
   o MRT table dumps (RFC 6396)
   o BGP Long-lived graceful restart
+  o BGP: Optional import table (Adj-RIB-In)
+  o BGP: Extend 'next hop keep' and 'next hop self' options
+  o BGP: Improved VRF support
+  o OSPF: Authentication trailer for OSPFv3 (RFC 7166)
+  o Babel: New option to randomize router ID
+  o Filter: Custom route attributes
+  o Filter: Support for src accessor to SADR source prefix
+  o Filter: Support for VPN_RD sets
   o Filter: Make ifname attribute modifiable
-  o Improved keeping track of IPv6 link-local addresses
+  o Perf: Protocol to measure BIRD performance internally
+  o More verbose error messages in config processing
+  o Log file size limit / log rotation
   o Many bugfixes
 
-Version 1.6.4 (2018-03-22)
+  Notes:
+
+  Export of routes to RS EBGP (route server) sessions from other sources than
+  RS EBGP sessions was changed that ASN is no longer prepended to BGP_PATH in
+  that case. The change does not affect regular BGP configurations or regular
+  route servers that have only RS EBGP peers.
+
+  For BGP route servers and route reflectors, the default value of option
+  'next hop keep' was changed to a more appropriate value.
+
+  Attributes for OSPF and Babel metrics are no longer reset when exported to
+  these protocols and could be set anywhere in BIRD. As a result, OSPF metric is
+  kept when a route is reannounced between OSPF instances. Also, when route is
+  exported to OSPF with both ospf_metric1 and ospf_metric2 attributes it is now
+  propagated as OSPF-E2 route instead of as OSPF-E1 route.
+
+  Compiling BIRD with --enable-debug no longer automatically activates debug
+  mode (-d option) nor local mode (-l option). Also, debug mode with output to
+  file (-D option) no longer not forces foreground mode (-f option).
+
+  The configure script now uses standard option --runstatedir, the old option
+  --with-runtimedir is deprecated.
+
+
+Version 2.0.2 (2018-03-22)
+  o Source-specific routing support for Linux kernel and Babel
+  o BGP: New option 'disable after cease'
+  o Filter: Allow silent filter execution
+  o Filter: Fixed stack overflow in BGP mask expressions.
+  o Several bugfixes
+
+  Notes:
+
+  Syntax prefix:netmask for IPv4 prefixes was dropped. Just use prefix/pxlen.
+
+
+Version 2.0.1 (2018-01-16)
+  o Linux MPLS kernel support
+  o Better handling of channels inherited from templates
+  o Default EBGP Route Propagation Behavior without Policies (RFC 8212)
+  o Many bugfixes
+
+  Notes:
+
+  To satisfy requirements of RFC 8212, external BGP protocols now require
+  explicit configuration of import and export policies.
+
+
+Version 2.0.0 (2017-12-11)
+  o Integrated IPv4 + IPv6 design
+  o Support for MPLS next hops
+  o Support for VPNv4 and VPNv6 networks
+  o Microsecond timers infrastructure
   o Basic VRF support
-  o Simplified autoconf scripts
-  o BGP: Shutdown communication (RFC 8203)
+  o Babel: Support for dual-stack IPv4/IPv6
+  o Babel: Many improvements and bugfixes
+  o Major BGP protocol redesign
+  o Full support for Multiprotocol BGP
+  o BGP multicast support (SAFI 2)
+  o BGP flowspec support (RFC 5575)
+  o BGP with MPLS labels (RFC 3107)
+  o BGP MPLS/VPN support (RFC 4364)
+  o BGP 6PE - IPv6 NLRI over IPv4 MPLS (RFC 4798)
+  o BGP IPv4 NLRI with an IPv6 Next Hop (RFC 5549)
+  o BGP Confederations (RFC 5065)
+  o BGP Shutdown communication (RFC 8203)
   o BGP: Allow exchanging LOCAL_PREF with eBGP peers
   o BGP: Allow to specify interface for regular sessions
-  o BGP: New option 'disable after cease'
+  o OSPF: Support of address families in OSPFv3
+  o OSPF: Enable ECMP and Link detection by default
   o RAdv: Support for more specific routes (RFC 4191)
   o RAdv: Proper handling of prefix retraction
-  o Filter: Allow silent filter execution
-  o Filter: Fixed stack overflow in BGP mask expressions
-  o Several bug fixes
+  o RIP: Enable ECMP and Link detection by default
+  o Redesign of RPKI handling
+  o New RPKI-Router protocol
+  o Static: Minor overhaul
+  o Static: Support for all new route types
+  o Kenrel: Default Linux kernel metric changed to 32
+  o Kernel: Fix IPv6 ECMP handling with Linux 4.11+
+  o Update of show route command
+  o BIRD client persistent history
+  o New build system
+  o Unit tests
+  o ...
+
+  Notes:
+
+  Tables are now defined with appropriate net type keyword. Protocols and tables
+  are now connected by explicit channels, most related protocol options (table,
+  import, export, ...) are now channel options. See doc/bird.conf.example2 for
+  configuration examples. Some options were removed/replaced.
+
 
 Version 1.6.3 (2016-12-21)
   o Large BGP communities
