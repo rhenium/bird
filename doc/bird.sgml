@@ -594,7 +594,7 @@ agreement").
 
 	<tag><label id="proto-description">description "<m/text/"</tag>
 	This is an optional description of the protocol. It is displayed as a
-	part of the output of 'show route all' command.
+	part of the output of 'show protocols all' command.
 
 	<tag><label id="proto-table">table <m/name/</tag>
 	Connect this protocol to a non-default routing table.
@@ -836,6 +836,10 @@ This argument can be omitted if there exists only a single instance.
 	<p>The <cf/stats/ switch requests showing of route statistics (the
 	number of networks, number of routes before and after filtering). If
 	you use <cf/count/ instead, only the statistics will be printed.
+
+	<tag><label id="cli-mrt-dump">mrt dump table <m/name/|"<m/pattern/" to "<m/filename/" [filter <m/f/|where <m/c/]</tag>
+	Dump content of a routing table to a specified file in MRT table dump
+	format. See <ref id="mrt" name="MRT protocol"> for details.
 
 	<tag><label id="cli-show-roa">show roa [<m/prefix/ | in <m/prefix/ | for <m/prefix/] [as <m/num/] [table <m/t/]</tag>
 	Show contents of a ROA table (by default of the first one). You can
@@ -1405,7 +1409,8 @@ clist for most purposes.
 	<tag><label id="rta-ifname"><m/string/ ifname</tag>
 	Name of the outgoing interface. Sink routes (like blackhole, unreachable
 	or prohibit) and multipath routes have no interface associated with
-	them, so <cf/ifname/ returns an empty string for such routes. Read-only.
+	them, so <cf/ifname/ returns an empty string for such routes. Setting it
+	would also change route to a direct one (remove gateway).
 
 	<tag><label id="rta-ifindex"><m/int/ ifindex</tag>
 	Index of the outgoing interface. System wide index of the interface. May
@@ -1977,13 +1982,16 @@ using the following configuration parameters:
 	immediately shut down. Note that this option cannot be used with
 	multihop BGP. Default: disabled.
 
-	<tag><label id="bgp-bfd">bfd <M>switch</M></tag>
+	<tag><label id="bgp-bfd">bfd <M>switch</M>|graceful</tag>
 	BGP could use BFD protocol as an advisory mechanism for neighbor
 	liveness and failure detection. If enabled, BIRD setups a BFD session
 	for the BGP neighbor and tracks its liveness by it. This has an
 	advantage of an order of magnitude lower detection times in case of
-	failure. Note that BFD protocol also has to be configured, see
-	<ref id="bfd" name="BFD"> section for details. Default: disabled.
+	failure. When a neighbor failure is detected, the BGP session is
+	restarted. Optionally, it can be configured (by <cf/graceful/ argument)
+	to trigger graceful restart instead of regular restart.  Note that BFD
+	protocol also has to be configured, see <ref id="bfd" name="BFD">
+	section for details. Default: disabled.
 
 	<tag><label id="bgp-ttl-security">ttl security <m/switch/</tag>
 	Use GTSM (<rfc id="5082"> - the generalized TTL security mechanism). GTSM
@@ -2107,6 +2115,25 @@ using the following configuration parameters:
 	and specifies how long the neighbor would wait for the BGP session to
 	re-establish after a restart before deleting stale routes. Default:
 	120 seconds.
+
+	<tag><label id="bgp-long-lived-graceful-restart">long lived graceful restart <m/switch/|aware</tag>
+	The long-lived graceful restart is an extension of the traditional
+	<ref id="bgp-graceful-restart" name="BGP graceful restart">, where stale
+	routes are kept even after the <ref id="bgp-graceful-restart-time"
+	name="restart time"> expires for additional long-lived stale time, but
+	they are marked with the LLGR_STALE community, depreferenced, and
+	withdrawn from routers not supporting LLGR. Like traditional BGP
+	graceful restart, it has three states: disabled, aware (receiving-only),
+	and enabled. Note that long-lived graceful restart requires at least
+	aware level of traditional BGP graceful restart. Default: aware, unless
+	graceful restart is disabled.
+
+	<tag><label id="bgp-long-lived-stale-time">long lived stale time <m/number/</tag>
+	The long-lived stale time is announced in the BGP long-lived graceful
+	restart capability and specifies how long the neighbor would keep stale
+	routes depreferenced during long-lived graceful restart until either the
+	session is re-stablished and synchronized or the stale time expires and
+	routes are removed. Default: 3600 seconds.
 
 	<tag><label id="bgp-interpret-communities">interpret communities <m/switch/</tag>
 	<rfc id="1997"> demands that BGP speaker should process well-known
@@ -2626,6 +2653,81 @@ protocol kernel {		# Secondary routing table
 	table auxtable;
 	kernel table 100;
 	export all;
+}
+</code>
+
+
+<sect>MRT
+<label id="mrt">
+
+<sect1>Introduction
+<label id="mrt-intro">
+
+<p>The MRT protocol is a component responsible for handling the Multi-Threaded
+Routing Toolkit (MRT) routing information export format, which is mainly used
+for collecting and analyzing of routing information from BGP routers. The MRT
+protocol can be configured to do periodic dumps of routing tables, created MRT
+files can be analyzed later by other tools. Independent MRT table dumps can also
+be requested from BIRD client. There is also a feature to save incoming BGP
+messages in MRT files, but it is controlled by <ref id="proto-mrtdump"
+name="mrtdump"> options independently of MRT protocol, although that might
+change in the future.
+
+BIRD implements the main MRT format specification as defined in <rfc id="6396">
+and the ADD_PATH extension (<rfc id="8050">).
+
+<sect1>Configuration
+<label id="mrt-config">
+
+<p>MRT configuration consists of several statements describing routing table
+dumps. Multiple independent periodic dumps can be done as multiple MRT protocol
+instances. There are two mandatory statements: <cf/filename/ and <cf/period/.
+The behavior can be modified by following configuration parameters:
+
+<descrip>
+	<tag><label id="mrt-table">table <m/name/ | "<m/pattern/"</tag>
+	Specify a routing table (or a set of routing tables described by a
+	wildcard pattern) that are to be dumped by the MRT protocol instance.
+	Default: the master table.
+
+	<tag><label id="mrt-filter">filter { <m/filter commands/ }</tag>
+	The MRT protocol allows to specify a filter that is applied to routes as
+	they are dumped. Rejected routes are ignored and not saved to the MRT
+	dump file. Default: no filter.
+
+	<tag><label id="mrt-where">where <m/filter expression/</tag>
+	An alternative way to specify a filter for the MRT protocol.
+
+	<tag><label id="mrt-filename">filename "<m/filename/"</tag>
+	Specify a filename for MRT dump files. The filename may contain time
+	format sequences with <it/strftime(3)/ notation (see <it/man strftime/
+	for details), there is also a sequence "%N" that is expanded to the name
+	of dumped table. Therefore, each periodic dump of each table can be
+	saved to a different file. Mandatory, see example below.
+
+	<tag><label id="mrt-period">period <m/number/</tag>
+	Specify the time interval (in seconds) between periodic dumps.
+	Mandatory.
+
+	<tag><label id="mrt-always-add-path">always add path <m/switch/</tag>
+	The MRT format uses special records (specified in <rfc id="8050">) for
+	routes received using BGP ADD_PATH extension to keep Path ID, while
+	other routes use regular records. This has advantage of better
+	compatibility with tools that do not know special records, but it loses
+	information about which route is the best route. When this option is
+	enabled, both ADD_PATH and non-ADD_PATH routes are stored in ADD_PATH
+	records and order of routes for network is preserved. Default: disabled.
+</descrip>
+
+<sect1>Example
+<label id="mrt-exam">
+
+<p><code>
+protocol mrt {
+	table "tab*";
+	where source = RTS_BGP;
+	filename "/var/log/bird/%N_%F_%T.mrt";
+	period 300;
 }
 </code>
 

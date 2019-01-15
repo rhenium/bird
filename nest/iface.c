@@ -441,7 +441,7 @@ if_find_by_name(char *name)
   struct iface *i;
 
   WALK_LIST(i, iface_list)
-    if (!strcmp(i->name, name))
+    if (!strcmp(i->name, name) && !(i->flags & IF_SHUTDOWN))
       return i;
   return NULL;
 }
@@ -451,8 +451,9 @@ if_get_by_name(char *name)
 {
   struct iface *i;
 
-  if (i = if_find_by_name(name))
-    return i;
+  WALK_LIST(i, iface_list)
+    if (!strcmp(i->name, name))
+      return i;
 
   /* No active iface, create a dummy */
   i = mb_allocz(if_pool, sizeof(struct iface));
@@ -469,10 +470,24 @@ struct ifa *kif_choose_primary(struct iface *i);
 static int
 ifa_recalc_primary(struct iface *i)
 {
-  struct ifa *a = kif_choose_primary(i);
+  struct ifa *a;
+  int c = 0;
+
+#ifdef IPV6
+  struct ifa *ll = NULL;
+
+  WALK_LIST(a, i->addrs)
+    if (ipa_is_link_local(a->ip) && (!ll || (a == i->llv6)))
+      ll = a;
+
+  c = (ll != i->llv6);
+  i->llv6 = ll;
+#endif
+
+  a = kif_choose_primary(i);
 
   if (a == i->addr)
-    return 0;
+    return c;
 
   if (i->addr)
     i->addr->flags &= ~IA_PRIMARY;
@@ -576,7 +591,7 @@ ifa_delete(struct ifa *a)
 	    b->flags &= ~IF_UP;
 	    ifa_notify_change(IF_CHANGE_DOWN, b);
 	  }
-	if (b->flags & IA_PRIMARY)
+	if ((b->flags & IA_PRIMARY) || (b == ifa_llv6(i)))
 	  {
 	    if_change_flags(i, i->flags | IF_TMP_DOWN);
 	    ifa_recalc_primary(i);
@@ -812,6 +827,9 @@ if_show_summary(void)
   cli_msg(-2005, "interface state address");
   WALK_LIST(i, iface_list)
     {
+      if (i->flags & IF_SHUTDOWN)
+	continue;
+
       if (i->addr)
 	bsprintf(addr, "%I/%d", i->addr->ip, i->addr->pxlen);
       else

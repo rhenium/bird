@@ -469,7 +469,8 @@ messages). Can be changed, but only to <CODE>RTD_BLACKHOLE</CODE>,
 <DT><CODE>
 <A NAME="rta-ifname"></A> <I>string</I> ifname</CODE><DD><P>Name of the outgoing interface. Sink routes (like blackhole, unreachable
 or prohibit) and multipath routes have no interface associated with
-them, so <CODE>ifname</CODE> returns an empty string for such routes. Read-only.
+them, so <CODE>ifname</CODE> returns an empty string for such routes. Setting it
+would also change route to a direct one (remove gateway).
 <P>
 <DT><CODE>
 <A NAME="rta-ifindex"></A> <I>int</I> ifindex</CODE><DD><P>Index of the outgoing interface. System wide index of the interface. May

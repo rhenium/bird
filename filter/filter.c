@@ -1000,6 +1000,20 @@ interpret(struct f_inst *what)
 	rta->hostentry = NULL;
 	break;
 
+      case SA_IFNAME:
+	{
+	  struct iface *ifa = if_find_by_name(v1.val.s);
+	  if (!ifa)
+	    runtime( "Invalid iface name" );
+
+	  rta->dest = RTD_DEVICE;
+	  rta->gw = IPA_NONE;
+	  rta->iface = ifa;
+	  rta->nexthops = NULL;
+	  rta->hostentry = NULL;
+	}
+	break;
+
       default:
 	bug("Invalid static attribute access (%x)", res.type);
       }
@@ -1513,7 +1527,7 @@ interpret(struct f_inst *what)
       /* 0x02 is a value of BA_AS_PATH, we don't want to include BGP headers */
       eattr *e = ea_find((*f_rte)->attrs->eattrs, EA_CODE(EAP_BGP, 0x02));
 
-      if (!e || e->type != EAF_TYPE_AS_PATH)
+      if (!e || ((e->type & EAF_TYPE_MASK) != EAF_TYPE_AS_PATH))
 	runtime("Missing AS_PATH attribute");
 
       as_path_get_last(e->u.ptr, &as);

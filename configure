@@ -652,7 +652,6 @@ CC
 CONTROL_SOCKET
 CONFIG_FILE
 SUFFIX
-runtimedir
 srcdir_rel_mf
 exedir
 objdir
@@ -678,6 +677,7 @@ infodir
 docdir
 oldincludedir
 includedir
+runstatedir
 localstatedir
 sharedstatedir
 sysconfdir
@@ -761,6 +761,7 @@ datadir='${datarootdir}'
 sysconfdir='${prefix}/etc'
 sharedstatedir='${prefix}/com'
 localstatedir='${prefix}/var'
+runstatedir='${localstatedir}/run'
 includedir='${prefix}/include'
 oldincludedir='/usr/include'
 docdir='${datarootdir}/doc/${PACKAGE}'
@@ -1013,6 +1014,15 @@ do
   | -silent | --silent | --silen | --sile | --sil)
     silent=yes ;;
 
+  -runstatedir | --runstatedir | --runstatedi | --runstated \
+  | --runstate | --runstat | --runsta | --runst | --runs \
+  | --run | --ru | --r)
+    ac_prev=runstatedir ;;
+  -runstatedir=* | --runstatedir=* | --runstatedi=* | --runstated=* \
+  | --runstate=* | --runstat=* | --runsta=* | --runst=* | --runs=* \
+  | --run=* | --ru=* | --r=*)
+    runstatedir=$ac_optarg ;;
+
   -sbindir | --sbindir | --sbindi | --sbind | --sbin | --sbi | --sb)
     ac_prev=sbindir ;;
   -sbindir=* | --sbindir=* | --sbindi=* | --sbind=* | --sbin=* \
@@ -1150,7 +1160,7 @@ fi
 for ac_var in	exec_prefix prefix bindir sbindir libexecdir datarootdir \
 		datadir sysconfdir sharedstatedir localstatedir includedir \
 		oldincludedir docdir infodir htmldir dvidir pdfdir psdir \
-		libdir localedir mandir
+		libdir localedir mandir runstatedir
 do
   eval ac_val=\$$ac_var
   # Remove trailing slashes.
@@ -1303,6 +1313,7 @@ Fine tuning of the installation directories:
   --sysconfdir=DIR        read-only single-machine data [PREFIX/etc]
   --sharedstatedir=DIR    modifiable architecture-independent data [PREFIX/com]
   --localstatedir=DIR     modifiable single-machine data [PREFIX/var]
+  --runstatedir=DIR       modifiable per-process data [LOCALSTATEDIR/run]
   --libdir=DIR            object code libraries [EPREFIX/lib]
   --includedir=DIR        C header files [PREFIX/include]
   --oldincludedir=DIR     C header files for non-gcc [/usr/include]
@@ -1346,7 +1357,8 @@ Optional Packages:
   --with-protocols=LIST   include specified routing protocols [all]
   --with-suffix=STRING    use specified suffix for BIRD files [6 for IPv6]
   --with-sysconfig=FILE   use specified BIRD system configuration file
-  --with-runtimedir=PATH  path for runtime files [LOCALSTATEDIR/run]
+
+  --with-runtimedir=PATH  run-state data, obsolete variant of --runstatedir
   --with-iproutedir=PATH  path to iproute2 config files [/etc/iproute2]
 
 Some influential environment variables:
@@ -2144,16 +2156,13 @@ fi
 # Check whether --with-sysconfig was given.
 if test "${with_sysconfig+set}" = set; then :
   withval=$with_sysconfig;
-
 fi
 
 
 
 # Check whether --with-runtimedir was given.
 if test "${with_runtimedir+set}" = set; then :
-  withval=$with_runtimedir; runtimedir="$with_runtimedir"
-else
-  runtimedir="\$(localstatedir)/run"
+  withval=$with_runtimedir; runstatedir="$with_runtimedir"
 
 fi
 
@@ -2195,6 +2204,12 @@ esac
 
 
 
+# Workaround for older Autoconfs that do not define runstatedir
+if test -z "${runstatedir}"; then :
+  runstatedir='${localstatedir}/run'
+fi
+
+
 
 if test "$enable_ipv6" = yes ; then
   ip=ipv6
@@ -2215,7 +2230,7 @@ if test "$enable_debug" = yes ; then
   CONTROL_SOCKET="bird$SUFFIX.ctl"
 else
   CONFIG_FILE="\$(sysconfdir)/bird$SUFFIX.conf"
-  CONTROL_SOCKET="$runtimedir/bird$SUFFIX.ctl"
+  CONTROL_SOCKET="\$(runstatedir)/bird$SUFFIX.ctl"
 fi
 
 
@@ -4418,9 +4433,13 @@ else
       ;;
     ipv6:freebsd*)
       sysdesc=bsd-v6
+      CPPFLAGS="$CPPFLAGS -I/usr/local/include"
+      LDFLAGS="$LDFLAGS -L/usr/local/lib"
       ;;
     ipv4:freebsd*)
       sysdesc=bsd
+      CPPFLAGS="$CPPFLAGS -I/usr/local/include"
+      LDFLAGS="$LDFLAGS -L/usr/local/lib"
       ;;
     ipv6:dragonfly*)
       sysdesc=bsd-v6
@@ -4476,7 +4495,7 @@ fi
 
 
 
-all_protocols="$proto_bfd bgp ospf pipe $proto_radv rip static"
+all_protocols="$proto_bfd bgp mrt ospf pipe $proto_radv rip static"
 if test "$ip" = ipv6 ; then
    all_protocols="$all_protocols babel"
 fi
@@ -4485,6 +4504,7 @@ all_protocols=`echo $all_protocols | sed 's/ /,/g'`
 if test "$with_protocols" = all ; then
   with_protocols="$all_protocols"
 fi
+
 
 
 
@@ -5053,6 +5073,142 @@ $as_echo "#define AC_APPLE_UNIVERSAL_BUILD 1" >>confdefs.h
  ;;
  esac
 
+
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for glob.h" >&5
+$as_echo_n "checking for glob.h... " >&6; }
+if ${bird_cv_lib_glob+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+
+	  #include <glob.h>
+	  #include <stdlib.h>
+
+int
+main ()
+{
+ glob(NULL, 0, NULL, NULL);
+
+  ;
+  return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  bird_cv_lib_glob=yes
+else
+
+        bird_tmp_libs="$LIBS"
+        LIBS="$LIBS -landroid-glob"
+        cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+
+	      #include <glob.h>
+	      #include <stdlib.h>
+
+int
+main ()
+{
+ glob(NULL, 0, NULL, NULL);
+
+  ;
+  return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  bird_cv_lib_glob=-landroid-glob
+else
+  bird_cv_lib_glob=no
+
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+        LIBS="$bird_tmp_libs"
+
+
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $bird_cv_lib_glob" >&5
+$as_echo "$bird_cv_lib_glob" >&6; }
+
+if test "$bird_cv_lib_glob" = no ; then
+  as_fn_error $? "glob.h not found." "$LINENO" 5
+elif test "$bird_cv_lib_glob" != yes ; then
+  LIBS="$LIBS $bird_cv_lib_glob"
+fi
+
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for syslog lib flags" >&5
+$as_echo_n "checking for syslog lib flags... " >&6; }
+if ${bird_cv_lib_log+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+       #include <sys/syslog.h>
+int
+main ()
+{
+ syslog(0, "");
+
+  ;
+  return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  bird_cv_lib_log=yes
+else
+
+        bird_tmp_libs="$LIBS"
+        LIBS="$LIBS -llog"
+        cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+           #include <sys/syslog.h>
+int
+main ()
+{
+ syslog(0, "");
+
+  ;
+  return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  bird_cv_lib_log=-llog
+else
+  bird_cv_lib_log=no
+
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+        LIBS="$bird_tmp_libs"
+
+
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $bird_cv_lib_log" >&5
+$as_echo "$bird_cv_lib_log" >&6; }
+
+if test "$bird_cv_lib_log" = no ; then
+  as_fn_error $? "don't know how to link syslog." "$LINENO" 5
+elif test "$bird_cv_lib_log" != yes ; then
+  LIBS="$LIBS $bird_cv_lib_log"
+fi
 
 if test "$enable_debug" = yes ; then
 
@@ -6680,7 +6836,7 @@ $as_echo "$as_me: executing $ac_file commands" >&6;}
 
 
   case $ac_file$ac_mode in
-    "merge":C)  export CPP="$CPP"; $srcdir/tools/mergedirs $srcdir $srcdir_rel $objdir $sysdep_dirs  ;;
+    "merge":C)  export CPP="$CPP"; sh $srcdir/tools/mergedirs $srcdir $srcdir_rel $objdir $sysdep_dirs  ;;
 
   esac
 done # for ac_tag
@@ -6742,4 +6898,5 @@ $as_echo "        POSIX threads:		$enable_pthreads" >&6; }
 $as_echo "        Routing protocols:	$protocols" >&6; }
 { $as_echo "$as_me:${as_lineno-$LINENO}: result:         Client:			$enable_client" >&5
 $as_echo "        Client:			$enable_client" >&6; }
+
 rm -f $objdir/.*-stamp

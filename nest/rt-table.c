@@ -48,7 +48,7 @@ pool *rt_table_pool;
 static slab *rte_slab;
 static linpool *rte_update_pool;
 
-static list routing_tables;
+list routing_tables;
 
 static byte *rt_format_via(rte *e);
 static void rt_free_hostcache(rtable *tab);
@@ -426,13 +426,15 @@ rt_notify_basic(struct announce_hook *ah, net *net, rte *new0, rte *old0, int re
    * reconfiguration and the end of refeed - if a newly filtered
    * route disappears during this period, proper withdraw is not
    * sent (because old would be also filtered) and the route is
-   * not refeeded (because it disappeared before that).
+   * not refeeded (because it disappeared before that). Therefore,
+   * we also do not try to run the filter on old routes that are
+   * older than the last filter change.
    */
 
   if (new)
     new = export_filter(ah, new, &new_free, &tmpa, 0);
 
-  if (old && !refeed)
+  if (old && !(refeed || (old->lastmod <= ah->last_out_filter_change)))
     old = export_filter(ah, old, &old_free, NULL, 1);
 
   if (!new && !old)
@@ -541,7 +543,17 @@ rt_notify_accepted(struct announce_hook *ah, net *net, rte *new_changed, rte *ol
    *
    * - We found new_best the same as new_changed, therefore it cannot
    *   be old_best and we have to continue search for old_best.
+   *
+   * There is also a hack to ensure consistency in case of changed filters.
+   * It does not find the proper old_best, just selects a non-NULL route.
    */
+
+  /* Hack for changed filters */
+  if (old_changed && (old_changed->lastmod <= ah->last_out_filter_change))
+    {
+      old_best = old_changed;
+      goto found;
+    }
 
   /* First case */
   if (old_meet)
@@ -1283,6 +1295,28 @@ rte_discard(rte *old)	/* Non-filtered route deletion, used during garbage collec
   rte_update_unlock();
 }
 
+/* Modify existing route by protocol hook, used for long-lived graceful restart */
+static inline void
+rte_modify(rte *old)
+{
+  rte_update_lock();
+
+  rte *new = old->sender->proto->rte_modify(old, rte_update_pool);
+  if (new != old)
+  {
+    if (new)
+    {
+      if (!rta_is_cached(new->attrs))
+	new->attrs = rta_lookup(new->attrs);
+      new->flags = (old->flags & ~REF_MODIFY) | REF_COW;
+    }
+
+    rte_recalculate(old->sender, old->net, new, old->attrs->src);
+  }
+
+  rte_update_unlock();
+}
+
 /* Check rtable for best route to given net whether it would be exported do p */
 int
 rt_examine(rtable *t, ip_addr prefix, int pxlen, struct proto *p, struct filter *filter)
@@ -1364,6 +1398,29 @@ rt_refresh_end(rtable *t, struct announce_hook *ah)
 	if ((e->sender == ah) && (e->flags & REF_STALE))
 	  {
 	    e->flags |= REF_DISCARD;
+	    prune = 1;
+	  }
+    }
+  FIB_WALK_END;
+
+  if (prune)
+    rt_schedule_prune(t);
+}
+
+void
+rt_modify_stale(rtable *t, struct announce_hook *ah)
+{
+  int prune = 0;
+  net *n;
+  rte *e;
+
+  FIB_WALK(&t->fib, fn)
+    {
+      n = (net *) fn;
+      for (e = n->routes; e; e = e->next)
+	if ((e->sender == ah) && (e->flags & REF_STALE) && !(e->flags & REF_FILTERED))
+	  {
+	    e->flags |= REF_MODIFY;
 	    prune = 1;
 	  }
     }
@@ -1592,6 +1649,7 @@ again:
 
     rescan:
       for (e=n->routes; e; e=e->next)
+      {
 	if (e->sender->proto->flushing || (e->flags & REF_DISCARD))
 	  {
 	    if (*limit <= 0)
@@ -1605,6 +1663,22 @@ again:
 
 	    goto rescan;
 	  }
+
+	if (e->flags & REF_MODIFY)
+	  {
+	    if (*limit <= 0)
+	      {
+		FIB_ITERATE_PUT(fit, fn);
+		return 0;
+	      }
+
+	    rte_modify(e);
+	    (*limit)--;
+
+	    goto rescan;
+	  }
+      }
+
       if (!n->routes)		/* Orphaned FIB entry */
 	{
 	  FIB_ITERATE_PUT(fit, fn);

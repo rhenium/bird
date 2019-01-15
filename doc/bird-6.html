@@ -531,12 +531,16 @@ immediately shut down. Note that this option cannot be used with
 multihop BGP. Default: disabled.
 <P>
 <DT><CODE>
-<A NAME="bgp-bfd"></A> bfd <I>switch</I></CODE><DD><P>BGP could use BFD protocol as an advisory mechanism for neighbor
+<A NAME="bgp-bfd"></A> bfd <I>switch</I>|graceful</CODE><DD><P>BGP could use BFD protocol as an advisory mechanism for neighbor
 liveness and failure detection. If enabled, BIRD setups a BFD session
 for the BGP neighbor and tracks its liveness by it. This has an
 advantage of an order of magnitude lower detection times in case of
-failure. Note that BFD protocol also has to be configured, see
-<A HREF="#bfd">BFD</A> section for details. Default: disabled.
+failure. When a neighbor failure is detected, the BGP session is
+restarted. Optionally, it can be configured (by <CODE>graceful</CODE> argument)
+to trigger graceful restart instead of regular restart.  Note that BFD
+protocol also has to be configured, see 
+<A HREF="#bfd">BFD</A>
+section for details. Default: disabled.
 <P>
 <DT><CODE>
 <A NAME="bgp-ttl-security"></A> ttl security <I>switch</I></CODE><DD><P>Use GTSM (<A HREF="http://www.rfc-editor.org/info/rfc5082">RFC 5082</A> - the generalized TTL security mechanism). GTSM
@@ -660,6 +664,25 @@ configuration of other protocols.  Default: aware.
 and specifies how long the neighbor would wait for the BGP session to
 re-establish after a restart before deleting stale routes. Default:
 120 seconds.
+<P>
+<DT><CODE>
+<A NAME="bgp-long-lived-graceful-restart"></A> long lived graceful restart <I>switch</I>|aware</CODE><DD><P>The long-lived graceful restart is an extension of the traditional
+<A HREF="#bgp-graceful-restart">BGP graceful restart</A>, where stale
+routes are kept even after the 
+<A HREF="#bgp-graceful-restart-time">restart time</A> expires for additional long-lived stale time, but
+they are marked with the LLGR_STALE community, depreferenced, and
+withdrawn from routers not supporting LLGR. Like traditional BGP
+graceful restart, it has three states: disabled, aware (receiving-only),
+and enabled. Note that long-lived graceful restart requires at least
+aware level of traditional BGP graceful restart. Default: aware, unless
+graceful restart is disabled.
+<P>
+<DT><CODE>
+<A NAME="bgp-long-lived-stale-time"></A> long lived stale time <I>number</I></CODE><DD><P>The long-lived stale time is announced in the BGP long-lived graceful
+restart capability and specifies how long the neighbor would keep stale
+routes depreferenced during long-lived graceful restart until either the
+session is re-stablished and synchronized or the stale time expires and
+routes are removed. Default: 3600 seconds.
 <P>
 <DT><CODE>
 <A NAME="bgp-interpret-communities"></A> interpret communities <I>switch</I></CODE><DD><P><A HREF="http://www.rfc-editor.org/info/rfc1997">RFC 1997</A> demands that BGP speaker should process well-known
@@ -1195,7 +1218,81 @@ protocol kernel {               # Secondary routing table
 <HR>
 <P>
 <P>
-<H2><A NAME="ospf"></A> <A NAME="ss6.7">6.7</A> <A HREF="bird.html#toc6.7">OSPF</A>
+<H2><A NAME="mrt"></A> <A NAME="ss6.7">6.7</A> <A HREF="bird.html#toc6.7">MRT</A>
+</H2>
+
+<H3><A NAME="mrt-intro"></A> Introduction</H3>
+
+<P>The MRT protocol is a component responsible for handling the Multi-Threaded
+Routing Toolkit (MRT) routing information export format, which is mainly used
+for collecting and analyzing of routing information from BGP routers. The MRT
+protocol can be configured to do periodic dumps of routing tables, created MRT
+files can be analyzed later by other tools. Independent MRT table dumps can also
+be requested from BIRD client. There is also a feature to save incoming BGP
+messages in MRT files, but it is controlled by 
+<A HREF="bird-3.html#proto-mrtdump">mrtdump</A> options independently of MRT protocol, although that might
+change in the future.
+<P>BIRD implements the main MRT format specification as defined in <A HREF="http://www.rfc-editor.org/info/rfc6396">RFC 6396</A>
+and the ADD_PATH extension (<A HREF="http://www.rfc-editor.org/info/rfc8050">RFC 8050</A>).
+<P>
+<H3><A NAME="mrt-config"></A> Configuration</H3>
+
+<P>MRT configuration consists of several statements describing routing table
+dumps. Multiple independent periodic dumps can be done as multiple MRT protocol
+instances. There are two mandatory statements: <CODE>filename</CODE> and <CODE>period</CODE>.
+The behavior can be modified by following configuration parameters:
+<P>
+<DL>
+<DT><CODE>
+<A NAME="mrt-table"></A> table <I>name</I> | "<I>pattern</I>"</CODE><DD><P>Specify a routing table (or a set of routing tables described by a
+wildcard pattern) that are to be dumped by the MRT protocol instance.
+Default: the master table.
+<P>
+<DT><CODE>
+<A NAME="mrt-filter"></A> filter { <I>filter commands</I> }</CODE><DD><P>The MRT protocol allows to specify a filter that is applied to routes as
+they are dumped. Rejected routes are ignored and not saved to the MRT
+dump file. Default: no filter.
+<P>
+<DT><CODE>
+<A NAME="mrt-where"></A> where <I>filter expression</I></CODE><DD><P>An alternative way to specify a filter for the MRT protocol.
+<P>
+<DT><CODE>
+<A NAME="mrt-filename"></A> filename "<I>filename</I>"</CODE><DD><P>Specify a filename for MRT dump files. The filename may contain time
+format sequences with <I>strftime(3)</I> notation (see <I>man strftime</I>
+for details), there is also a sequence "%N" that is expanded to the name
+of dumped table. Therefore, each periodic dump of each table can be
+saved to a different file. Mandatory, see example below.
+<P>
+<DT><CODE>
+<A NAME="mrt-period"></A> period <I>number</I></CODE><DD><P>Specify the time interval (in seconds) between periodic dumps.
+Mandatory.
+<P>
+<DT><CODE>
+<A NAME="mrt-always-add-path"></A> always add path <I>switch</I></CODE><DD><P>The MRT format uses special records (specified in <A HREF="http://www.rfc-editor.org/info/rfc8050">RFC 8050</A>) for
+routes received using BGP ADD_PATH extension to keep Path ID, while
+other routes use regular records. This has advantage of better
+compatibility with tools that do not know special records, but it loses
+information about which route is the best route. When this option is
+enabled, both ADD_PATH and non-ADD_PATH routes are stored in ADD_PATH
+records and order of routes for network is preserved. Default: disabled.
+</DL>
+<P>
+<H3><A NAME="mrt-exam"></A> Example</H3>
+
+<P>
+<HR>
+<PRE>
+protocol mrt {
+        table "tab*";
+        where source = RTS_BGP;
+        filename "/var/log/bird/%N_%F_%T.mrt";
+        period 300;
+}
+</PRE>
+<HR>
+<P>
+<P>
+<H2><A NAME="ospf"></A> <A NAME="ss6.8">6.8</A> <A HREF="bird.html#toc6.8">OSPF</A>
 </H2>
 
 <H3><A NAME="ospf-intro"></A> Introduction</H3>
@@ -1763,7 +1860,7 @@ protocol ospf MyOSPF {
 <HR>
 <P>
 <P>
-<H2><A NAME="pipe"></A> <A NAME="ss6.8">6.8</A> <A HREF="bird.html#toc6.8">Pipe</A>
+<H2><A NAME="pipe"></A> <A NAME="ss6.9">6.9</A> <A HREF="bird.html#toc6.9">Pipe</A>
 </H2>
 
 <H3><A NAME="pipe-intro"></A> Introduction</H3>
@@ -1888,7 +1985,7 @@ protocol pipe {                         # The Pipe
 <HR>
 <P>
 <P>
-<H2><A NAME="radv"></A> <A NAME="ss6.9">6.9</A> <A HREF="bird.html#toc6.9">RAdv</A>
+<H2><A NAME="radv"></A> <A NAME="ss6.10">6.10</A> <A HREF="bird.html#toc6.10">RAdv</A>
 </H2>
 
 <H3><A NAME="radv-intro"></A> Introduction</H3>
@@ -2218,7 +2315,7 @@ protocol radv {
 <HR>
 <P>
 <P>
-<H2><A NAME="rip"></A> <A NAME="ss6.10">6.10</A> <A HREF="bird.html#toc6.10">RIP</A>
+<H2><A NAME="rip"></A> <A NAME="ss6.11">6.11</A> <A HREF="bird.html#toc6.11">RIP</A>
 </H2>
 
 <H3><A NAME="rip-intro"></A> Introduction</H3>
@@ -2487,7 +2584,7 @@ protocol rip {
 <HR>
 <P>
 <P>
-<H2><A NAME="static"></A> <A NAME="ss6.11">6.11</A> <A HREF="bird.html#toc6.11">Static</A>
+<H2><A NAME="static"></A> <A NAME="ss6.12">6.12</A> <A HREF="bird.html#toc6.12">Static</A>
 </H2>
 
 <P>The Static protocol doesn't communicate with other routers in the network,

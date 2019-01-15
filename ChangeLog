@@ -1,3 +1,384 @@
+commit ef8974b7ca7595bc2685b222aa4822c13349a2e1
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sat Jan 5 00:37:31 2019 +0100
+
+    NEWS and version update
+
+commit a93684b2d452d231315dde7fb1960cdd9f023802
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Fri Jan 4 19:11:54 2019 +0100
+
+    Configure: Fix lost suffix in bird.ctl
+    
+    One of previous commits bacported from 2.0 removed suffix from bird.ctl
+
+commit c30f00d4a803906bfd09e47874b922a3525855c7
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Fri Jan 4 18:20:56 2019 +0100
+
+    BSD: Fix TCP-MD5 code on current FreeBSD kernels
+    
+    Current FreeBSD kernels require SA records for both directions.
+    
+    Thanks to Joseph Mulloy and Andrey V. Elsukov for reporting and
+    solving the issue.
+
+commit 968c31ec6dd7882d626d1d54bbc0390ccf83f8b6
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Jan 3 17:25:33 2019 +0100
+
+    Doc: README and INSTALL update
+    
+    Minor cleanups, updates and clarifications. Also removes (incomplete
+    and well-known) build steps from README, as they are better described
+    in INSTALL.
+
+commit 89bc266fe7cf58f5dbd37e8ec0f40cfe40558df5
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Jan 3 17:17:08 2019 +0100
+
+    Doc: Fix documentation build with newer Linuxdoc-Tools
+
+commit cdf2daae01c63d383b03d66e14692ff27bdbd180
+Author: Robert Scheck <robert@fedoraproject.org>
+Date:   Thu Dec 20 13:25:53 2018 +0100
+
+    Doc: Allow overriding $SGML_CATALOG_FILES using distribution specific paths
+
+commit 7a53383a22e2163b9d84188052a6a3a431656119
+Author: Robert Scheck <robert@fedoraproject.org>
+Date:   Thu Dec 20 13:25:31 2018 +0100
+
+    Doc: Add alternative path for SGML ISO entities 8879.1986 to $SGML_CATALOG_FILES
+    
+    The existing paths are valid for Debian, alternative paths are necessary
+    for Fedora and RHEL/CentOS.
+
+commit b47d33b344de2cf19cc2b02f9ee89ffa59ad525f
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Dec 20 13:17:30 2018 +0100
+
+    Autoconf: Minor cleanup
+
+commit 16fb28e588842a2ae604620ff1ae43c851a1fbb5
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Dec 20 13:15:53 2018 +0100
+
+    Configure: Use standard --runstatedir option
+    
+    Newer Autoconf defines --runstatedir option for setting directory for
+    run-time variable data. Use it instead our old --with-runtimedir.
+
+commit e7e3b335bf179441f4482f7219b4862797ed66ca
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Dec 20 13:06:18 2018 +0100
+
+    Nest: Fix crash in rta_show() for Babel routes
+    
+    Some new route source values did not have associated string
+    in rta_show(), which might caused crash in some cases.
+
+commit 4df42f1a55b39bd4f7657e3b22c3a09a77f25a45
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Dec 20 13:01:15 2018 +0100
+
+    Lib: Force output type in ip4_addr constructor
+    
+    Fixes type issue when u64 is pushed into it.
+
+commit 17450df314ff472deff535104a6824c322e5aa7f
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Dec 20 12:59:55 2018 +0100
+
+    Filter: Fix minor bug in accessing bgp_path
+    
+    Not relevant for regular BGP paths, just for BGP paths added by filters
+    to e.g. static routes.
+
+commit d82b1a19778d00b0efd5eddd4f96cf4cf5170dd3
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Dec 20 12:57:43 2018 +0100
+
+    Nest: Fix 'show interfaces summary' command
+    
+    The command showed interfaces that were removed / in shutdown.
+
+commit 257c7ce95d6991c123879148a857afbe4dc4e6dc
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Dec 20 12:54:52 2018 +0100
+
+    Doc: Fix description of 'description'
+    
+    Thanks to Clemens Schrimpe for the bugreport.
+
+commit 04edf8f2f251f0c2a133843b898cad84f9312880
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Dec 19 18:10:39 2018 +0100
+
+    IO: Workaround for broken FreeBSD behavior
+    
+    FreeBSD silently changes TTL to 1 when MSG_DONTROUTE is used, even when
+    it is explicitly set to another value. That breaks TTL security sockets,
+    including BFD which always uses TTL 255. Bad FreeBSD!
+
+commit c0ed32ee28cbeabf8d36f59765fe593baf39c788
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Dec 19 16:32:52 2018 +0100
+
+    Doc: Generate MRT progdoc
+
+commit 523c5d9f2b2348d2859264879d46d72e4aad4c35
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Dec 19 16:29:20 2018 +0100
+
+    Doc: Rename code documentation files back to Doc
+
+commit d1c8f22becd6dd4d846e10edae951c3e0a170bd1
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Dec 19 16:25:59 2018 +0100
+
+    Doc: Move root of code documentation to doc dir
+    
+    It reduces clutter in root and also avoid collision with doc dir on
+    case-insensitive filesystems when name back to Doc.
+
+commit 81bc013dde105e604703b430dfe50a67e27b3b70
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Dec 19 15:52:13 2018 +0100
+
+    Unix: Fix variable declarations
+
+commit 98b1486c4846c5869780c8603e5f83e288c3d72f
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Mon Dec 17 17:10:59 2018 +0100
+
+    OSPF: Fix wrong LSA collisions detection
+    
+    In some circumstances (old LSA flushed but not acknowledged and not
+    removed) origination of a new LSA may wrongly triggers LSA collision
+    code. The patch fixes that.
+    
+    Thanks to Asbjorn Mikkelsen for the bugreport and @mdelagueronniere
+    for the original patch.
+
+commit 8c0b12ac86d9075b76a3906d0c25ba9bc73bbb2c
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Mon Dec 10 02:05:21 2018 +0100
+
+    OSPF: Fix reconfiguration of vlinks
+    
+    Fix crash during reconfiguration of OSPF config with vlinks. When vlink
+    is reconfigured, a generic iface-reconfiguration code is used, which in
+    one place supposes that it is running on a regular iface.
+    
+    Thanks to Cybertinus for a bugreport.
+
+commit ea59172cdec564af781181c9c3e388c59178b49e
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Dec 4 13:52:58 2018 +0100
+
+    Static: Fix reset neighbor entries for ECMP routes
+    
+    Neighbor entries for static ECMP routes were not cleaned up during
+    reconfigure and pointed to the old instances, which leads to crash
+    after reconfigure.
+    
+    Thanks to Vladimir Osmolovskiy for the bugreport.
+
+commit 93cec703616f459ba0cdfe3f808dd85e76b1339d
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Nov 21 15:46:31 2018 +0100
+
+    MRT documentation
+
+commit 1453ab7552cee47b94d78b9d843b747c1f74897c
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Nov 20 17:40:12 2018 +0100
+
+    MRT: Fix bug in MRT table dump requested from CLI
+
+commit 81489b79e07d448f30434a0c1d22f8f744f0fda8
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Nov 8 20:43:04 2018 +0100
+
+    Nest: Improve keeping track of IPv6 link-local addresses
+    
+    Most protocols in IPv6 mode use link-local source addresses and expect
+    that there is one on each active interface. The old code depended on
+    assumption that if there is some IPv6 address on iface, there is also an
+    IPv6 link-local address on that iface (added by kernel when the iface
+    went up). Unfortunately, that is not generally true, as a configured
+    global address sometimes ceases to be tentative (finishes DOD) before
+    a link-local address on the same iface. In such case a protocol iface
+    (namely RAdv and Babel) is activated, but fails to found link-local
+    address and stays in failed state.
+    
+    The patch fixes that by tracking 'primary' IPv6 link-local address,
+    sending iface restart notifications when it changes and making
+    protocols ignore iface-up notifications when no such address is
+    selected for an iface.
+
+commit 716b904f4eb14349cdf66656eea0d90b040d51e5
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Mon Nov 5 21:55:18 2018 +0100
+
+    Filter: Make ifname attribute modifiable
+    
+    Allow to change an interface associated with a route by setting
+    ifname attribute. It will also change the route to a direct one.
+
+commit fff79b1c1e0577f487b4fb67f79a74b054d734b6
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Oct 25 17:21:06 2018 +0200
+
+    OSPF: Fix some trace messages
+    
+    Missing argument in MTU change trace message can crash bird when MTU
+    change happens and trace messages are active.
+    
+    Thanks to Alexander Velkov for the bugreport.
+
+commit c0fc3e67185c1e0ff2d083572c6ad3983ba4ef25
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Sep 18 17:29:00 2018 +0200
+
+    The MRT protocol
+    
+    The new MRT protocol is responsible for periodic RIB table dumps in the
+    MRT format (RFC 6396). Also the existing code for BGP4MP MRT dumps is
+    refactored and splitted between BGP to MRT protocols, will be more
+    integrated into MRT in the future.
+    
+    Example:
+    
+    protocol mrt {
+            table "*";
+            filename "%N_%F_%T.mrt";
+            period 60;
+    }
+    
+    It is partially based on the old MRT code from Pavel Tvrdik.
+
+commit afa14f1868f2c753efdc81ce8e2c2d44e6bdd80e
+Author: Jan Maria Matejka <mq@ucw.cz>
+Date:   Tue Sep 11 16:55:41 2018 +0200
+
+    Conf: Show the line:char position where the syntax error happens
+
+commit b1f6c439f55233338a5f7cca5070c70618fe7f1d
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Aug 1 17:41:29 2018 +0200
+
+    BGP: Fix BFD/GR interaction
+    
+    The old code does not cause GR if BFD failed when GR is running,
+    session is re-established but not yet synchronized.
+
+commit 4abccabd7b10808c2ebb9ad4f6cbac3fe47cfb8f
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Aug 1 17:35:39 2018 +0200
+
+    BGP: Minor fixes in long-lived graceful restart
+
+commit 6be71641ef3baa8658d031f3624f4481b493bdaf
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sat Jul 28 16:54:06 2018 +0200
+
+    BSD: Use MSG_DONTROUTE for unicast packets on FreeBSD
+    
+    BSD systems cannot use SO_DONTROUTE, because it does not work properly
+    with multicast packets (perhaps it tries to find iface based on multicast
+    group address). But we can use MSG_DONTROUTE sendmsg() flag for unicast
+    packets. Works on FreeBSD, is ignored on OpenBSD and is broken on NetBSD
+    (i guess due to integrated routing table and ARP table).
+
+commit 3140c8b2ca48263da1a1f12b478031dc4b572db7
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sat Jul 28 15:50:30 2018 +0200
+
+    Move FreeBSD CFLAGS and LDFLAGS to configure
+    
+    Backport of commit 09c1e370b3084f7acb7c3777427670a69945368a.
+
+commit aa2ec912f5a557f340a633e95b9fbf2ad7937edd
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Jul 4 16:42:42 2018 +0200
+
+    BGP: Long-lived graceful restart enhancements
+    
+    When use of LLGR is negotiated, handle hold timeout by LLGR instead of by
+    hard restart. Allow to configure whether BFD session down event should be
+    handled by GR/LLGR or by hard restart.
+
+commit a9d869c484f899f2ef509659a8d928804d020461
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Jun 5 16:02:25 2018 +0200
+
+    Doc: Documentation for long-lived graceful restart
+
+commit 68197386ddba616c9973d3190c42f6121a25d9b7
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Mon Jun 4 18:56:05 2018 +0200
+
+    BGP: Long-lived graceful restart
+    
+    The patch implements long-lived graceful restart for BGP, namely
+    draft-uttaro-idr-bgp-persistence-03.
+
+commit 470efcb98cb33de2d5636679eb0f72c88280d6b8
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Fri Jul 6 02:17:59 2018 +0200
+
+    Nest: Fix race condition during reconfiguration, part 2
+    
+    If export filter is changed during reconfiguration and a route disappears
+    between reconfiguration and refeed (e.g., if the route is a static route
+    also removed during the reconfiguration), the route is not withdrawn.
+    
+    The issue was fixed for regular channels by an earlier patch. This patch
+    fixes the issue for channels in RA_ACCEPTED mode (first-pass-the-filter),
+    used by BGP with 'secondary' option.
+
+commit cbfdf6ed057b993d7e107b4c39b8a5b81c081eee
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Jul 3 19:21:42 2018 +0200
+
+    Nest: Fix race condition during reconfiguration
+    
+    If export filter is changed during reconfiguration and a route disappears
+    between reconfiguration and refeed (e.g., if the route is a static route
+    also removed during the reconfiguration), the route is not withdrawn.
+    The patch fixes that by adding tx reconfiguration timestamp.
+
+commit 822a7ee6d5cd9bf38548026e0dd52fbc4634030d
+Author: Maria Matejka <mq@jmq.cz>
+Date:   Mon Apr 23 15:59:02 2018 +0200
+
+    Autotools: updated config.guess and config.sub
+    
+    Updated to version 63b4ce2e8c28aee6a32133e400436e4ca885215a
+    from git://git.savannah.gnu.org/config.git
+    
+    Previous version was 93b5037172b15ad28952481933517f1ba93d125b
+
+commit 0671e6c29adefff21fd36ff73844c898a1b6ecb9
+Author: Maria Matejka <mq@jmq.cz>
+Date:   Mon Apr 23 15:56:50 2018 +0200
+
+    Netlink: removed dynamic length array as Clang won't support it.
+
+commit 1e921ec868871bfd8954879c3f28ca1e286d2c86
+Author: Maria Matejka <mq@jmq.cz>
+Date:   Mon Apr 23 15:54:20 2018 +0200
+
+    Android: check for extra libs needed for build
+
+commit 7904f409e2a11221b852505d6522b65b6c2900c7
+Author: Maria Matejka <mq@jmq.cz>
+Date:   Mon Apr 23 11:29:13 2018 +0200
+
+    Doc: renamed progdoc files Doc -> progdoc to fix collision with doc/ folder on case-insensitive filesystems
+
 commit 4c0b741ba7419e2cb816e1dc9a23096234d998e2
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Sat Mar 24 01:53:03 2018 +0100
@@ -53,27 +434,27 @@ Date:   Wed Feb 28 16:57:50 2018 +0100
     This led to strange behavior like rewriting bgpmasks when they shan't
     be rewritten:
     
-    	function mask_generator(int as)
-    	{
-    		return [= * as * =];
-    	}
+            function mask_generator(int as)
+            {
+                    return [= * as * =];
+            }
     
-    	function another()
-    	bgpmask m1;
-    	bgpmask m2;
-    	{
-    		m1 = mask_generator(10);
-    		m2 = mask_generator(20);
-    		if (m1 == m2) {
-    			print("strange"); # this would happen
-    		}
-    	}
+            function another()
+            bgpmask m1;
+            bgpmask m2;
+            {
+                    m1 = mask_generator(10);
+                    m2 = mask_generator(20);
+                    if (m1 == m2) {
+                            print("strange"); # this would happen
+                    }
+            }
     
     Moreover, sending this to CLI would cause stack overflow and knock down the
     whole BIRD, as soon as there is at least one route to execute the given
     filter on.
     
-    	show route filter bgpmask mmm; bgppath ppp; { ppp = +empty+; mmm = [= (ppp ~ mmm) =]; print(mmm); accept; }
+            show route filter bgpmask mmm; bgppath ppp; { ppp = +empty+; mmm = [= (ppp ~ mmm) =]; print(mmm); accept; }
     
     The magic match operator (~) inside the bgpmask literal would try to
     resolve mmm, which points to the same bgpmask so it would resolve
@@ -367,7 +748,7 @@ Date:   Mon Sep 4 22:32:45 2017 +0200
     Thanks to Eugene Sevastyanov for the original patch.
 
 commit 96eace1ea70d7c2bc13672fbeba104d34d8ede4c
-Merge: 08b6a61 5c4dfe0
+Merge: 08b6a617 5c4dfe0c
 Author: Michal 'vorner' Vaner <michal.vaner@nic.cz>
 Date:   Mon Sep 4 13:30:13 2017 +0200
 
@@ -1170,7 +1551,7 @@ Date:   Tue Aug 30 12:43:46 2016 +0200
     check.
 
 commit 768d013267bd2a52bab70ba6d413f49365fb31e3
-Merge: 678c97f d107ef7
+Merge: 678c97f2 d107ef78
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue Aug 23 17:35:26 2016 +0200
 
@@ -1644,7 +2025,7 @@ Date:   Wed Mar 9 17:37:44 2016 +0100
     Thanks to Pavel Tvrdik for noticing it.
 
 commit 62a4ad365760afae485ae61c5aab734012545be4
-Merge: 9036bbf 9c92f69
+Merge: 9036bbf2 9c92f692
 Author: Jan Moskyto Matejka <mq@ucw.cz>
 Date:   Tue Mar 22 13:23:55 2016 +0100
 
@@ -1687,7 +2068,7 @@ Date:   Wed Mar 9 12:12:02 2016 +0100
     FD_SETSIZE limit doesn't matter now when creating new sockets.
 
 commit ce95af7a5f5159033e569a7ccedce0e20bb5d913
-Merge: b25509e e3f506f
+Merge: b25509e5 e3f506f9
 Author: Jan Moskyto Matejka <mq@ucw.cz>
 Date:   Thu Feb 25 18:25:53 2016 +0100
 
@@ -1748,7 +2129,7 @@ Date:   Fri Nov 13 16:08:28 2015 +0100
     MD5: Mormalize naming style
 
 commit 90f78507f4a13673ccf0ba7c786b43d9e882fca7
-Merge: 8eb8e54 ad27615
+Merge: 8eb8e546 ad276157
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue Nov 24 15:21:11 2015 +0100
 
@@ -1781,7 +2162,7 @@ Date:   Tue Nov 24 13:47:28 2015 +0100
     Minor changes to SHA hash functions
 
 commit 12d752ef24ab507d249a60098ec98dcf28b70036
-Merge: 1e4891e f312a83
+Merge: 1e4891e4 f312a837
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Mon Nov 23 11:32:18 2015 +0100
 
@@ -1884,7 +2265,7 @@ Date:   Tue Nov 3 11:08:57 2015 +0100
     Thanks to Alexander V. Chernikov for the patch.
 
 commit 8eb8e546dc8cc647fcfa4a3a17dfa8ab36b00958
-Merge: 8465dcc acb04cf
+Merge: 8465dccb acb04cfd
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Sat Oct 17 14:44:34 2015 +0200
 
@@ -2400,7 +2781,7 @@ Date:   Sat Feb 21 11:46:14 2015 +0100
     Configurable fast shutdown of a BGP session when an interface loses link.
 
 commit 7730553b7eeb33d21e5597f110334ca584ad532d
-Merge: 0da562a ec2194f
+Merge: 0da562a7 ec2194fa
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sat Feb 21 11:39:45 2015 +0100
 
@@ -2486,7 +2867,7 @@ Date:   Thu Oct 16 18:05:54 2014 +0200
     __attribute__((packed)) added. Thank to Maksim Tamarsky
 
 commit 78342404ff573e85e396f0611014b90cea9b4c0a
-Merge: 178a197 cfdea7b
+Merge: 178a197a cfdea7b8
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Oct 14 17:23:34 2014 +0200
 
@@ -2656,7 +3037,7 @@ Date:   Mon May 5 11:05:12 2014 +0200
     Thanks to Sergey Popovich for the original patch.
 
 commit 5a3905fe905ab1cc1a58fe9e6a4284f7d5057d13
-Merge: 66370ea 7d9ab86
+Merge: 66370eac 7d9ab86b
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun May 4 11:59:50 2014 +0200
 
@@ -2701,7 +3082,7 @@ Date:   Wed Apr 23 13:54:28 2014 +0200
     Thanks to Peter Christensen for the original patch.
 
 commit 4dd24f05f384ac14546d4bebbfcb0ecf9a976ec6
-Merge: 1cb0f83 6c6ebd6
+Merge: 1cb0f83d 6c6ebd64
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Wed Apr 23 13:52:15 2014 +0200
 
@@ -2822,7 +3203,7 @@ Date:   Mon Mar 24 12:56:56 2014 +0100
     Reformat bird.sgml to have consistent line length.
 
 commit c980f8002e0f0578d5e715d48d65d9fb9a0c5a70
-Merge: 2e84b4e 227af30
+Merge: 2e84b4e8 227af309
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Mar 24 12:41:43 2014 +0100
 
@@ -2894,7 +3275,7 @@ Date:   Fri Feb 7 11:46:01 2014 +0100
     Fixes autoconf check for ncurses.
 
 commit 5c200e0a4d26d183e04fda43de16340521002c40
-Merge: 4a5eb28 080ed4d
+Merge: 4a5eb284 080ed4d8
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu Feb 6 20:15:05 2014 +0100
 
@@ -2958,7 +3339,7 @@ Date:   Thu Feb 6 17:46:01 2014 +0100
      - Use ifa->ifname instead of ifa->iface->name
 
 commit f48fa14214301382b2e6b134788a7506b61b664f
-Merge: 6601a14 300e400
+Merge: 6601a148 300e4008
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu Feb 6 16:47:43 2014 +0100
 
@@ -2983,7 +3364,7 @@ Date:   Tue Jan 21 23:43:22 2014 +0100
     Small doc update.
 
 commit 6601a14831cdd32fc671ebc9dc299d2be427e489
-Merge: 2d0b7e2 283c7df
+Merge: 2d0b7e24 283c7dfa
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Dec 10 22:30:46 2013 +0100
 
@@ -3016,7 +3397,7 @@ Date:   Tue Nov 26 22:37:24 2013 +0100
     Fixes some bugs and uses generic hash implementation.
 
 commit 283c7dfada53a6dee6a8a17ecab492ffafd44b66
-Merge: 736e143 0bb4e37
+Merge: 736e143f 0bb4e37d
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Nov 25 18:42:47 2013 +0100
 
@@ -3127,7 +3508,7 @@ Date:   Sat Nov 23 13:26:52 2013 +0100
     Added a few sentences about symbol names.
 
 commit 736e143fa50607fcd88132291e96089b899af979
-Merge: 094d2bd 2b3d52a
+Merge: 094d2bdb 2b3d52aa
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sat Nov 23 11:50:34 2013 +0100
 
@@ -3135,11 +3516,11 @@ Date:   Sat Nov 23 11:50:34 2013 +0100
     
     Conflicts:
     
-    	filter/filter.c
-    	nest/proto.c
-    	nest/rt-table.c
-    	proto/bgp/bgp.h
-    	proto/bgp/config.Y
+            filter/filter.c
+            nest/proto.c
+            nest/rt-table.c
+            proto/bgp/bgp.h
+            proto/bgp/config.Y
 
 commit 2b3d52aa421ae1c31e30107beefd82fddbb42854
 Author: Ondrej Zajicek <santiago@crfreenet.org>
@@ -3178,7 +3559,7 @@ Date:   Fri Nov 22 18:45:57 2013 +0100
     Adds check for buffer size in OSPF LSA flood.
 
 commit 0aeac9cb7f9887374ce0258c8653f9518529bf08
-Merge: 8931425 7c9930f
+Merge: 8931425d 7c9930f9
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Nov 22 02:43:41 2013 +0100
 
@@ -3411,7 +3792,7 @@ Date:   Tue Sep 10 12:58:24 2013 +0200
     Thanks to Sergey Popovich for a bugreport.
 
 commit d27e127aa996d500fed21be2bbbe888cafecb830
-Merge: bff9ce5 b0a8c7f
+Merge: bff9ce51 b0a8c7fc
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Sep 10 12:54:57 2013 +0200
 
@@ -3693,7 +4074,7 @@ Date:   Mon Apr 29 22:08:05 2013 +0200
     Thanks to Peter Christensen for the bugfix.
 
 commit 32622d0ea366406f3afa14bb9edb4855d6979786
-Merge: efd6d12 a5e9f3d
+Merge: efd6d12b a5e9f3d2
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Apr 23 02:54:13 2013 +0200
 
@@ -4120,7 +4501,7 @@ Date:   Wed Aug 8 14:10:31 2012 +0200
     DragonFly support add - thanks to john@marino.st
 
 commit 60c412b9368fd7c3b0a8df2200f02140adcb0cf3
-Merge: 3fe1d9e 94e2f1c
+Merge: 3fe1d9e4 94e2f1c1
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Aug 7 11:15:23 2012 +0200
 
@@ -4185,7 +4566,7 @@ Date:   Wed Jul 18 19:29:33 2012 +0200
     Thanks Kelly Cochran for suggestion and draft patch.
 
 commit abced4a91495e27fe86b142bc1967cec53bab3dc
-Merge: fc06fb6 7617026
+Merge: fc06fb62 76170264
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Jul 16 14:44:45 2012 +0200
 
@@ -4193,12 +4574,12 @@ Date:   Mon Jul 16 14:44:45 2012 +0200
     
     Conflicts:
     
-    	nest/config.Y
-    	nest/rt-table.c
-    	proto/bgp/bgp.c
+            nest/config.Y
+            nest/rt-table.c
+            proto/bgp/bgp.c
 
 commit 761702644397886bd3c1be10fd55c01485b7c454
-Merge: 26822d8 553e405
+Merge: 26822d8f 553e4054
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Jul 16 10:41:29 2012 +0200
 
@@ -4217,7 +4598,7 @@ Date:   Sat Jul 7 10:40:00 2012 +0200
     Implements RDNSS and DNSSL support for RAdv.
 
 commit 3fe1d9e4a40663b93b59f5b6f9d61af9dc6a8ae6
-Merge: 72b2db8 95127cb
+Merge: 72b2db8d 95127cbb
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue May 15 23:40:37 2012 +0200
 
@@ -4248,7 +4629,7 @@ Date:   Fri May 11 12:01:27 2012 +0200
     Fixes a bug in RA_ACCEPTED handling.
 
 commit 72b2db8db7534c52e928618410ec1f18787752c8
-Merge: 2795700 95616c8
+Merge: 2795700c 95616c82
 Author: Ondrej Filip <feela@network.cz>
 Date:   Fri May 11 00:01:29 2012 +0200
 
@@ -4282,7 +4663,7 @@ Date:   Thu May 3 12:25:15 2012 +0200
     Implements build options to specify socket dir and suffix.
 
 commit 2795700c3158fa52b6cf957e9d0b9ad4a27c67a5
-Merge: 1f85226 bf42207
+Merge: 1f85226e bf422073
 Author: Ondrej Filip <feela@network.cz>
 Date:   Wed May 2 11:10:40 2012 +0200
 
@@ -4359,7 +4740,7 @@ Date:   Fri Apr 27 00:04:51 2012 +0200
     Some minor fixes.
 
 commit 1f85226ecb76d3803b8fe37eb0891c45a6557dcd
-Merge: 92f8f7e d9b77cc
+Merge: 92f8f7e3 d9b77cc2
 Author: Ondrej Filip <feela@network.cz>
 Date:   Thu Apr 26 17:03:53 2012 +0200
 
@@ -4374,7 +4755,7 @@ Date:   Tue Apr 24 23:39:57 2012 +0200
     And also fixes some minor bugs in limits.
 
 commit 3589546af4baa4d349409a318f8c9658dd11b3cc
-Merge: 7d0a31d cca9706
+Merge: 7d0a31de cca97066
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Apr 24 23:37:01 2012 +0200
 
@@ -4435,14 +4816,14 @@ Date:   Sun Apr 15 15:28:29 2012 +0200
     Thanks to Alexander V. Chernikov for the original patch.
 
 commit 3e17e380598b9a512bb369f51a4cf55da269f608
-Merge: 00a09f3 ae8b300
+Merge: 00a09f3c ae8b3001
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Apr 15 15:17:03 2012 +0200
 
     Merge branch 'master' into rt-accepted
 
 commit ae8b300164a975597f9b6caea0b205af2e4db30b
-Merge: d360f12 ed7c4b0
+Merge: d360f129 ed7c4b0c
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Apr 15 15:15:05 2012 +0200
 
@@ -4467,7 +4848,7 @@ Date:   Mon Apr 9 14:19:28 2012 +0200
     Small bugfix in error message related to reconfiguration.
 
 commit bf2abe2f515d7b7aaed5fb4f37af82169adcd2f2
-Merge: fb829de c0adf7e
+Merge: fb829de6 c0adf7e9
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Mar 30 11:04:12 2012 +0200
 
@@ -4475,8 +4856,8 @@ Date:   Fri Mar 30 11:04:12 2012 +0200
     
     Conflicts:
     
-    	nest/proto.c
-    	nest/rt-table.c
+            nest/proto.c
+            nest/rt-table.c
 
 commit fb829de69052755a31d76d73e17525d050e5ff4d
 Author: Ondrej Zajicek <santiago@crfreenet.org>
@@ -4489,7 +4870,7 @@ Date:   Wed Mar 28 18:40:04 2012 +0200
     maximum number of routes flushed in one step.
 
 commit cb3cf95859d81c711337738f004675f43c8bbb0e
-Merge: c9df01d 16fc65a
+Merge: c9df01d3 16fc65ac
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Mar 25 20:59:13 2012 +0200
 
@@ -5169,7 +5550,7 @@ Date:   Tue May 10 02:42:17 2011 +0200
     linux capabilities CAP_NET_* are kept.
 
 commit 46bb7e0d176a4dc0a47bb406988f92fb29cceaf4
-Merge: b8cc390 b7c4898
+Merge: b8cc390e b7c48981
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri May 6 22:09:44 2011 +0200
 
@@ -5206,7 +5587,7 @@ Date:   Sun May 1 17:16:05 2011 +0200
     There may be more IP address records with the same IP.
 
 commit 5964569c23829ec93fcf671a2582be01c8aebecf
-Merge: acc93ef d600909
+Merge: acc93efd d600909d
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Apr 29 19:03:19 2011 +0200
 
@@ -5255,7 +5636,7 @@ Date:   Tue Apr 5 11:41:18 2011 +0200
     Minor fixes.
 
 commit bf27abd6d4a20448f5b4c80e9aa9258dc8670f62
-Merge: 4ef0950 a5b84ab
+Merge: 4ef09506 a5b84ab5
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Apr 1 13:56:42 2011 +0200
 
@@ -5945,7 +6326,7 @@ Date:   Tue Apr 27 18:29:01 2010 +0200
     A fix in OSPFv3 next_hop calculation.
 
 commit 96599c957baa9c82bde91d610ce4f519aead05e9
-Merge: ba13017 9d1ee13
+Merge: ba130172 9d1ee138
 Author: Ondrej Filip <feela@majklik.network.cz>
 Date:   Tue Apr 27 11:28:44 2010 +0200
 
@@ -5989,7 +6370,7 @@ Date:   Sat Apr 24 15:18:21 2010 +0200
     OSPFv2 and OSPFv3 (previously it displayed stubnets in OSPFv2).
 
 commit 1d44ddf20f3ecef864d4bd20355251839fcd10ee
-Merge: 3b89a23 6bc414d
+Merge: 3b89a232 6bc414d6
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Wed Apr 21 21:52:10 2010 +0200
 
@@ -6156,7 +6537,7 @@ Date:   Mon Mar 29 19:29:03 2010 +0200
      - Documentation updates.
 
 commit eb0f129fcedcecbee85403095abad8f59b82683c
-Merge: b1c030b 48cff37
+Merge: b1c030b0 48cff379
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Mar 26 18:53:31 2010 +0100
 
@@ -6232,7 +6613,7 @@ Date:   Wed Mar 17 12:19:22 2010 +0100
     - Fixes socket name path check and other error handling in CLI init.
 
 commit 4e3bfd9006ba3033a814a392f9bf4bbca060c8a9
-Merge: e8da1bd cda2dfb
+Merge: e8da1bd0 cda2dfb7
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Mar 15 00:39:45 2010 +0100
 
@@ -6251,7 +6632,7 @@ Date:   Sun Mar 14 16:36:59 2010 +0100
     Temporary OSPF commit - sockets.
 
 commit 54305181f6ee3af57dd3d15d53ea2e851b36ed23
-Merge: e7b76b9 afa9f66
+Merge: e7b76b97 afa9f66c
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu Mar 11 18:55:59 2010 +0100
 
@@ -6320,7 +6701,7 @@ Date:   Sun Feb 21 14:34:53 2010 +0100
     Fix configure to enable warnings and fix most of them.
 
 commit 9e43ccf07b96597ef098955a07383d826938cd2d
-Merge: e285bd2 89534cd
+Merge: e285bd23 89534cda
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Feb 21 10:15:49 2010 +0100
 
@@ -6442,7 +6823,7 @@ Date:   Wed Feb 10 16:18:17 2010 +0100
     NEWS and version update.
 
 commit fae9be7782a161bdf93c83884d62941a34cbe518
-Merge: 7d19666 0efd646
+Merge: 7d196668 0efd6462
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Wed Feb 10 14:59:26 2010 +0100
 
@@ -6520,7 +6901,7 @@ Date:   Tue Feb 2 00:03:46 2010 +0100
     Because we don't want to have a limit on a function/filter length.
 
 commit 1a7a4e59a22f903a0be791f229e86ab881593851
-Merge: 4167702 1960d20
+Merge: 41677025 1960d203
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu Jan 28 16:00:16 2010 +0100
 
@@ -6562,7 +6943,7 @@ Date:   Wed Jan 13 14:53:33 2010 +0100
     Comment update.
 
 commit 974363c172e026b00be5f78ec585dda1e402b6f6
-Merge: 99f5fc1 844e0f6
+Merge: 99f5fc14 844e0f65
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Jan 8 22:20:09 2010 +0100
 
@@ -6575,7 +6956,7 @@ Date:   Fri Jan 8 22:19:41 2010 +0100
     A partial vlink fix.
 
 commit 844e0f65dbab98f71f2a5631277a720613d4d7a5
-Merge: 3242ab4 fc33143
+Merge: 3242ab43 fc33143f
 Author: Ondrej Filip <feela@majklik.network.cz>
 Date:   Fri Jan 8 21:19:03 2010 +0100
 
@@ -6678,7 +7059,7 @@ Date:   Tue Dec 22 10:49:39 2009 +0100
     Show command cleanups.
 
 commit 0ad19261bf551ef49a1565e21e384ec749ec16d4
-Merge: c4ae538 67b24e7
+Merge: c4ae5385 67b24e7c
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Dec 22 01:34:01 2009 +0100
 
@@ -6705,14 +7086,14 @@ Date:   Mon Dec 21 11:50:42 2009 +0100
     Change default LOCAL_PREF attribute to 100 (suggested value by RFC 4277).
 
 commit ba9a122142a3d42137c129fabaef097702d44801
-Merge: 0225ea4 c4199e3
+Merge: 0225ea4e c4199e30
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Dec 20 22:57:44 2009 +0100
 
     Merge branch 'ospf3' into new
 
 commit c4199e30313c88c0911060a5b5f3cc181ceedb37
-Merge: f2d7da7 ea7ada3
+Merge: f2d7da74 ea7ada38
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Dec 20 22:56:09 2009 +0100
 
@@ -6745,7 +7126,7 @@ Date:   Sat Dec 19 18:45:46 2009 +0100
     NEWS and version update.
 
 commit 0225ea4eddb44bd9dd4f112e512325cbf80134d3
-Merge: 43c1cec f2d7da7
+Merge: 43c1cecc f2d7da74
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Dec 15 00:32:13 2009 +0100
 
@@ -6776,7 +7157,7 @@ Date:   Mon Dec 14 21:17:15 2009 +0100
     Implements route reload for OSPF.
 
 commit 63542845dfb6d2277f93f77ad9ca3ad8bbaddd09
-Merge: 34a877c 8a7fb88
+Merge: 34a877cc 8a7fb885
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Dec 14 20:37:32 2009 +0100
 
@@ -6784,9 +7165,9 @@ Date:   Mon Dec 14 20:37:32 2009 +0100
     
     Conflicts:
     
-    	proto/ospf/lsreq.c
-    	proto/ospf/lsupd.c
-    	proto/ospf/rt.c
+            proto/ospf/lsreq.c
+            proto/ospf/lsupd.c
+            proto/ospf/rt.c
 
 commit 34a877ccac25d38172716d3d2488449c870cad0b
 Author: Ondrej Zajicek <santiago@crfreenet.org>
@@ -6906,7 +7287,7 @@ Date:   Thu Nov 26 20:47:59 2009 +0100
     Implements BGP route refresh.
 
 commit 5e6f568115511e2bcf43c60dfdcbd7a35cb04b93
-Merge: 069bfcb 1f8be1e
+Merge: 069bfcb5 1f8be1e4
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Nov 24 17:19:23 2009 +0100
 
@@ -7007,14 +7388,14 @@ Date:   Mon Nov 9 23:22:53 2009 +0100
     Use IPv6 checksums in OSPFv3.
 
 commit 3f22fa9e74c8643d3e4f7e3a7b4f2aa992ad09f5
-Merge: a6bc04d b7c0e93
+Merge: a6bc04d5 b7c0e93e
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Nov 9 22:54:39 2009 +0100
 
     Merge branch 'dev' into ospf3
 
 commit b7c0e93ebd40cdc4f6e89067a3e5f7293263c7f9
-Merge: 7965e17 f1f1e89
+Merge: 7965e17d f1f1e899
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Nov 2 16:27:17 2009 +0100
 
@@ -7279,7 +7660,7 @@ Date:   Sun Aug 23 23:03:31 2009 +0200
     Version 1.1.2
 
 commit 2ef58837dcb7b78edc193bc9ef1da316bba86998
-Merge: 86975e5 5516a66
+Merge: 86975e58 5516a66d
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Aug 21 09:46:49 2009 +0200
 
@@ -7392,7 +7773,7 @@ Date:   Mon Aug 10 12:04:25 2009 +0200
     Fixes typo in Makefile
 
 commit b92c8e30191dd757c76239076eda82d0065f2348
-Merge: 54d70d3 71a9574
+Merge: 54d70d3e 71a9574a
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Aug 10 10:16:00 2009 +0200
 
@@ -7455,7 +7836,7 @@ Date:   Thu Jul 9 15:42:39 2009 +0200
     Fixed bug related to reconfiguration of BGP with MD5 passwords.
 
 commit dd7b4a13848f5a92b403a563e8e27a3cbdfc937f
-Merge: d1abbea bffd4c0
+Merge: d1abbeac bffd4c0b
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Jul 6 23:10:33 2009 +0200
 
@@ -7524,7 +7905,7 @@ Date:   Fri Jun 26 13:33:41 2009 +0200
     nobody noticed it already.
 
 commit 5004d02cb9df1f3ee231632a8e89929f4eb4f088
-Merge: 1876e18 99355da
+Merge: 1876e18d 99355da1
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Jun 26 01:06:12 2009 +0200
 
@@ -7767,7 +8148,7 @@ Date:   Fri May 29 13:32:24 2009 +0200
     Add 'primary' configuration option.
 
 commit 7c3d06b087946cbea4affa4a814e72b7a3556833
-Merge: f571473 4c2507d
+Merge: f571473e 4c2507da
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu May 28 13:58:51 2009 +0200
 
@@ -7853,7 +8234,7 @@ Date:   Fri May 22 00:26:30 2009 +0200
     Better checks for M4 in configure.
 
 commit 6c84554b671fce473fe333ab3d8b548a0768882b
-Merge: f434d19 4d176e1
+Merge: f434d191 4d176e14
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu May 21 09:26:59 2009 +0200
 
@@ -8622,7 +9003,7 @@ Date:   Tue Oct 28 16:10:42 2008 +0100
     Fixes some sloppiness of commit a3b70dc499b64f41aa776b5b4afee5c7bfb8dfa6.
 
 commit a98fbf0f12b5e83e25afa0f585ca6a4d4ac5f6bf
-Merge: a3b70dc 1567ede
+Merge: a3b70dc4 1567edea
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Oct 27 00:20:22 2008 +0100
 
@@ -9291,17 +9672,17 @@ Author: Ondrej Filip <feela@network.cz>
 Date:   Fri Jun 25 16:39:53 2004 +0000
 
     A lot of changes:
-    	- metric is 3 byte long now
-    	- summary lsa originating
-    	- more OSPF areas possible
-    	- virtual links
-    	- better E1/E2 routes handling
-    	- some bug fixes..
+            - metric is 3 byte long now
+            - summary lsa originating
+            - more OSPF areas possible
+            - virtual links
+            - better E1/E2 routes handling
+            - some bug fixes..
     
     I have to do:
-    	- md5 auth (last mandatory item from rfc2328)
-    	- !!!!DEBUG!!!!! (mainly virtual link system has probably a lot of bugs)
-    	- 2328 appendig E
+            - md5 auth (last mandatory item from rfc2328)
+            - !!!!DEBUG!!!!! (mainly virtual link system has probably a lot of bugs)
+            - 2328 appendig E
 
 commit 5ed68e46d781f8a14d3ef3ffd7fe3afc4a62260e
 Author: Ondrej Filip <feela@network.cz>
@@ -10746,7 +11127,7 @@ Author: Ondrej Filip <feela@network.cz>
 Date:   Fri Aug 25 12:26:03 2000 +0000
 
     Minor bug. It does not work on non RH systems. Thanx to
-    	Craig Bourne <cbourne@cbourne.com>
+            Craig Bourne <cbourne@cbourne.com>
 
 commit 6cf7e97abe05ee8943f8a2d300e1c46038b95df1
 Author: Ondrej Filip <feela@network.cz>
@@ -11744,7 +12125,7 @@ Date:   Mon Jun 5 02:23:20 2000 +0000
 
     Many bugfixes (I don't remember all of them):
     Added link ID calculation for external routes with same prefix but
-    	different mask.
+            different mask.
     Bugfix in NET lsa origination.
     Bugfix in NET hashing.
     Bugfix in LSA installing.
@@ -12879,11 +13260,11 @@ Date:   Mon May 29 10:32:37 2000 +0000
     Added skeleton for subchapters on all the protocols. Each subchapter should
     contain:
     
-    	Introduction (brief intro to the protocol, where should it be used,
-    		references to the relevant standards)
-    	Configuration
-    	Attributes
-    	Example
+            Introduction (brief intro to the protocol, where should it be used,
+                    references to the relevant standards)
+            Configuration
+            Attributes
+            Example
     
     Added a more detailed description of RIP attributes.
 
@@ -14431,8 +14812,8 @@ Date:   Sat Apr 29 15:45:30 2000 +0000
     Mj, could you provide example of static config for ipv6 that is _not_
     rejected by checks? I tried this and got rejected.
     
-    	route 62:168::/32 via 62:169::;
-    	route 1:2::/32 via 1:3::;
+            route 62:168::/32 via 62:169::;
+            route 1:2::/32 via 1:3::;
 
 commit 46cdc7e20faaf922431a157bcb0f82a45b7aa2d2
 Author: Martin Mares <mj@ucw.cz>
@@ -15376,10 +15757,10 @@ Date:   Sat Apr 1 10:19:47 2000 +0000
     set to EAP_xxx) and also a callback for naming and formatting of attributes.
     The callback can return one of the following results:
     
-    	GA_UNKNOWN	Attribute not recognized.
-    	GA_NAME		Attribute name recognized and put to the buffer,
-    			generic code should format the value.
-    	GA_FULL		Both attribute name and value put to the buffer.
+            GA_UNKNOWN      Attribute not recognized.
+            GA_NAME         Attribute name recognized and put to the buffer,
+                            generic code should format the value.
+            GA_FULL         Both attribute name and value put to the buffer.
     
     Please update protocols generating dynamic attributes to provide
     the attr_class and formatting hook.
@@ -16336,9 +16717,9 @@ Date:   Mon Jan 17 11:52:50 2000 +0000
     Separated `official protocol names' used in status dumps from name templates
     used for automatic generation of instance names.
     
-    	protocol->name is the official name
-    	protocol->template is the name template (usually "name%d"),
-    		should be all lowercase.
+            protocol->name is the official name
+            protocol->template is the name template (usually "name%d"),
+                    should be all lowercase.
     
     Updated all protocols to define the templates, checked that their configuration
     grammar includes proto_name which generates the name and interns it in the
@@ -16989,8 +17370,8 @@ Date:   Wed Nov 17 12:14:44 1999 +0000
     
     To define a new command, just add a new rule to the gramar:
       CF_CLI(COMMAND NAME, arguments, help-args, help-text) {
-    	what-should-the-command-do
-    	} ;
+            what-should-the-command-do
+            } ;
     where <arguments> are appended to the RHS of the rule, <help-args> is the
     argument list as shown in the help and <help-text> is description of the
     command for the help.
@@ -17008,8 +17389,8 @@ Date:   Wed Nov 17 12:14:44 1999 +0000
     
     Functions to call inside command handlers:
       cli_printf(cli, code, printf-args) -- print text to CLI connection,
-    	<code> is message code as assigned in doc/reply_codes or a negative
-    	one if it's a continuation line.
+            <code> is message code as assigned in doc/reply_codes or a negative
+            one if it's a continuation line.
       cli_msg(code, printf-args) -- the same for this_cli.
     
     Use 'sock -x bird.ctl' for connecting to the CLI until a client is written.
@@ -17239,9 +17620,9 @@ Date:   Sun Oct 31 17:47:47 1999 +0000
     to exist). This macro automatically creates a skeleton rule for the command,
     you only need to append arguments as in:
     
-    	CF_CLI(STEAL MONEY, <$>, [[Steal <$> US dollars or equivalent in any other currency]]): NUM {
-    		cli_msg(0, "%d$ stolen", $3);
-    	} ;
+            CF_CLI(STEAL MONEY, <$>, [[Steal <$> US dollars or equivalent in any other currency]]): NUM {
+                    cli_msg(0, "%d$ stolen", $3);
+            } ;
     
     Also don't forget to reset lexer state between inputs.
 
@@ -18239,12 +18620,12 @@ Date:   Mon Apr 5 20:25:03 1999 +0000
        -- instead use a pool pointer passed to all related functions.
     o  Split rte_update to three functions:
     
-    	rte_update	The front end: handles all checking, inbound
-    			filtering and calls rte_recalculate() for the
-    			final version of the route.
-    	rte_recalculate	Update the table according to already filtered route.
-    	rte_announce	Announce routing table changes to all protocols,
-    			passing them through export filters and so on.
+            rte_update      The front end: handles all checking, inbound
+                            filtering and calls rte_recalculate() for the
+                            final version of the route.
+            rte_recalculate Update the table according to already filtered route.
+            rte_announce    Announce routing table changes to all protocols,
+                            passing them through export filters and so on.
     
        The interface has _not_ changed -- still call rte_update() and it will
        do the rest for you automagically.
@@ -18256,9 +18637,9 @@ Date:   Mon Apr 5 20:17:59 1999 +0000
 
     Added some new protocol hooks (look at the comments for better explanation):
     
-    	make_tmp_attrs		Convert inline attributes to ea_list
-    	store_tmp_attrs		Convert ea_list to inline attributes
-    	import_control		Pre-import decisions
+            make_tmp_attrs          Convert inline attributes to ea_list
+            store_tmp_attrs         Convert ea_list to inline attributes
+            import_control          Pre-import decisions
 
 commit 5056c559c4eb253a4eee10cf35b694faec5265eb
 Author: Martin Mares <mj@ucw.cz>
@@ -18267,17 +18648,17 @@ Date:   Mon Apr 5 20:15:31 1999 +0000
     Changed syntax of attaching filters to protocols to hopefully the final
     version:
     
-    	EXPORT <filter-spec>	for outbound routes (i.e., those announced
-    				by BIRD to the rest of the world).
-    	IMPORT <filter-spec>	for inbound routes (i.e., those imported
-    				by BIRD from the rest of the world).
+            EXPORT <filter-spec>    for outbound routes (i.e., those announced
+                                    by BIRD to the rest of the world).
+            IMPORT <filter-spec>    for inbound routes (i.e., those imported
+                                    by BIRD from the rest of the world).
     
     where <filter-spec> is one of:
     
-    	ALL			pass all routes
-    	NONE			drop all routes
-    	FILTER <name>		use named filter
-    	FILTER { <filter> }	use explicitly defined filter
+            ALL                     pass all routes
+            NONE                    drop all routes
+            FILTER <name>           use named filter
+            FILTER { <filter> }     use explicitly defined filter
     
     For all protocols, the default is IMPORT ALL, EXPORT NONE. This includes
     the kernel protocol, so that you need to add EXPORT ALL to get the previous
@@ -18466,11 +18847,11 @@ Date:   Sat Mar 27 22:51:05 1999 +0000
     Available configurations:
     
        o  linux-20: Old Linux interface via /proc/net/route (selected by default
-    		on pre-2.1 kernels).
+                    on pre-2.1 kernels).
        o  linux-21: Old Linux interface, but device routes handled by the
-    		kernel (selected by default for 2.1 and newer kernels).
+                    kernel (selected by default for 2.1 and newer kernels).
        o  linux-22: Linux with Netlink (I play with it a lot yet, so it isn't
-    		a default).
+                    a default).
        o  linux-ipv6: Prototype config for IPv6 on Linux. Not functional yet.
 
 commit 7dc4827c968053e45bcb7f145e9986eeb20c993b
@@ -18647,7 +19028,7 @@ Date:   Thu Mar 4 14:23:32 1999 +0000
     
     To build BIRD with Netlink support, just configure it with
     
-    	./configure --with-sysconfig=linux-21
+            ./configure --with-sysconfig=linux-21
     
     After it will be tested well enough, I'll probably make it a default
     for 2.2 kernels (and rename it to linux-22 :)).
@@ -19032,21 +19413,21 @@ Date:   Thu Feb 11 21:18:26 1999 +0000
     be linked in at most one event list. For most purposes, just use the
     global event list handled by the following functions:
     
-    	ev_schedule	Schedule event to be called at the next event
-    			scheduling point. If the event was already
-    			scheduled, it's just re-linked to the end of the list.
-    	ev_postpone	Postpone an already scheduled event, so that it
-    			won't get called. Postponed events can be scheduled
-    			again by ev_schedule().
+            ev_schedule     Schedule event to be called at the next event
+                            scheduling point. If the event was already
+                            scheduled, it's just re-linked to the end of the list.
+            ev_postpone     Postpone an already scheduled event, so that it
+                            won't get called. Postponed events can be scheduled
+                            again by ev_schedule().
     
     You can also create custom event lists to build your own synchronization
     primitives. Just use:
     
-    	ev_init_list	to initialize an event list
-    	ev_enqueue	to schedule event on specified event list
-    	ev_postpone	works as well for custom lists
-    	ev_run_list	to run all events on your custom list
-    	ev_run		to run a specific event and dequeue it
+            ev_init_list    to initialize an event list
+            ev_enqueue      to schedule event on specified event list
+            ev_postpone     works as well for custom lists
+            ev_run_list     to run all events on your custom list
+            ev_run          to run a specific event and dequeue it
 
 commit edf62ba13fa6a74447d7ad44b23acbee964731bc
 Author: Pavel Machek <pavel@ucw.cz>
@@ -19235,16 +19616,16 @@ Date:   Sat Jan 9 15:02:11 1999 +0000
     
     To compile BIRD, you now need to do:
     
-    	autoconf		# Create configure from configure.in
-    	./configure		# Run configure script
-    	make			# Compile everything
+            autoconf                # Create configure from configure.in
+            ./configure             # Run configure script
+            make                    # Compile everything
     
     Configuration files:
     
-    	sysdep/config.h		Master config file
-    	sysdep/autoconf.h	Parameters determined by configure script
-    	sysdep/cf/*.h		Fixed system configuration we're unable
-    				to guess.
+            sysdep/config.h         Master config file
+            sysdep/autoconf.h       Parameters determined by configure script
+            sysdep/cf/*.h           Fixed system configuration we're unable
+                                    to guess.
     
     Makefiles are still the original ones, but this will change soon.
 
@@ -19367,9 +19748,9 @@ Date:   Sat Dec 19 11:51:47 1998 +0000
     we can use very simple function which is monotonic with respect
     to re-hashing:
     
-    	n ^= n >> 16;
-    	n ^= n << 10;
-    	h = (n >> (16 - o)) & ((1 << o) - 1);
+            n ^= n >> 16;
+            n ^= n << 10;
+            h = (n >> (16 - o)) & ((1 << o) - 1);
     
     where o is table order. Statistical analysis for both backbone routing
     table and local OSPF routing tables gives values near theoretical
@@ -20016,7 +20397,7 @@ Date:   Tue Oct 13 14:32:18 1998 +0000
 
     I prefer to have broken drivers than completely stupid ones...
     
-    							Linus Torvalds
+                                                            Linus Torvalds
     
     Rip now uses main routing table properly: entries are stored directly
     into main routing table and we are relying on core to call our's
@@ -20146,10 +20527,10 @@ Date:   Wed Jun 17 14:31:36 1998 +0000
     Added local version of sprintf (bsprintf and bvsprintf) offering few new
     format strings:
     
-    	%I	IP address
-    	%#I	IP address in hexadecimal
-    	%1I	IP address padded to full length
-    	%m	strerror(errno)
+            %I      IP address
+            %#I     IP address in hexadecimal
+            %1I     IP address padded to full length
+            %m      strerror(errno)
 
 commit 97d858c590998786d4d8a16b5c1f657800d74736
 Author: Martin Mares <mj@ucw.cz>
