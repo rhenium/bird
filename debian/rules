@@ -34,8 +34,6 @@ override_dh_install:
 	install -m 644 debian/envvars debian/tmp/etc/bird2/
 	install -d -m 755 debian/tmp/usr/lib/bird2
 	install -m 755 debian/prepare-environment debian/tmp/usr/lib/bird2/
-	install -d -m 755 debian/tmp/usr/share/bird2
-	install -m 644 debian/bird.conf debian/tmp/usr/share/bird2/
 	dh_install --sourcedir=debian/tmp
 
 override_dh_installinit:
