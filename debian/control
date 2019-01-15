@@ -10,7 +10,7 @@ Build-Depends: autotools-dev,
                flex,
                libncurses5-dev,
                libreadline-dev | libreadline6-dev | libreadline5-dev,
-	       libssh-dev,
+               libssh-dev,
                linuxdoc-tools-latex,
                m4,
                opensp,
@@ -29,9 +29,9 @@ Depends: adduser,
          ucf,
          ${misc:Depends},
          ${shlibs:Depends}
-Conflicts: routed,
-           zebra,
-	   bird
+Conflicts: bird,
+           routed,
+           zebra
 Suggests: bird2-doc
 Description: Internet Routing Daemon
  BIRD is an Internet routing daemon with full support for all the major
