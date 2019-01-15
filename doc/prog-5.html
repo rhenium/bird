@@ -724,7 +724,7 @@ checks their headers and framing and passes complete packets to
 <H3>Arguments</H3>
 <P>
 <DL>
-<DT><I>struct bgp_proto *</I> <B>p</B><DD><P>BGP instance
+<DT><I>struct bgp_proto *</I> <B>p</B><DD><P>BGP instance (or NULL)
 <DT><I>byte *</I> <B>w</B><DD><P>buffer
 <DT><I>ea_list *</I> <B>attrs</B><DD><P>a list of extended attributes
 <DT><I>int</I> <B>remains</B><DD><P>remaining space in the buffer
@@ -755,7 +755,37 @@ and converts it to its BGP representation (a part of an Update message).
 its consistency and converts it to a list of BIRD route attributes represented
 by a <I>rta</I>.
 
-<H2><A NAME="ss5.4">5.4</A> <A HREF="prog.html#toc5.4">Open Shortest Path First (OSPF)</A>
+<H2><A NAME="ss5.4">5.4</A> <A HREF="prog.html#toc5.4">Multi-Threaded Routing Toolkit (MRT) protocol</A>
+</H2>
+
+<P>
+<P>The MRT protocol is implemented in just one file: <CODE>mrt.c</CODE>. It contains of
+several parts: Generic functions for preparing MRT messages in a buffer,
+functions for MRT table dump (called from timer or CLI), functions for MRT
+BGP4MP dump (called from BGP), and the usual protocol glue. For the MRT table
+dump, the key structure is struct mrt_table_dump_state, which contains all
+necessary data and created when the MRT dump cycle is started for the
+duration of the MRT dump. The MBGP4MP dump is currently not bound to MRT
+protocol instance and uses the config-&gt;mrtdump_file fd.
+<P>The protocol is simple, just periodically scans routing table and export it
+to a file. It does not use the regular update mechanism, but a direct access
+in order to handle iteration through multiple routing tables. The table dump
+needs to dump all peers first and then use indexes to address the peers, we
+use a hash table (<B>peer_hash</B>) to find peer index based on BGP protocol key
+attributes.
+<P>One thing worth documenting is the locking. During processing, the currently
+processed table (<B>table</B> field in the state structure) is locked and also the
+explicitly named table is locked (<B>table_ptr</B> field in the state structure) if
+specified. Between dumps no table is locked. Also the current config is
+locked (by <B>config_add_obstacle()</B>) during table dumps as some data (strings,
+filters) are shared from the config and the running table dump may be
+interrupted by reconfiguration.
+<P>Supported standards:
+- RFC 6396 - MRT format standard
+- RFC 8050 - ADD_PATH extension
+<P>
+<P>
+<H2><A NAME="ss5.5">5.5</A> <A HREF="prog.html#toc5.5">Open Shortest Path First (OSPF)</A>
 </H2>
 
 <P>
@@ -1216,7 +1246,7 @@ of the buffer.
 It's based on Dijkstra's shortest path tree algorithms.
 This function is invoked from <B>ospf_disp()</B>.
 
-<H2><A NAME="ss5.5">5.5</A> <A HREF="prog.html#toc5.5">Pipe</A>
+<H2><A NAME="ss5.6">5.6</A> <A HREF="prog.html#toc5.6">Pipe</A>
 </H2>
 
 <P>
@@ -1239,7 +1269,7 @@ are used as export filters in ahooks 2 and 1. Route limits are
 handled similarly, but on the import side of ahooks.
 <P>
 <P>
-<H2><A NAME="ss5.6">5.6</A> <A HREF="prog.html#toc5.6">Routing Information Protocol (RIP)</A>
+<H2><A NAME="ss5.7">5.7</A> <A HREF="prog.html#toc5.7">Routing Information Protocol (RIP)</A>
 </H2>
 
 <P>
@@ -1419,7 +1449,7 @@ transmitted. Note that there may be at most one active update session per
 interface, the function will terminate the old active session before
 activating the new one.
 
-<H2><A NAME="ss5.7">5.7</A> <A HREF="prog.html#toc5.7">Router Advertisements</A>
+<H2><A NAME="ss5.8">5.8</A> <A HREF="prog.html#toc5.8">Router Advertisements</A>
 </H2>
 
 <P>
@@ -1447,7 +1477,7 @@ case of the specified trigger prefix was changed.
 - RFC 6106 - DNS extensions (RDDNS, DNSSL)
 <P>
 <P>
-<H2><A NAME="ss5.8">5.8</A> <A HREF="prog.html#toc5.8">Static</A>
+<H2><A NAME="ss5.9">5.9</A> <A HREF="prog.html#toc5.9">Static</A>
 </H2>
 
 <P>
@@ -1474,7 +1504,7 @@ difference between the lists of static routes and it just inserts the
 newly added routes and removes the obsolete ones.
 <P>
 <P>
-<H2><A NAME="ss5.9">5.9</A> <A HREF="prog.html#toc5.9">Direct</A>
+<H2><A NAME="ss5.10">5.10</A> <A HREF="prog.html#toc5.10">Direct</A>
 </H2>
 
 <P>

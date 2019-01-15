@@ -779,7 +779,7 @@ passing them at once.
 </DL>
 <H3>Description</H3>
 <P>Finish MAC computation and return a pointer to the result. No more
-<B>mac_update</B>() calls could be done, but the context may be reinitialized
+@<B>mac_update()</B> calls could be done, but the context may be reinitialized
 later.
 <P>Note that the returned pointer points into data in the <B>ctx</B> context. If it
 ceases to exist, the pointer becomes invalid.
@@ -798,7 +798,7 @@ ceases to exist, the pointer becomes invalid.
 <H3>Description</H3>
 <P>Cleanup MAC context after computation (by filling with zeros). Not strictly
 necessary, just to erase sensitive data from stack. This also invalidates the
-pointer returned by <B>mac_final</B>().
+pointer returned by @<B>mac_final()</B>.
 
 
 <HR><H3>Function</H3>

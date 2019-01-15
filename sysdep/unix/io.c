@@ -54,6 +54,7 @@
    this to gen small latencies */
 #define MAX_RX_STEPS 4
 
+
 /*
  *	Tracked Files
  */
@@ -88,18 +89,31 @@ static struct resclass rf_class = {
   NULL
 };
 
-void *
-tracked_fopen(pool *p, char *name, char *mode)
+struct rfile *
+rf_open(pool *p, char *name, char *mode)
 {
   FILE *f = fopen(name, mode);
 
-  if (f)
-    {
-      struct rfile *r = ralloc(p, &rf_class);
-      r->f = f;
-    }
-  return f;
+  if (!f)
+    return NULL;
+
+  struct rfile *r = ralloc(p, &rf_class);
+  r->f = f;
+  return r;
 }
+
+void *
+rf_file(struct rfile *f)
+{
+  return f->f;
+}
+
+int
+rf_fileno(struct rfile *f)
+{
+  return fileno(f->f);
+}
+
 
 /**
  * DOC: Timers
@@ -476,6 +490,20 @@ tm_format_datetime(char *x, struct timeformat *fmt_spec, bird_clock_t t)
   int rv = strftime(x, TM_DATETIME_BUFFER_SIZE, fmt_used, tm);
   if (((rv == 0) && fmt_used[0]) || (rv == TM_DATETIME_BUFFER_SIZE))
     strcpy(x, "<too-long>");
+}
+
+int
+tm_format_real_time(char *x, size_t max, const char *fmt, bird_clock_t t)
+{
+  struct tm tm;
+
+  if (!localtime_r(&t, &tm))
+    return 0;
+
+  if (!strftime(x, max, fmt, &tm))
+    return 0;
+
+  return 1;
 }
 
 
@@ -1574,6 +1602,7 @@ sk_sendmsg(sock *s)
   struct iovec iov = {s->tbuf, s->tpos - s->tbuf};
   byte cmsg_buf[CMSG_TX_SPACE];
   sockaddr dst;
+  int flags = 0;
 
   sockaddr_fill(&dst, s->af, s->daddr, s->iface, s->dport);
 
@@ -1583,6 +1612,13 @@ sk_sendmsg(sock *s)
     .msg_iov = &iov,
     .msg_iovlen = 1
   };
+
+#ifdef CONFIG_DONTROUTE_UNICAST
+  /* FreeBSD silently changes TTL to 1 when MSG_DONTROUTE is used, therefore we
+     cannot use it for other cases (e.g. when TTL security is used). */
+  if (ipa_is_ip4(s->daddr) && ip4_is_unicast(ipa_to_ip4(s->daddr)) && (s->ttl == 1))
+    flags = MSG_DONTROUTE;
+#endif
 
 #ifdef CONFIG_USE_HDRINCL
   byte hdr[20];
@@ -1599,7 +1635,7 @@ sk_sendmsg(sock *s)
   if (s->flags & SKF_PKTINFO)
     sk_prepare_cmsgs(s, &msg, cmsg_buf, sizeof(cmsg_buf));
 
-  return sendmsg(s->fd, &msg, 0);
+  return sendmsg(s->fd, &msg, flags);
 }
 
 static inline int

@@ -48,14 +48,12 @@ AC_ARG_WITH([suffix],
 )
 
 AC_ARG_WITH([sysconfig],
-  [AS_HELP_STRING([--with-sysconfig=FILE], [use specified BIRD system configuration file])],
-  []
+  [AS_HELP_STRING([--with-sysconfig=FILE], [use specified BIRD system configuration file])]
 )
 
 AC_ARG_WITH([runtimedir],
-  [AS_HELP_STRING([--with-runtimedir=PATH], [path for runtime files @<:@LOCALSTATEDIR/run@:>@])],
-  [runtimedir="$with_runtimedir"],
-  [runtimedir="\$(localstatedir)/run"]
+  [AS_HELP_STRING([--with-runtimedir=PATH], [run-state data, obsolete variant of --runstatedir])],
+  [runstatedir="$with_runtimedir"]
 )
 
 AC_ARG_WITH([iproutedir],
@@ -91,7 +89,11 @@ esac
 AC_SUBST([objdir])
 AC_SUBST([exedir])
 AC_SUBST([srcdir_rel_mf])
-AC_SUBST([runtimedir])
+
+# Workaround for older Autoconfs that do not define runstatedir
+AS_IF([test -z "${runstatedir}"], [runstatedir='${localstatedir}/run'])
+AC_SUBST([runstatedir])
+
 
 if test "$enable_ipv6" = yes ; then
   ip=ipv6
@@ -112,7 +114,7 @@ if test "$enable_debug" = yes ; then
   CONTROL_SOCKET="bird$SUFFIX.ctl"
 else
   CONFIG_FILE="\$(sysconfdir)/bird$SUFFIX.conf"
-  CONTROL_SOCKET="$runtimedir/bird$SUFFIX.ctl"
+  CONTROL_SOCKET="\$(runstatedir)/bird$SUFFIX.ctl"
 fi
 AC_SUBST([CONFIG_FILE])
 AC_SUBST([CONTROL_SOCKET])
@@ -216,9 +218,13 @@ else
       ;;
     ipv6:freebsd*)
       sysdesc=bsd-v6
+      CPPFLAGS="$CPPFLAGS -I/usr/local/include"
+      LDFLAGS="$LDFLAGS -L/usr/local/lib"
       ;;
     ipv4:freebsd*)
       sysdesc=bsd
+      CPPFLAGS="$CPPFLAGS -I/usr/local/include"
+      LDFLAGS="$LDFLAGS -L/usr/local/lib"
       ;;
     ipv6:dragonfly*)
       sysdesc=bsd-v6
@@ -266,7 +272,7 @@ fi
 
 AC_SUBST([iproutedir])
 
-all_protocols="$proto_bfd bgp ospf pipe $proto_radv rip static"
+all_protocols="$proto_bfd bgp mrt ospf pipe $proto_radv rip static"
 if test "$ip" = ipv6 ; then
    all_protocols="$all_protocols babel"
 fi
@@ -279,6 +285,7 @@ fi
 AH_TEMPLATE([CONFIG_BABEL], 	[Babel protocol])
 AH_TEMPLATE([CONFIG_BFD],	[BFD protocol])
 AH_TEMPLATE([CONFIG_BGP],	[BGP protocol])
+AH_TEMPLATE([CONFIG_MRT],	[MRT protocol])
 AH_TEMPLATE([CONFIG_OSPF],	[OSPF protocol])
 AH_TEMPLATE([CONFIG_PIPE],	[Pipe protocol])
 AH_TEMPLATE([CONFIG_RADV],	[RAdv protocol])
@@ -320,6 +327,20 @@ AC_C_BIGENDIAN(
   [AC_DEFINE([CPU_LITTLE_ENDIAN], [1], [Define to 1 if cpu is little endian])],
   [AC_MSG_ERROR([Cannot determine CPU endianity.])]
 )
+
+BIRD_CHECK_ANDROID_GLOB
+if test "$bird_cv_lib_glob" = no ; then
+  AC_MSG_ERROR([glob.h not found.])
+elif test "$bird_cv_lib_glob" != yes ; then
+  LIBS="$LIBS $bird_cv_lib_glob"
+fi
+
+BIRD_CHECK_ANDROID_LOG
+if test "$bird_cv_lib_log" = no ; then
+  AC_MSG_ERROR([don't know how to link syslog.])
+elif test "$bird_cv_lib_log" != yes ; then
+  LIBS="$LIBS $bird_cv_lib_log"
+fi
 
 if test "$enable_debug" = yes ; then
   AC_DEFINE([DEBUGGING], [1], [Define to 1 if debugging is enabled])
@@ -382,7 +403,7 @@ AC_SUBST([CLIENT_LIBS])
 mkdir -p $objdir/sysdep
 AC_CONFIG_HEADERS([$objdir/sysdep/autoconf.h:sysdep/autoconf.h.in])
 AC_CONFIG_COMMANDS([merge],
-  [ export CPP="$CPP"; $srcdir/tools/mergedirs $srcdir $srcdir_rel $objdir $sysdep_dirs ],
+  [ export CPP="$CPP"; sh $srcdir/tools/mergedirs $srcdir $srcdir_rel $objdir $sysdep_dirs ],
   [
     srcdir=$srcdir
     srcdir_rel=$srcdir_rel
@@ -405,4 +426,5 @@ AC_MSG_RESULT([        Debugging:		$enable_debug])
 AC_MSG_RESULT([        POSIX threads:		$enable_pthreads])
 AC_MSG_RESULT([        Routing protocols:	$protocols])
 AC_MSG_RESULT([        Client:			$enable_client])
+
 rm -f $objdir/.*-stamp

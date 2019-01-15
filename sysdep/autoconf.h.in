@@ -12,6 +12,9 @@
 /* BGP protocol */
 #undef CONFIG_BGP
 
+/* MRT protocol */
+#undef CONFIG_MRT
+
 /* OSPF protocol */
 #undef CONFIG_OSPF
 

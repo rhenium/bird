@@ -206,7 +206,7 @@ config_del_obstacle(struct config *c)
 {
   DBG("+++ deleting obstacle %d\n", c->obstacle_count);
   c->obstacle_count--;
-  if (!c->obstacle_count)
+  if (!c->obstacle_count && (c != config))
     ev_schedule(config_event);
 }
 
@@ -515,6 +515,7 @@ cf_error(char *msg, ...)
   va_end(args);
   new_config->err_msg = cfg_strdup(buf);
   new_config->err_lino = ifs->lino;
+  new_config->err_chno = ifs->chno - ifs->toklen + 1;
   new_config->err_file_name = ifs->file_name;
   cf_lex_unwind();
   longjmp(conf_jmpbuf, 1);

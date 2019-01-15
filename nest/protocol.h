@@ -76,7 +76,7 @@ void protos_dump_all(void);
  */
 
 extern struct protocol
-  proto_device, proto_radv, proto_rip, proto_static,
+  proto_device, proto_radv, proto_rip, proto_static, proto_mrt,
   proto_ospf, proto_pipe, proto_bgp, proto_bfd, proto_babel;
 
 /*
@@ -213,6 +213,7 @@ struct proto {
   int (*rte_better)(struct rte *, struct rte *);
   int (*rte_same)(struct rte *, struct rte *);
   int (*rte_mergable)(struct rte *, struct rte *);
+  struct rte * (*rte_modify)(struct rte *, struct linpool *);
   void (*rte_insert)(struct network *, struct rte *);
   void (*rte_remove)(struct network *, struct rte *);
 
@@ -471,6 +472,7 @@ struct announce_hook {
   struct proto_stats *stats;		/* Per-table protocol statistics */
   struct announce_hook *next;		/* Next hook for the same protocol */
   int in_keep_filtered;			/* Routes rejected in import filter are kept */
+  bird_clock_t last_out_filter_change;	/* Last time when out_filter _changed_ */
 };
 
 struct announce_hook *proto_add_announce_hook(struct proto *p, struct rtable *t, struct proto_stats *stats);

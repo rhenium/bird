@@ -13,7 +13,7 @@
 #include "nest/protocol.h"
 #include "nest/route.h"
 #include "nest/attrs.h"
-#include "nest/mrtdump.h"
+#include "proto/mrt/mrt.h"
 #include "conf/conf.h"
 #include "lib/unaligned.h"
 #include "lib/socket.h"
@@ -38,81 +38,45 @@ static byte fsm_err_subcode[BS_MAX] = {
   [BS_ESTABLISHED] = 3
 };
 
-/*
- * MRT Dump format is not semantically specified.
- * We will use these values in appropriate fields:
- *
- * Local AS, Remote AS - configured AS numbers for given BGP instance.
- * Local IP, Remote IP - IP addresses of the TCP connection (0 if no connection)
- *
- * We dump two kinds of MRT messages: STATE_CHANGE (for BGP state
- * changes) and MESSAGE (for received BGP messages).
- *
- * STATE_CHANGE uses always AS4 variant, but MESSAGE uses AS4 variant
- * only when AS4 session is established and even in that case MESSAGE
- * does not use AS4 variant for initial OPEN message. This strange
- * behavior is here for compatibility with Quagga and Bgpdump,
- */
-
-static byte *
-mrt_put_bgp4_hdr(byte *buf, struct bgp_conn *conn, int as4)
+static void
+init_mrt_bgp_data(struct bgp_conn *conn, struct mrt_bgp_data *d)
 {
   struct bgp_proto *p = conn->bgp;
+  int p_ok = conn->state >= BS_OPENCONFIRM;
 
-  if (as4)
-    {
-      put_u32(buf+0, p->remote_as);
-      put_u32(buf+4, p->local_as);
-      buf+=8;
-    }
-  else
-    {
-      put_u16(buf+0, (p->remote_as <= 0xFFFF) ? p->remote_as : AS_TRANS);
-      put_u16(buf+2, (p->local_as <= 0xFFFF)  ? p->local_as  : AS_TRANS);
-      buf+=4;
-    }
-
-  put_u16(buf+0, (p->neigh && p->neigh->iface) ? p->neigh->iface->index : 0);
-  put_u16(buf+2, BGP_AF);
-  buf+=4;
-  buf = put_ipa(buf, conn->sk ? conn->sk->daddr : IPA_NONE);
-  buf = put_ipa(buf, conn->sk ? conn->sk->saddr : IPA_NONE);
-
-  return buf;
+  memset(d, 0, sizeof(struct mrt_bgp_data));
+  d->peer_as = p->remote_as;
+  d->local_as = p->local_as;
+  d->index = (p->neigh && p->neigh->iface) ? p->neigh->iface->index : 0;
+  d->af = BGP_AF;
+  d->peer_ip = conn->sk ? conn->sk->daddr : IPA_NONE;
+  d->local_ip = conn->sk ? conn->sk->saddr : IPA_NONE;
+  d->as4 = p_ok ? p->as4_session : 0;
+  d->add_path = p_ok ? p->add_path_rx : 0;
 }
 
 static void
-mrt_dump_bgp_packet(struct bgp_conn *conn, byte *pkt, unsigned len)
+bgp_dump_message(struct bgp_conn *conn, byte *pkt, uint len)
 {
-  byte *buf = alloca(128+len);	/* 128 is enough for MRT headers */
-  byte *bp = buf + MRTDUMP_HDR_LENGTH;
-  int as4 = conn->bgp->as4_session;
+  struct mrt_bgp_data d;
+  init_mrt_bgp_data(conn, &d);
 
-  bp = mrt_put_bgp4_hdr(bp, conn, as4);
-  memcpy(bp, pkt, len);
-  bp += len;
-  mrt_dump_message(&conn->bgp->p, BGP4MP, as4 ? BGP4MP_MESSAGE_AS4 : BGP4MP_MESSAGE,
-		   buf, bp-buf);
-}
+  d.message = pkt;
+  d.msg_len = len;
 
-static inline u16
-convert_state(unsigned state)
-{
-  /* Convert state from our BS_* values to values used in MRTDump */
-  return (state == BS_CLOSE) ? 1 : state + 1;
+  mrt_dump_bgp_message(&d);
 }
 
 void
-mrt_dump_bgp_state_change(struct bgp_conn *conn, unsigned old, unsigned new)
+bgp_dump_state_change(struct bgp_conn *conn, uint old, uint new)
 {
-  byte buf[128];
-  byte *bp = buf + MRTDUMP_HDR_LENGTH;
+  struct mrt_bgp_data d;
+  init_mrt_bgp_data(conn, &d);
 
-  bp = mrt_put_bgp4_hdr(bp, conn, 1);
-  put_u16(bp+0, convert_state(old));
-  put_u16(bp+2, convert_state(new));
-  bp += 4;
-  mrt_dump_message(&conn->bgp->p, BGP4MP, BGP4MP_STATE_CHANGE_AS4, buf, bp-buf);
+  d.old_state = old;
+  d.new_state = new;
+
+  mrt_dump_bgp_state_change(&d);
 }
 
 static byte *
@@ -231,6 +195,32 @@ bgp_put_cap_err(struct bgp_proto *p UNUSED, byte *buf)
   return buf;
 }
 
+static byte *
+bgp_put_cap_llgr1(struct bgp_proto *p, byte *buf)
+{
+  *buf++ = 71;		/* Capability 71: Support for long-lived graceful restart */
+  *buf++ = 7;		/* Capability data length */
+
+  *buf++ = 0;		/* Appropriate AF */
+  *buf++ = BGP_AF;
+  *buf++ = 1;		/* and SAFI 1 */
+
+  /* Next is 8bit flags and 24bit time */
+  put_u32(buf, p->cf->llgr_time);
+  buf[0] = p->p.gr_recovery ? BGP_LLGRF_FORWARDING : 0;
+  buf += 4;
+
+  return buf;
+}
+
+static byte *
+bgp_put_cap_llgr2(struct bgp_proto *p UNUSED, byte *buf)
+{
+  *buf++ = 71;		/* Capability 71: Support for long-lived graceful restart */
+  *buf++ = 0;		/* Capability data length */
+  return buf;
+}
+
 
 static byte *
 bgp_create_open(struct bgp_conn *conn, byte *buf)
@@ -284,6 +274,11 @@ bgp_create_open(struct bgp_conn *conn, byte *buf)
 
   if (p->cf->enable_extended_messages)
     cap = bgp_put_cap_ext_msg(p, cap);
+
+  if (p->cf->llgr_mode == BGP_LLGR_ABLE)
+    cap = bgp_put_cap_llgr1(p, cap);
+  else if (p->cf->llgr_mode == BGP_LLGR_AWARE)
+    cap = bgp_put_cap_llgr2(p, cap);
 
   cap_len = cap - buf - 12;
   if (cap_len > 0)
@@ -872,11 +867,38 @@ bgp_parse_capabilities(struct bgp_conn *conn, byte *opt, int len)
 	  conn->peer_enhanced_refresh_support = 1;
 	  break;
 
+	case 71: /* Long-lived graceful restart capability, RFC draft */
+	  if (cl % 7)
+	    goto err;
+	  conn->peer_llgr_aware = 1;
+	  conn->peer_llgr_able = 0;
+	  conn->peer_llgr_time = 0;
+	  conn->peer_llgr_aflags = 0;
+	  for (i = 0; i < cl; i += 7)
+	    if (opt[2+i+0] == 0 && opt[2+i+1] == BGP_AF && opt[2+i+2] == 1) /* Match AFI/SAFI */
+	      {
+		conn->peer_llgr_able = 1;
+		conn->peer_llgr_time = get_u32(opt + 2+i+3) & 0xffffff;
+		conn->peer_llgr_aflags = opt[2+i+3];
+	      }
+	  break;
+
 	  /* We can safely ignore all other capabilities */
 	}
       len -= 2 + cl;
       opt += 2 + cl;
     }
+
+  /* The LLGR capability must be advertised together with the GR capability,
+     otherwise it must be disregarded */
+  if (!conn->peer_gr_aware && conn->peer_llgr_aware)
+  {
+    conn->peer_llgr_aware = 0;
+    conn->peer_llgr_able = 0;
+    conn->peer_llgr_time = 0;
+    conn->peer_llgr_aflags = 0;
+  }
+
   return;
 
  err:
@@ -1034,7 +1056,8 @@ bgp_rx_open(struct bgp_conn *conn, byte *pkt, uint len)
   p->as4_session = p->cf->enable_as4 && conn->peer_as4_support;
   p->add_path_rx = (p->cf->add_path & ADD_PATH_RX) && (conn->peer_add_path & ADD_PATH_TX);
   p->add_path_tx = (p->cf->add_path & ADD_PATH_TX) && (conn->peer_add_path & ADD_PATH_RX);
-  p->gr_ready = p->cf->gr_mode && conn->peer_gr_able;
+  p->gr_ready = (p->cf->gr_mode && conn->peer_gr_able) ||
+		(p->cf->llgr_mode && conn->peer_llgr_able);
   p->ext_messages = p->cf->enable_extended_messages && conn->peer_ext_messages_support;
 
   /* Update RA mode */
@@ -1125,6 +1148,7 @@ bgp_rte_update(struct bgp_proto *p, ip_addr prefix, int pxlen,
   e->net = n;
   e->pflags = 0;
   e->u.bgp.suppressed = 0;
+  e->u.bgp.stale = -1;
   rte_update2(p->p.main_ahook, n, e, *src);
 }
 
@@ -1704,7 +1728,7 @@ bgp_rx_packet(struct bgp_conn *conn, byte *pkt, unsigned len)
   DBG("BGP: Got packet %02x (%d bytes)\n", type, len);
 
   if (conn->bgp->p.mrtdump & MD_MESSAGES)
-    mrt_dump_bgp_packet(conn, pkt, len);
+    bgp_dump_message(conn, pkt, len);
 
   switch (type)
     {
