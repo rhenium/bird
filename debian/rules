@@ -11,6 +11,7 @@ include /usr/share/dpkg/default.mk
 
 COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc/bird2 --mandir=\$${prefix}/share/man \
 	--infodir=\$${prefix}/share/info --localstatedir=/var --runstatedir=/run/bird2 \
+	--docdir=\$${prefix}/share/bird2 \
 	--enable-client
 
 CFLAGS += -g -O2 -fno-strict-aliasing -fno-strict-overflow -fPIC
@@ -21,11 +22,6 @@ LDFLAGS += -g -O2 -fno-strict-aliasing -fno-strict-overflow -fPIC -Wl,-z,defs -W
 
 override_dh_auto_configure:
 	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" dh_auto_configure -- $(COMMON_FLAGS) --with-protocols=all
-
-override_dh_auto_build:
-	dh_auto_build
-	# Build the upstream documentation
-	dh_auto_build -Ddoc
 
 override_dh_auto_clean:
 	dh_auto_clean
