@@ -9,6 +9,8 @@
 #ifndef _BIRD_BITOPTS_H_
 #define _BIRD_BITOPTS_H_
 
+#include "sysdep/config.h"
+
 /*
  *	Bit mask operations:
  *
@@ -19,7 +21,7 @@
  */
 
 u32 u32_mkmask(uint n);
-int u32_masklen(u32 x);
+uint u32_masklen(u32 x);
 
 u32 u32_log2(u32 v);
 

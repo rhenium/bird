@@ -17,7 +17,14 @@
  *  if possible.
  */
 
+#include "sysdep/unix/endian.h"
 #include "lib/string.h"
+
+static inline u8
+get_u8(const void *p)
+{
+  return * (u8 *) p;
+}
 
 static inline u16
 get_u16(const void *p)
@@ -25,6 +32,13 @@ get_u16(const void *p)
   u16 x;
   memcpy(&x, p, 2);
   return ntohs(x);
+}
+
+static inline u32
+get_u24(const void *P)
+{
+  const byte *p = P;
+  return (p[0] << 16) + (p[1] << 8) + p[2];
 }
 
 static inline u32
@@ -58,6 +72,13 @@ put_u16(void *p, u16 x)
 }
 
 static inline void
+put_u24(void *p, u32 x)
+{
+  x = htonl(x);
+  memcpy(p, ((char *) &x) + 1, 3);
+}
+
+static inline void
 put_u32(void *p, u32 x)
 {
   x = htonl(x);
@@ -73,5 +94,23 @@ put_u64(void *p, u64 x)
   memcpy(p, &xh, 4);
   memcpy(p+4, &xl, 4);
 }
+
+static inline void
+get_u32s(const void *p, u32 *x, int n)
+{
+  int i;
+  memcpy(x, p, 4*n);
+  for (i = 0; i < n; i++)
+    x[i] = ntohl(x[i]);
+}
+
+static inline void
+put_u32s(void *p, const u32 *x, int n)
+{
+  int i;
+  for (i = 0; i < n; i++)
+    put_u32((byte *) p + 4*i, x[i]);
+}
+
 
 #endif

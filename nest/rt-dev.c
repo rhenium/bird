@@ -24,14 +24,18 @@
 #include "lib/resource.h"
 #include "lib/string.h"
 
-static void
-dev_ifa_notify(struct proto *p, unsigned c, struct ifa *ad)
-{
-  struct rt_dev_config *P = (void *) p->cf;
 
-  if (!EMPTY_LIST(P->iface_list) &&
-      !iface_patt_find(&P->iface_list, ad->iface, ad->iface->addr))
-    /* Empty list is automagically treated as "*" */
+static void
+dev_ifa_notify(struct proto *P, uint flags, struct ifa *ad)
+{
+  struct rt_dev_proto *p = (void *) P;
+  struct rt_dev_config *cf = (void *) P->cf;
+  struct channel *c;
+  net_addr *net = &ad->prefix;
+
+  if (!EMPTY_LIST(cf->iface_list) &&
+      !iface_patt_find(&cf->iface_list, ad->iface, ad))
+    /* Empty list is automatically treated as "*" */
     return;
 
   if (ad->flags & IA_SECONDARY)
@@ -40,51 +44,56 @@ dev_ifa_notify(struct proto *p, unsigned c, struct ifa *ad)
   if (ad->scope <= SCOPE_LINK)
     return;
 
-  if (c & IF_CHANGE_DOWN)
-    {
-      net *n;
+  if (ad->prefix.type == NET_IP4)
+    c = p->ip4_channel;
+  else if (ad->prefix.type == NET_IP6)
+    c = p->ip6_channel;
+  else
+    return;
 
+  if (!c)
+    return;
+
+  /* For IPv6 SADR, replace regular prefix with SADR prefix */
+  if (c->net_type == NET_IP6_SADR)
+  {
+    net = alloca(sizeof(net_addr_ip6_sadr));
+    net_fill_ip6_sadr(net, net6_prefix(&ad->prefix), net6_pxlen(&ad->prefix), IP6_NONE, 0);
+  }
+
+  if (flags & IF_CHANGE_DOWN)
+    {
       DBG("dev_if_notify: %s:%I going down\n", ad->iface->name, ad->ip);
-      n = net_find(p->table, ad->prefix, ad->pxlen);
-      if (!n)
-	{
-	  DBG("dev_if_notify: device shutdown: prefix not found\n");
-	  return;
-	}
 
       /* Use iface ID as local source ID */
-      struct rte_src *src = rt_get_source(p, ad->iface->index);
-      rte_update2(p->main_ahook, n, NULL, src);
+      struct rte_src *src = rt_get_source(P, ad->iface->index);
+      rte_update2(c, net, NULL, src);
     }
-  else if (c & IF_CHANGE_UP)
+  else if (flags & IF_CHANGE_UP)
     {
       rta *a;
-      net *n;
       rte *e;
 
       DBG("dev_if_notify: %s:%I going up\n", ad->iface->name, ad->ip);
 
-      if (P->check_link && !(ad->iface->flags & IF_LINK_UP))
+      if (cf->check_link && !(ad->iface->flags & IF_LINK_UP))
 	return;
 
       /* Use iface ID as local source ID */
-      struct rte_src *src = rt_get_source(p, ad->iface->index);
+      struct rte_src *src = rt_get_source(P, ad->iface->index);
 
       rta a0 = {
 	.src = src,
 	.source = RTS_DEVICE,
 	.scope = SCOPE_UNIVERSE,
-	.cast = RTC_UNICAST,
-	.dest = RTD_DEVICE,
-	.iface = ad->iface
+	.dest = RTD_UNICAST,
+	.nh.iface = ad->iface,
       };
 
       a = rta_lookup(&a0);
-      n = net_get(p->table, ad->prefix, ad->pxlen);
       e = rte_get_temp(a);
-      e->net = n;
       e->pflags = 0;
-      rte_update2(p->main_ahook, n, e, src);
+      rte_update2(c, net, e, src);
     }
 }
 
@@ -106,32 +115,62 @@ dev_if_notify(struct proto *p, uint c, struct iface *iface)
   }
 }
 
+static void
+dev_postconfig(struct proto_config *CF)
+{
+  struct rt_dev_config *cf = (void *) CF;
+  struct channel_config *ip4, *ip6, *ip6_sadr;
+
+  ip4 = proto_cf_find_channel(CF, NET_IP4);
+  ip6 = proto_cf_find_channel(CF, NET_IP6);
+  ip6_sadr = proto_cf_find_channel(CF, NET_IP6_SADR);
+
+  if (ip6 && ip6_sadr)
+    cf_error("Both ipv6 and ipv6-sadr channels");
+
+  cf->ip4_channel = ip4;
+  cf->ip6_channel = ip6 ?: ip6_sadr;
+}
 
 static struct proto *
-dev_init(struct proto_config *c)
+dev_init(struct proto_config *CF)
 {
-  struct proto *p = proto_new(c, sizeof(struct proto));
+  struct proto *P = proto_new(CF);
+  struct rt_dev_proto *p = (void *) P;
+  struct rt_dev_config *cf = (void *) CF;
 
-  p->if_notify = dev_if_notify;
-  p->ifa_notify = dev_ifa_notify;
-  return p;
+  proto_configure_channel(P, &p->ip4_channel, cf->ip4_channel);
+  proto_configure_channel(P, &p->ip6_channel, cf->ip6_channel);
+
+  P->if_notify = dev_if_notify;
+  P->ifa_notify = dev_ifa_notify;
+
+  return P;
 }
 
 static int
-dev_reconfigure(struct proto *p, struct proto_config *new)
+dev_reconfigure(struct proto *P, struct proto_config *CF)
 {
-  struct rt_dev_config *o = (struct rt_dev_config *) p->cf;
-  struct rt_dev_config *n = (struct rt_dev_config *) new;
+  struct rt_dev_proto *p = (void *) P;
+  struct rt_dev_config *o = (void *) P->cf;
+  struct rt_dev_config *n = (void *) CF;
 
-  return iface_patts_equal(&o->iface_list, &n->iface_list, NULL) &&
-    (o->check_link == n->check_link);
+  if (!iface_patts_equal(&o->iface_list, &n->iface_list, NULL) ||
+      (o->check_link != n->check_link))
+    return 0;
+
+  return
+    proto_configure_channel(P, &p->ip4_channel, n->ip4_channel) &&
+    proto_configure_channel(P, &p->ip6_channel, n->ip6_channel);
+
+  return 1;
 }
 
 static void
 dev_copy_config(struct proto_config *dest, struct proto_config *src)
 {
-  struct rt_dev_config *d = (struct rt_dev_config *) dest;
-  struct rt_dev_config *s = (struct rt_dev_config *) src;
+  struct rt_dev_config *d = (void *) dest;
+  struct rt_dev_config *s = (void *) src;
 
   /*
    * We copy iface_list as ifaces can be shared by more direct protocols.
@@ -144,11 +183,15 @@ dev_copy_config(struct proto_config *dest, struct proto_config *src)
 }
 
 struct protocol proto_device = {
-  .name = 		"Direct",
-  .template = 		"direct%d",
-  .preference = 	DEF_PREF_DIRECT,
+  .name =		"Direct",
+  .template =		"direct%d",
+  .class =		PROTOCOL_DIRECT,
+  .preference =		DEF_PREF_DIRECT,
+  .channel_mask =	NB_IP | NB_IP6_SADR,
+  .proto_size =		sizeof(struct rt_dev_proto),
   .config_size =	sizeof(struct rt_dev_config),
-  .init = 		dev_init,
-  .reconfigure = 	dev_reconfigure,
-  .copy_config = 	dev_copy_config
+  .postconfig =		dev_postconfig,
+  .init =		dev_init,
+  .reconfigure =	dev_reconfigure,
+  .copy_config =	dev_copy_config
 };

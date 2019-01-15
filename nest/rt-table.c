@@ -33,13 +33,13 @@
 #include "nest/bird.h"
 #include "nest/route.h"
 #include "nest/protocol.h"
-#include "nest/cli.h"
 #include "nest/iface.h"
 #include "lib/resource.h"
 #include "lib/event.h"
 #include "lib/string.h"
 #include "conf/conf.h"
 #include "filter/filter.h"
+#include "lib/hash.h"
 #include "lib/string.h"
 #include "lib/alloca.h"
 
@@ -50,41 +50,198 @@ static linpool *rte_update_pool;
 
 list routing_tables;
 
-static byte *rt_format_via(rte *e);
 static void rt_free_hostcache(rtable *tab);
 static void rt_notify_hostcache(rtable *tab, net *net);
 static void rt_update_hostcache(rtable *tab);
 static void rt_next_hop_update(rtable *tab);
-static inline int rt_prune_table(rtable *tab);
-static inline void rt_schedule_gc(rtable *tab);
-static inline void rt_schedule_prune(rtable *tab);
+static inline void rt_prune_table(rtable *tab);
 
 
 /* Like fib_route(), but skips empty net entries */
-static net *
-net_route(rtable *tab, ip_addr a, int len)
+static inline void *
+net_route_ip4(rtable *t, net_addr_ip4 *n)
 {
-  ip_addr a0;
-  net *n;
+  net *r;
 
-  while (len >= 0)
+  while (r = net_find_valid(t, (net_addr *) n), (!r) && (n->pxlen > 0))
+  {
+    n->pxlen--;
+    ip4_clrbit(&n->prefix, n->pxlen);
+  }
+
+  return r;
+}
+
+static inline void *
+net_route_ip6(rtable *t, net_addr_ip6 *n)
+{
+  net *r;
+
+  while (r = net_find_valid(t, (net_addr *) n), (!r) && (n->pxlen > 0))
+  {
+    n->pxlen--;
+    ip6_clrbit(&n->prefix, n->pxlen);
+  }
+
+  return r;
+}
+
+static inline void *
+net_route_ip6_sadr(rtable *t, net_addr_ip6_sadr *n)
+{
+  struct fib_node *fn;
+
+  while (1)
+  {
+    net *best = NULL;
+    int best_pxlen = 0;
+
+    /* We need to do dst first matching. Since sadr addresses are hashed on dst
+       prefix only, find the hash table chain and go through it to find the
+       match with the smallest matching src prefix. */
+    for (fn = fib_get_chain(&t->fib, (net_addr *) n); fn; fn = fn->next)
     {
-      a0 = ipa_and(a, ipa_mkmask(len));
-      n = fib_find(&tab->fib, &a0, len);
-      if (n && rte_is_valid(n->routes))
-	return n;
-      len--;
+      net_addr_ip6_sadr *a = (void *) fn->addr;
+
+      if (net_equal_dst_ip6_sadr(n, a) &&
+	  net_in_net_src_ip6_sadr(n, a) &&
+	  (a->src_pxlen >= best_pxlen))
+      {
+	best = fib_node_to_user(&t->fib, fn);
+	best_pxlen = a->src_pxlen;
+      }
     }
+
+    if (best)
+      return best;
+
+    if (!n->dst_pxlen)
+      break;
+
+    n->dst_pxlen--;
+    ip6_clrbit(&n->dst_prefix, n->dst_pxlen);
+  }
+
   return NULL;
 }
 
-static void
-rte_init(struct fib_node *N)
+void *
+net_route(rtable *tab, const net_addr *n)
 {
-  net *n = (net *) N;
+  ASSERT(tab->addr_type == n->type);
 
-  N->flags = 0;
-  n->routes = NULL;
+  net_addr *n0 = alloca(n->length);
+  net_copy(n0, n);
+
+  switch (n->type)
+  {
+  case NET_IP4:
+  case NET_VPN4:
+  case NET_ROA4:
+    return net_route_ip4(tab, (net_addr_ip4 *) n0);
+
+  case NET_IP6:
+  case NET_VPN6:
+  case NET_ROA6:
+    return net_route_ip6(tab, (net_addr_ip6 *) n0);
+
+  case NET_IP6_SADR:
+    return net_route_ip6_sadr(tab, (net_addr_ip6_sadr *) n0);
+
+  default:
+    return NULL;
+  }
+}
+
+
+static int
+net_roa_check_ip4(rtable *tab, const net_addr_ip4 *px, u32 asn)
+{
+  struct net_addr_roa4 n = NET_ADDR_ROA4(px->prefix, px->pxlen, 0, 0);
+  struct fib_node *fn;
+  int anything = 0;
+
+  while (1)
+  {
+    for (fn = fib_get_chain(&tab->fib, (net_addr *) &n); fn; fn = fn->next)
+    {
+      net_addr_roa4 *roa = (void *) fn->addr;
+      net *r = fib_node_to_user(&tab->fib, fn);
+
+      if (net_equal_prefix_roa4(roa, &n) && rte_is_valid(r->routes))
+      {
+	anything = 1;
+	if (asn && (roa->asn == asn) && (roa->max_pxlen >= px->pxlen))
+	  return ROA_VALID;
+      }
+    }
+
+    if (n.pxlen == 0)
+      break;
+
+    n.pxlen--;
+    ip4_clrbit(&n.prefix, n.pxlen);
+  }
+
+  return anything ? ROA_INVALID : ROA_UNKNOWN;
+}
+
+static int
+net_roa_check_ip6(rtable *tab, const net_addr_ip6 *px, u32 asn)
+{
+  struct net_addr_roa6 n = NET_ADDR_ROA6(px->prefix, px->pxlen, 0, 0);
+  struct fib_node *fn;
+  int anything = 0;
+
+  while (1)
+  {
+    for (fn = fib_get_chain(&tab->fib, (net_addr *) &n); fn; fn = fn->next)
+    {
+      net_addr_roa6 *roa = (void *) fn->addr;
+      net *r = fib_node_to_user(&tab->fib, fn);
+
+      if (net_equal_prefix_roa6(roa, &n) && rte_is_valid(r->routes))
+      {
+	anything = 1;
+	if (asn && (roa->asn == asn) && (roa->max_pxlen >= px->pxlen))
+	  return ROA_VALID;
+      }
+    }
+
+    if (n.pxlen == 0)
+      break;
+
+    n.pxlen--;
+    ip6_clrbit(&n.prefix, n.pxlen);
+  }
+
+  return anything ? ROA_INVALID : ROA_UNKNOWN;
+}
+
+/**
+ * roa_check - check validity of route origination in a ROA table
+ * @tab: ROA table
+ * @n: network prefix to check
+ * @asn: AS number of network prefix
+ *
+ * Implements RFC 6483 route validation for the given network prefix. The
+ * procedure is to find all candidate ROAs - ROAs whose prefixes cover the given
+ * network prefix. If there is no candidate ROA, return ROA_UNKNOWN. If there is
+ * a candidate ROA with matching ASN and maxlen field greater than or equal to
+ * the given prefix length, return ROA_VALID. Otherwise, return ROA_INVALID. If
+ * caller cannot determine origin AS, 0 could be used (in that case ROA_VALID
+ * cannot happen). Table @tab must have type NET_ROA4 or NET_ROA6, network @n
+ * must have type NET_IP4 or NET_IP6, respectively.
+ */
+int
+net_roa_check(rtable *tab, const net_addr *n, u32 asn)
+{
+  if ((tab->addr_type == NET_ROA4) && (n->type == NET_IP4))
+    return net_roa_check_ip4(tab, (const net_addr_ip4 *) n, asn);
+  else if ((tab->addr_type == NET_ROA6) && (n->type == NET_IP6))
+    return net_roa_check_ip6(tab, (const net_addr_ip6 *) n, asn);
+  else
+    return ROA_UNKNOWN;	/* Should not happen */
 }
 
 /**
@@ -121,7 +278,7 @@ rte_get_temp(rta *a)
 
   e->attrs = a;
   e->flags = 0;
-  e->pref = a->src->proto->preference;
+  e->pref = 0;
   return e;
 }
 
@@ -161,11 +318,11 @@ rte_cow_rta(rte *r, linpool *lp)
   if (!rta_is_cached(r->attrs))
     return r;
 
-  rte *e = rte_cow(r);
+  r = rte_cow(r);
   rta *a = rta_do_cow(r->attrs, lp);
-  rta_free(e->attrs);
-  e->attrs = a;
-  return e;
+  rta_free(r->attrs);
+  r->attrs = a;
+  return r;
 }
 
 static int				/* Actually better or at least as good as */
@@ -219,7 +376,7 @@ rte_mergable(rte *pri, rte *sec)
 static void
 rte_trace(struct proto *p, rte *e, int dir, char *msg)
 {
-  log(L_TRACE "%s %c %s %I/%d %s", p->name, dir, msg, e->net->n.prefix, e->net->n.pxlen, rt_format_via(e));
+  log(L_TRACE "%s %c %s %N %s", p->name, dir, msg, e->net->n.addr, rta_dest_name(e->attrs->dest));
 }
 
 static inline void
@@ -237,24 +394,20 @@ rte_trace_out(uint flag, struct proto *p, rte *e, char *msg)
 }
 
 static rte *
-export_filter_(struct announce_hook *ah, rte *rt0, rte **rt_free, ea_list **tmpa, linpool *pool, int silent)
+export_filter_(struct channel *c, rte *rt0, rte **rt_free, linpool *pool, int silent)
 {
-  struct proto *p = ah->proto;
-  struct filter *filter = ah->out_filter;
-  struct proto_stats *stats = ah->stats;
-  ea_list *tmpb = NULL;
+  struct proto *p = c->proto;
+  struct filter *filter = c->out_filter;
+  struct proto_stats *stats = &c->stats;
   rte *rt;
   int v;
 
   rt = rt0;
   *rt_free = NULL;
 
-  if (!tmpa)
-    tmpa = &tmpb;
+  rte_make_tmp_attrs(&rt, pool);
 
-  *tmpa = rte_make_tmp_attrs(rt, pool);
-
-  v = p->import_control ? p->import_control(p, &rt, tmpa, pool) : 0;
+  v = p->preexport ? p->preexport(p, &rt, pool) : 0;
   if (v < 0)
     {
       if (silent)
@@ -273,8 +426,8 @@ export_filter_(struct announce_hook *ah, rte *rt0, rte **rt_free, ea_list **tmpa
     }
 
   v = filter && ((filter == FILTER_REJECT) ||
-		 (f_run(filter, &rt, tmpa, pool,
-			FF_FORCE_TMPATTR | (silent ? FF_SILENT : 0)) > F_ACCEPT));
+		 (f_run(filter, &rt, pool,
+			(silent ? FF_SILENT : 0)) > F_ACCEPT));
   if (v)
     {
       if (silent)
@@ -298,16 +451,16 @@ export_filter_(struct announce_hook *ah, rte *rt0, rte **rt_free, ea_list **tmpa
 }
 
 static inline rte *
-export_filter(struct announce_hook *ah, rte *rt0, rte **rt_free, ea_list **tmpa, int silent)
+export_filter(struct channel *c, rte *rt0, rte **rt_free, int silent)
 {
-  return export_filter_(ah, rt0, rt_free, tmpa, rte_update_pool, silent);
+  return export_filter_(c, rt0, rt_free, rte_update_pool, silent);
 }
 
 static void
-do_rt_notify(struct announce_hook *ah, net *net, rte *new, rte *old, ea_list *tmpa, int refeed)
+do_rt_notify(struct channel *c, net *net, rte *new, rte *old, int refeed)
 {
-  struct proto *p = ah->proto;
-  struct proto_stats *stats = ah->stats;
+  struct proto *p = c->proto;
+  struct proto_stats *stats = &c->stats;
 
 
   /*
@@ -337,11 +490,11 @@ do_rt_notify(struct announce_hook *ah, net *net, rte *new, rte *old, ea_list *tm
    * also non-new updates (contrary to import blocking).
    */
 
-  struct proto_limit *l = ah->out_limit;
-  if (l && new)
+  struct channel_limit *l = &c->out_limit;
+  if (l->action && new)
     {
       if ((!old || refeed) && (stats->exp_routes >= l->limit))
-	proto_notify_limit(ah, l, PLD_OUT, stats->exp_routes);
+	channel_notify_limit(c, l, PLD_OUT, stats->exp_routes);
 
       if (l->state == PLS_BLOCKED)
 	{
@@ -377,65 +530,49 @@ do_rt_notify(struct announce_hook *ah, net *net, rte *new, rte *old, ea_list *tm
       else if (old)
 	rte_trace_out(D_ROUTES, p, old, "removed");
     }
-  if (!new)
-    p->rt_notify(p, ah->table, net, NULL, old, NULL);
-  else if (tmpa)
-    {
-      ea_list *t = tmpa;
-      while (t->next)
-	t = t->next;
-      t->next = new->attrs->eattrs;
-      p->rt_notify(p, ah->table, net, new, old, tmpa);
-      t->next = NULL;
-    }
-  else
-    p->rt_notify(p, ah->table, net, new, old, new->attrs->eattrs);
+  p->rt_notify(p, c, net, new, old);
 }
 
 static void
-rt_notify_basic(struct announce_hook *ah, net *net, rte *new0, rte *old0, int refeed)
+rt_notify_basic(struct channel *c, net *net, rte *new0, rte *old0, int refeed)
 {
-  struct proto *p = ah->proto;
-  struct proto_stats *stats = ah->stats;
+  struct proto *p = c->proto;
 
   rte *new = new0;
   rte *old = old0;
   rte *new_free = NULL;
   rte *old_free = NULL;
-  ea_list *tmpa = NULL;
 
   if (new)
-    stats->exp_updates_received++;
+    c->stats.exp_updates_received++;
   else
-    stats->exp_withdraws_received++;
+    c->stats.exp_withdraws_received++;
 
   /*
-   * This is a tricky part - we don't know whether route 'old' was
-   * exported to protocol 'p' or was filtered by the export filter.
-   * We try to run the export filter to know this to have a correct
-   * value in 'old' argument of rte_update (and proper filter value)
+   * This is a tricky part - we don't know whether route 'old' was exported to
+   * protocol 'p' or was filtered by the export filter. We try to run the export
+   * filter to know this to have a correct value in 'old' argument of rte_update
+   * (and proper filter value).
    *
-   * FIXME - this is broken because 'configure soft' may change
-   * filters but keep routes. Refeed is expected to be called after
-   * change of the filters and with old == new, therefore we do not
-   * even try to run the filter on an old route, This may lead to
-   * 'spurious withdraws' but ensure that there are no 'missing
+   * This is broken because 'configure soft' may change filters but keep routes.
+   * Refeed cycle is expected to be called after change of the filters and with
+   * old == new, therefore we do not even try to run the filter on an old route.
+   * This may lead to 'spurious withdraws' but ensure that there are no 'missing
    * withdraws'.
    *
-   * This is not completely safe as there is a window between
-   * reconfiguration and the end of refeed - if a newly filtered
-   * route disappears during this period, proper withdraw is not
-   * sent (because old would be also filtered) and the route is
-   * not refeeded (because it disappeared before that). Therefore,
-   * we also do not try to run the filter on old routes that are
+   * This is not completely safe as there is a window between reconfiguration
+   * and the end of refeed - if a newly filtered route disappears during this
+   * period, proper withdraw is not sent (because old would be also filtered)
+   * and the route is not refeeded (because it disappeared before that).
+   * Therefore, we also do not try to run the filter on old routes that are
    * older than the last filter change.
    */
 
   if (new)
-    new = export_filter(ah, new, &new_free, &tmpa, 0);
+    new = export_filter(c, new, &new_free, 0);
 
-  if (old && !(refeed || (old->lastmod <= ah->last_out_filter_change)))
-    old = export_filter(ah, old, &old_free, NULL, 1);
+  if (old && !(refeed || (old->lastmod <= c->last_tx_filter_change)))
+    old = export_filter(c, old, &old_free, 1);
 
   if (!new && !old)
   {
@@ -452,13 +589,13 @@ rt_notify_basic(struct announce_hook *ah, net *net, rte *new0, rte *old0, int re
 
 #ifdef CONFIG_PIPE
     if ((p->proto == &proto_pipe) && !new0 && (p != old0->sender->proto))
-      p->rt_notify(p, ah->table, net, NULL, old0, NULL);
+      p->rt_notify(p, c, net, NULL, old0);
 #endif
 
     return;
   }
 
-  do_rt_notify(ah, net, new, old, tmpa, refeed);
+  do_rt_notify(c, net, new, old, refeed);
 
   /* Discard temporary rte's */
   if (new_free)
@@ -468,17 +605,15 @@ rt_notify_basic(struct announce_hook *ah, net *net, rte *new0, rte *old0, int re
 }
 
 static void
-rt_notify_accepted(struct announce_hook *ah, net *net, rte *new_changed, rte *old_changed, rte *before_old, int feed)
+rt_notify_accepted(struct channel *c, net *net, rte *new_changed, rte *old_changed, rte *before_old, int feed)
 {
-  // struct proto *p = ah->proto;
-  struct proto_stats *stats = ah->stats;
+  // struct proto *p = c->proto;
 
   rte *r;
   rte *new_best = NULL;
   rte *old_best = NULL;
   rte *new_free = NULL;
   rte *old_free = NULL;
-  ea_list *tmpa = NULL;
 
   /* Used to track whether we met old_changed position. If before_old is NULL
      old_changed was the first and we met it implicitly before current best route. */
@@ -489,14 +624,14 @@ rt_notify_accepted(struct announce_hook *ah, net *net, rte *new_changed, rte *ol
      was not valid, caller must use NULL for both old_changed and before_old. */
 
   if (new_changed)
-    stats->exp_updates_received++;
+    c->stats.exp_updates_received++;
   else
-    stats->exp_withdraws_received++;
+    c->stats.exp_withdraws_received++;
 
   /* First, find the new_best route - first accepted by filters */
   for (r=net->routes; rte_is_valid(r); r=r->next)
     {
-      if (new_best = export_filter(ah, r, &new_free, &tmpa, 0))
+      if (new_best = export_filter(c, r, &new_free, 0))
 	break;
 
       /* Note if we walked around the position of old_changed route */
@@ -504,9 +639,9 @@ rt_notify_accepted(struct announce_hook *ah, net *net, rte *new_changed, rte *ol
 	old_meet = 1;
     }
 
-  /* 
+  /*
    * Second, handle the feed case. That means we do not care for
-   * old_best. It is NULL for feed, and the new_best for refeed. 
+   * old_best. It is NULL for feed, and the new_best for refeed.
    * For refeed, there is a hack similar to one in rt_notify_basic()
    * to ensure withdraws in case of changed filters
    */
@@ -549,7 +684,7 @@ rt_notify_accepted(struct announce_hook *ah, net *net, rte *new_changed, rte *ol
    */
 
   /* Hack for changed filters */
-  if (old_changed && (old_changed->lastmod <= ah->last_out_filter_change))
+  if (old_changed && (old_changed->lastmod <= c->last_tx_filter_change))
     {
       old_best = old_changed;
       goto found;
@@ -557,7 +692,7 @@ rt_notify_accepted(struct announce_hook *ah, net *net, rte *new_changed, rte *ol
 
   /* First case */
   if (old_meet)
-    if (old_best = export_filter(ah, old_changed, &old_free, NULL, 1))
+    if (old_best = export_filter(c, old_changed, &old_free, 1))
       goto found;
 
   /* Second case */
@@ -575,18 +710,18 @@ rt_notify_accepted(struct announce_hook *ah, net *net, rte *new_changed, rte *ol
   /* Fourth case */
   for (r=r->next; rte_is_valid(r); r=r->next)
     {
-      if (old_best = export_filter(ah, r, &old_free, NULL, 1))
+      if (old_best = export_filter(c, r, &old_free, 1))
 	goto found;
 
       if (r == before_old)
-	if (old_best = export_filter(ah, old_changed, &old_free, NULL, 1))
+	if (old_best = export_filter(c, old_changed, &old_free, 1))
 	  goto found;
     }
 
   /* Implicitly, old_best is NULL and new_best is non-NULL */
 
  found:
-  do_rt_notify(ah, net, new_best, old_best, tmpa, (feed == 2));
+  do_rt_notify(c, net, new_best, old_best, (feed == 2));
 
   /* Discard temporary rte's */
   if (new_free)
@@ -596,19 +731,17 @@ rt_notify_accepted(struct announce_hook *ah, net *net, rte *new_changed, rte *ol
 }
 
 
-static struct mpnh *
-mpnh_merge_rta(struct mpnh *nhs, rta *a, linpool *pool, int max)
+static struct nexthop *
+nexthop_merge_rta(struct nexthop *nhs, rta *a, linpool *pool, int max)
 {
-  struct mpnh nh = { .gw = a->gw, .iface = a->iface };
-  struct mpnh *nh2 = (a->dest == RTD_MULTIPATH) ? a->nexthops : &nh;
-  return mpnh_merge(nhs, nh2, 1, 0, max, pool);
+  return nexthop_merge(nhs, &(a->nh), 1, 0, max, pool);
 }
 
 rte *
-rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, ea_list **tmpa, linpool *pool, int silent)
+rt_export_merged(struct channel *c, net *net, rte **rt_free, linpool *pool, int silent)
 {
-  // struct proto *p = ah->proto;
-  struct mpnh *nhs = NULL;
+  // struct proto *p = c->proto;
+  struct nexthop *nhs = NULL;
   rte *best0, *best, *rt0, *rt, *tmp;
 
   best0 = net->routes;
@@ -617,7 +750,7 @@ rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, ea_list **tm
   if (!rte_is_valid(best0))
     return NULL;
 
-  best = export_filter_(ah, best0, rt_free, tmpa, pool, silent);
+  best = export_filter_(c, best0, rt_free, pool, silent);
 
   if (!best || !rte_is_reachable(best))
     return best;
@@ -627,13 +760,13 @@ rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, ea_list **tm
     if (!rte_mergable(best0, rt0))
       continue;
 
-    rt = export_filter_(ah, rt0, &tmp, NULL, pool, 1);
+    rt = export_filter_(c, rt0, &tmp, pool, 1);
 
     if (!rt)
       continue;
 
     if (rte_is_reachable(rt))
-      nhs = mpnh_merge_rta(nhs, rt->attrs, pool, ah->proto->merge_limit);
+      nhs = nexthop_merge_rta(nhs, rt->attrs, pool, c->merge_limit);
 
     if (tmp)
       rte_free(tmp);
@@ -641,13 +774,12 @@ rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, ea_list **tm
 
   if (nhs)
   {
-    nhs = mpnh_merge_rta(nhs, best->attrs, pool, ah->proto->merge_limit);
+    nhs = nexthop_merge_rta(nhs, best->attrs, pool, c->merge_limit);
 
     if (nhs->next)
     {
       best = rte_cow_rta(best, pool);
-      best->attrs->dest = RTD_MULTIPATH;
-      best->attrs->nexthops = nhs;
+      nexthop_link(best->attrs, nhs);
     }
   }
 
@@ -659,16 +791,15 @@ rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, ea_list **tm
 
 
 static void
-rt_notify_merged(struct announce_hook *ah, net *net, rte *new_changed, rte *old_changed,
+rt_notify_merged(struct channel *c, net *net, rte *new_changed, rte *old_changed,
 		 rte *new_best, rte*old_best, int refeed)
 {
-  // struct proto *p = ah->proto;
+  // struct proto *p = c->proto;
 
   rte *new_best_free = NULL;
   rte *old_best_free = NULL;
   rte *new_changed_free = NULL;
   rte *old_changed_free = NULL;
-  ea_list *tmpa = NULL;
 
   /* We assume that all rte arguments are either NULL or rte_is_valid() */
 
@@ -680,31 +811,31 @@ rt_notify_merged(struct announce_hook *ah, net *net, rte *new_changed, rte *old_
   if ((new_best == old_best) && !refeed)
   {
     new_changed = rte_mergable(new_best, new_changed) ?
-      export_filter(ah, new_changed, &new_changed_free, NULL, 1) : NULL;
+      export_filter(c, new_changed, &new_changed_free, 1) : NULL;
 
     old_changed = rte_mergable(old_best, old_changed) ?
-      export_filter(ah, old_changed, &old_changed_free, NULL, 1) : NULL;
+      export_filter(c, old_changed, &old_changed_free, 1) : NULL;
 
     if (!new_changed && !old_changed)
       return;
   }
 
   if (new_best)
-    ah->stats->exp_updates_received++;
+    c->stats.exp_updates_received++;
   else
-    ah->stats->exp_withdraws_received++;
+    c->stats.exp_withdraws_received++;
 
   /* Prepare new merged route */
   if (new_best)
-    new_best = rt_export_merged(ah, net, &new_best_free, &tmpa, rte_update_pool, 0);
+    new_best = rt_export_merged(c, net, &new_best_free, rte_update_pool, 0);
 
   /* Prepare old merged route (without proper merged next hops) */
   /* There are some issues with running filter on old route - see rt_notify_basic() */
   if (old_best && !refeed)
-    old_best = export_filter(ah, old_best, &old_best_free, NULL, 1);
+    old_best = export_filter(c, old_best, &old_best_free, 1);
 
   if (new_best || old_best)
-    do_rt_notify(ah, net, new_best, old_best, tmpa, refeed);
+    do_rt_notify(c, net, new_best, old_best, refeed);
 
   /* Discard temporary rte's */
   if (new_best_free)
@@ -728,7 +859,7 @@ rt_notify_merged(struct announce_hook *ah, net *net, rte *new_changed, rte *old_
  * @new_best: the new best route for the same network
  * @old_best: the previous best route for the same network
  * @before_old: The previous route before @old for the same network.
- * 		If @before_old is NULL @old was the first.
+ *		If @before_old is NULL @old was the first.
  *
  * This function gets a routing table update and announces it
  * to all protocols that acccepts given type of route announcement
@@ -742,7 +873,7 @@ rt_notify_merged(struct announce_hook *ah, net *net, rte *new_changed, rte *old_
  * routing table @tab) changes In that case @old stores the old route
  * from the same protocol.
  *
- * For each appropriate protocol, we first call its import_control()
+ * For each appropriate protocol, we first call its preexport()
  * hook which performs basic checks on the route (each protocol has a
  * right to veto or force accept of the route before any filter is
  * asked) and adds default values of attributes specific to the new
@@ -769,28 +900,22 @@ rte_announce(rtable *tab, unsigned type, net *net, rte *new, rte *old,
   if (!old && !new)
     return;
 
-  if (type == RA_OPTIMAL)
-    {
-      if (new)
-	new->attrs->src->proto->stats.pref_routes++;
-      if (old)
-	old->attrs->src->proto->stats.pref_routes--;
+  if ((type == RA_OPTIMAL) && tab->hostcache)
+    rt_notify_hostcache(tab, net);
 
-      if (tab->hostcache)
-	rt_notify_hostcache(tab, net);
-    }
-
-  struct announce_hook *a;
-  WALK_LIST(a, tab->hooks)
+  struct channel *c; node *n;
+  WALK_LIST2(c, n, tab->channels, table_node)
     {
-      ASSERT(a->proto->export_state != ES_DOWN);
-      if (a->proto->accept_ra_types == type)
+      if (c->export_state == ES_DOWN)
+	continue;
+
+      if (c->ra_mode == type)
 	if (type == RA_ACCEPTED)
-	  rt_notify_accepted(a, net, new, old, before_old, 0);
+	  rt_notify_accepted(c, net, new, old, before_old, 0);
 	else if (type == RA_MERGED)
-	  rt_notify_merged(a, net, new, old, new_best, old_best, 0);
+	  rt_notify_merged(c, net, new, old, new_best, old_best, 0);
 	else
-	  rt_notify_basic(a, net, new, old, 0);
+	  rt_notify_basic(c, net, new, old, 0);
     }
 }
 
@@ -800,27 +925,36 @@ rte_validate(rte *e)
   int c;
   net *n = e->net;
 
-  if ((n->n.pxlen > BITS_PER_IP_ADDRESS) || !ip_is_prefix(n->n.prefix,n->n.pxlen))
-    {
-      log(L_WARN "Ignoring bogus prefix %I/%d received via %s",
-	  n->n.prefix, n->n.pxlen, e->sender->proto->name);
-      return 0;
-    }
+  if (!net_validate(n->n.addr))
+  {
+    log(L_WARN "Ignoring bogus prefix %N received via %s",
+	n->n.addr, e->sender->proto->name);
+    return 0;
+  }
 
-  c = ipa_classify_net(n->n.prefix);
+  /* FIXME: better handling different nettypes */
+  c = !net_is_flow(n->n.addr) ?
+    net_classify(n->n.addr): (IADDR_HOST | SCOPE_UNIVERSE);
   if ((c < 0) || !(c & IADDR_HOST) || ((c & IADDR_SCOPE_MASK) <= SCOPE_LINK))
-    {
-      log(L_WARN "Ignoring bogus route %I/%d received via %s",
-	  n->n.prefix, n->n.pxlen, e->sender->proto->name);
-      return 0;
-    }
+  {
+    log(L_WARN "Ignoring bogus route %N received via %s",
+	n->n.addr, e->sender->proto->name);
+    return 0;
+  }
 
-  if ((e->attrs->dest == RTD_MULTIPATH) && !mpnh_is_sorted(e->attrs->nexthops))
-    {
-      log(L_WARN "Ignoring unsorted multipath route %I/%d received via %s",
-	  n->n.prefix, n->n.pxlen, e->sender->proto->name);
-      return 0;
-    }
+  if (net_type_match(n->n.addr, NB_DEST) == !e->attrs->dest)
+  {
+    log(L_WARN "Ignoring route %N with invalid dest %d received via %s",
+	n->n.addr, e->attrs->dest, e->sender->proto->name);
+    return 0;
+  }
+
+  if ((e->attrs->dest == RTD_UNICAST) && !nexthop_is_sorted(&(e->attrs->nh)))
+  {
+    log(L_WARN "Ignoring unsorted multipath route %N received via %s",
+	n->n.addr, e->sender->proto->name);
+    return 0;
+  }
 
   return 1;
 }
@@ -860,11 +994,11 @@ rte_same(rte *x, rte *y)
 static inline int rte_is_ok(rte *e) { return e && !rte_is_filtered(e); }
 
 static void
-rte_recalculate(struct announce_hook *ah, net *net, rte *new, struct rte_src *src)
+rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
 {
-  struct proto *p = ah->proto;
-  struct rtable *table = ah->table;
-  struct proto_stats *stats = ah->stats;
+  struct proto *p = c->proto;
+  struct rtable *table = c->table;
+  struct proto_stats *stats = &c->stats;
   static struct tbf rl_pipe = TBF_DEFAULT_LOG_LIMITS;
   rte *before_old = NULL;
   rte *old_best = net->routes;
@@ -889,8 +1023,8 @@ rte_recalculate(struct announce_hook *ah, net *net, rte *new, struct rte_src *sr
 	    {
 	      if (new)
 		{
-		  log_rl(&rl_pipe, L_ERR "Pipe collision detected when sending %I/%d to table %s",
-		      net->n.prefix, net->n.pxlen, table->name);
+		  log_rl(&rl_pipe, L_ERR "Pipe collision detected when sending %N to table %s",
+		      net->n.addr, table->name);
 		  rte_free_quick(new);
 		}
 	      return;
@@ -910,6 +1044,7 @@ rte_recalculate(struct announce_hook *ah, net *net, rte *new, struct rte_src *sr
 	      return;
 	    }
 	  *k = old->next;
+	  table->rt_count--;
 	  break;
 	}
       k = &old->next;
@@ -928,13 +1063,13 @@ rte_recalculate(struct announce_hook *ah, net *net, rte *new, struct rte_src *sr
   int new_ok = rte_is_ok(new);
   int old_ok = rte_is_ok(old);
 
-  struct proto_limit *l = ah->rx_limit;
-  if (l && !old && new)
+  struct channel_limit *l = &c->rx_limit;
+  if (l->action && !old && new && !c->in_table)
     {
       u32 all_routes = stats->imp_routes + stats->filt_routes;
 
       if (all_routes >= l->limit)
-	proto_notify_limit(ah, l, PLD_RX, all_routes);
+	channel_notify_limit(c, l, PLD_RX, all_routes);
 
       if (l->state == PLS_BLOCKED)
 	{
@@ -948,11 +1083,11 @@ rte_recalculate(struct announce_hook *ah, net *net, rte *new, struct rte_src *sr
 	}
     }
 
-  l = ah->in_limit;
-  if (l && !old_ok && new_ok)
+  l = &c->in_limit;
+  if (l->action && !old_ok && new_ok)
     {
       if (stats->imp_routes >= l->limit)
-	proto_notify_limit(ah, l, PLD_IN, stats->imp_routes);
+	channel_notify_limit(c, l, PLD_IN, stats->imp_routes);
 
       if (l->state == PLS_BLOCKED)
 	{
@@ -966,13 +1101,13 @@ rte_recalculate(struct announce_hook *ah, net *net, rte *new, struct rte_src *sr
 	  stats->imp_updates_ignored++;
 	  rte_trace_in(D_FILTERS, p, new, "ignored [limit]");
 
-	  if (ah->in_keep_filtered)
+	  if (c->in_keep_filtered)
 	    new->flags |= REF_FILTERED;
 	  else
 	    { rte_free_quick(new); new = NULL; }
 
 	  /* Note that old && !new could be possible when
-	     ah->in_keep_filtered changed in the recent past. */
+	     c->in_keep_filtered changed in the recent past. */
 
 	  if (!old && !new)
 	    return;
@@ -1012,6 +1147,7 @@ rte_recalculate(struct announce_hook *ah, net *net, rte *new, struct rte_src *sr
 
 	  new->next = *k;
 	  *k = new;
+	  table->rt_count++;
 	}
     }
   else
@@ -1029,6 +1165,7 @@ rte_recalculate(struct announce_hook *ah, net *net, rte *new, struct rte_src *sr
 
 	  new->next = net->routes;
 	  net->routes = new;
+	  table->rt_count++;
 	}
       else if (old == old_best)
 	{
@@ -1044,6 +1181,7 @@ rte_recalculate(struct announce_hook *ah, net *net, rte *new, struct rte_src *sr
 	    {
 	      new->next = net->routes;
 	      net->routes = new;
+	      table->rt_count++;
 	    }
 
 	  /* Find a new optimal route (if there is any) */
@@ -1071,12 +1209,13 @@ rte_recalculate(struct announce_hook *ah, net *net, rte *new, struct rte_src *sr
 	  ASSERT(net->routes != NULL);
 	  new->next = net->routes->next;
 	  net->routes->next = new;
+	  table->rt_count++;
 	}
       /* The fourth (empty) case - suboptimal route was removed, nothing to do */
     }
 
   if (new)
-    new->lastmod = now;
+    new->lastmod = current_time();
 
   /* Log the route change */
   if (p->debug & D_ROUTES)
@@ -1104,8 +1243,8 @@ rte_recalculate(struct announce_hook *ah, net *net, rte *new, struct rte_src *sr
 
   if (!net->routes &&
       (table->gc_counter++ >= table->config->gc_max_ops) &&
-      (table->gc_time + table->config->gc_min_time <= now))
-    rt_schedule_gc(table);
+      (table->gc_time + table->config->gc_min_time <= current_time()))
+    rt_schedule_prune(table);
 
   if (old_ok && p->rte_remove)
     p->rte_remove(net, old);
@@ -1154,7 +1293,7 @@ rte_unhide_dummy_routes(net *net, rte **dummy)
 /**
  * rte_update - enter a new update to a routing table
  * @table: table to be updated
- * @ah: pointer to table announce hook
+ * @c: channel doing the update
  * @net: network node
  * @p: protocol submitting the update
  * @src: protocol originating the update
@@ -1194,18 +1333,26 @@ rte_unhide_dummy_routes(net *net, rte **dummy)
  */
 
 void
-rte_update2(struct announce_hook *ah, net *net, rte *new, struct rte_src *src)
+rte_update2(struct channel *c, const net_addr *n, rte *new, struct rte_src *src)
 {
-  struct proto *p = ah->proto;
-  struct proto_stats *stats = ah->stats;
-  struct filter *filter = ah->in_filter;
-  ea_list *tmpa = NULL;
+  struct proto *p = c->proto;
+  struct proto_stats *stats = &c->stats;
+  struct filter *filter = c->in_filter;
   rte *dummy = NULL;
+  net *nn;
+
+  ASSERT(c->channel_state == CS_UP);
 
   rte_update_lock();
   if (new)
     {
-      new->sender = ah;
+      nn = net_get(c->table, n);
+
+      new->net = nn;
+      new->sender = c;
+
+      if (!new->pref)
+	new->pref = c->preference;
 
       stats->imp_updates_received++;
       if (!rte_validate(new))
@@ -1220,7 +1367,7 @@ rte_update2(struct announce_hook *ah, net *net, rte *new, struct rte_src *src)
 	  stats->imp_updates_filtered++;
 	  rte_trace_in(D_FILTERS, p, new, "filtered out");
 
-	  if (! ah->in_keep_filtered)
+	  if (! c->in_keep_filtered)
 	    goto drop;
 
 	  /* new is a private copy, i could modify it */
@@ -1228,23 +1375,23 @@ rte_update2(struct announce_hook *ah, net *net, rte *new, struct rte_src *src)
 	}
       else
 	{
-	  tmpa = rte_make_tmp_attrs(new, rte_update_pool);
+	  rte_make_tmp_attrs(&new, rte_update_pool);
 	  if (filter && (filter != FILTER_REJECT))
 	    {
-	      ea_list *old_tmpa = tmpa;
-	      int fr = f_run(filter, &new, &tmpa, rte_update_pool, 0);
+	      ea_list *oldea = new->attrs->eattrs;
+	      int fr = f_run(filter, &new, rte_update_pool, 0);
 	      if (fr > F_ACCEPT)
 		{
 		  stats->imp_updates_filtered++;
 		  rte_trace_in(D_FILTERS, p, new, "filtered out");
 
-		  if (! ah->in_keep_filtered)
+		  if (! c->in_keep_filtered)
 		    goto drop;
 
 		  new->flags |= REF_FILTERED;
 		}
-	      if (tmpa != old_tmpa && src->proto->store_tmp_attrs)
-		src->proto->store_tmp_attrs(new, tmpa);
+	      if (new->attrs->eattrs != oldea && src->proto->store_tmp_attrs)
+		src->proto->store_tmp_attrs(new);
 	    }
 	}
       if (!rta_is_cached(new->attrs)) /* Need to copy attributes */
@@ -1255,7 +1402,7 @@ rte_update2(struct announce_hook *ah, net *net, rte *new, struct rte_src *src)
     {
       stats->imp_withdraws_received++;
 
-      if (!net || !src)
+      if (!(nn = net_find(c->table, n)) || !src)
 	{
 	  stats->imp_withdraws_ignored++;
 	  rte_update_unlock();
@@ -1264,9 +1411,9 @@ rte_update2(struct announce_hook *ah, net *net, rte *new, struct rte_src *src)
     }
 
  recalc:
-  rte_hide_dummy_routes(net, &dummy);
-  rte_recalculate(ah, net, new, src);
-  rte_unhide_dummy_routes(net, &dummy);
+  rte_hide_dummy_routes(nn, &dummy);
+  rte_recalculate(c, nn, new, src);
+  rte_unhide_dummy_routes(nn, &dummy);
   rte_update_unlock();
   return;
 
@@ -1278,7 +1425,7 @@ rte_update2(struct announce_hook *ah, net *net, rte *new, struct rte_src *src)
 
 /* Independent call to rte_announce(), used from next hop
    recalculation, outside of rte_update(). new must be non-NULL */
-static inline void 
+static inline void
 rte_announce_i(rtable *tab, unsigned type, net *net, rte *new, rte *old,
 	       rte *new_best, rte *old_best)
 {
@@ -1319,9 +1466,9 @@ rte_modify(rte *old)
 
 /* Check rtable for best route to given net whether it would be exported do p */
 int
-rt_examine(rtable *t, ip_addr prefix, int pxlen, struct proto *p, struct filter *filter)
+rt_examine(rtable *t, net_addr *a, struct proto *p, struct filter *filter)
 {
-  net *n = net_find(t, prefix, pxlen);
+  net *n = net_find(t, a);
   rte *rt = n ? n->routes : NULL;
 
   if (!rte_is_valid(rt))
@@ -1330,11 +1477,10 @@ rt_examine(rtable *t, ip_addr prefix, int pxlen, struct proto *p, struct filter 
   rte_update_lock();
 
   /* Rest is stripped down export_filter() */
-  ea_list *tmpa = rte_make_tmp_attrs(rt, rte_update_pool);
-  int v = p->import_control ? p->import_control(p, &rt, &tmpa, rte_update_pool) : 0;
+  rte_make_tmp_attrs(&rt, rte_update_pool);
+  int v = p->preexport ? p->preexport(p, &rt, rte_update_pool) : 0;
   if (v == RIC_PROCESS)
-    v = (f_run(filter, &rt, &tmpa, rte_update_pool,
-	       FF_FORCE_TMPATTR | FF_SILENT) <= F_ACCEPT);
+    v = (f_run(filter, &rt, rte_update_pool, FF_SILENT) <= F_ACCEPT);
 
    /* Discard temporary rte */
   if (rt != n->routes)
@@ -1349,28 +1495,25 @@ rt_examine(rtable *t, ip_addr prefix, int pxlen, struct proto *p, struct filter 
 /**
  * rt_refresh_begin - start a refresh cycle
  * @t: related routing table
- * @ah: related announce hook 
+ * @c related channel
  *
  * This function starts a refresh cycle for given routing table and announce
  * hook. The refresh cycle is a sequence where the protocol sends all its valid
  * routes to the routing table (by rte_update()). After that, all protocol
- * routes (more precisely routes with @ah as @sender) not sent during the
+ * routes (more precisely routes with @c as @sender) not sent during the
  * refresh cycle but still in the table from the past are pruned. This is
  * implemented by marking all related routes as stale by REF_STALE flag in
  * rt_refresh_begin(), then marking all related stale routes with REF_DISCARD
  * flag in rt_refresh_end() and then removing such routes in the prune loop.
  */
 void
-rt_refresh_begin(rtable *t, struct announce_hook *ah)
+rt_refresh_begin(rtable *t, struct channel *c)
 {
-  net *n;
-  rte *e;
-
-  FIB_WALK(&t->fib, fn)
+  FIB_WALK(&t->fib, net, n)
     {
-      n = (net *) fn;
+      rte *e;
       for (e = n->routes; e; e = e->next)
-	if (e->sender == ah)
+	if (e->sender == c)
 	  e->flags |= REF_STALE;
     }
   FIB_WALK_END;
@@ -1379,23 +1522,21 @@ rt_refresh_begin(rtable *t, struct announce_hook *ah)
 /**
  * rt_refresh_end - end a refresh cycle
  * @t: related routing table
- * @ah: related announce hook 
+ * @c: related channel
  *
- * This function starts a refresh cycle for given routing table and announce
+ * This function ends a refresh cycle for given routing table and announce
  * hook. See rt_refresh_begin() for description of refresh cycles.
  */
 void
-rt_refresh_end(rtable *t, struct announce_hook *ah)
+rt_refresh_end(rtable *t, struct channel *c)
 {
   int prune = 0;
-  net *n;
-  rte *e;
 
-  FIB_WALK(&t->fib, fn)
+  FIB_WALK(&t->fib, net, n)
     {
-      n = (net *) fn;
+      rte *e;
       for (e = n->routes; e; e = e->next)
-	if ((e->sender == ah) && (e->flags & REF_STALE))
+	if ((e->sender == c) && (e->flags & REF_STALE))
 	  {
 	    e->flags |= REF_DISCARD;
 	    prune = 1;
@@ -1408,17 +1549,15 @@ rt_refresh_end(rtable *t, struct announce_hook *ah)
 }
 
 void
-rt_modify_stale(rtable *t, struct announce_hook *ah)
+rt_modify_stale(rtable *t, struct channel *c)
 {
   int prune = 0;
-  net *n;
-  rte *e;
 
-  FIB_WALK(&t->fib, fn)
+  FIB_WALK(&t->fib, net, n)
     {
-      n = (net *) fn;
+      rte *e;
       for (e = n->routes; e; e = e->next)
-	if ((e->sender == ah) && (e->flags & REF_STALE) && !(e->flags & REF_FILTERED))
+	if ((e->sender == c) && (e->flags & REF_STALE) && !(e->flags & REF_FILTERED))
 	  {
 	    e->flags |= REF_MODIFY;
 	    prune = 1;
@@ -1430,7 +1569,6 @@ rt_modify_stale(rtable *t, struct announce_hook *ah)
     rt_schedule_prune(t);
 }
 
-
 /**
  * rte_dump - dump a route
  * @e: &rte to be dumped
@@ -1441,8 +1579,8 @@ void
 rte_dump(rte *e)
 {
   net *n = e->net;
-  debug("%-1I/%2d ", n->n.prefix, n->n.pxlen);
-  debug("KF=%02x PF=%02x pref=%d lm=%d ", n->n.flags, e->pflags, e->pref, now-e->lastmod);
+  debug("%-1N ", n->n.addr);
+  debug("KF=%02x PF=%02x pref=%d ", n->n.flags, e->pflags, e->pref);
   rta_dump(e->attrs);
   if (e->attrs->src->proto->proto->dump_attrs)
     e->attrs->src->proto->proto->dump_attrs(e);
@@ -1458,23 +1596,17 @@ rte_dump(rte *e)
 void
 rt_dump(rtable *t)
 {
-  rte *e;
-  net *n;
-  struct announce_hook *a;
-
   debug("Dump of routing table <%s>\n", t->name);
 #ifdef DEBUGGING
   fib_check(&t->fib);
 #endif
-  FIB_WALK(&t->fib, fn)
+  FIB_WALK(&t->fib, net, n)
     {
-      n = (net *) fn;
+      rte *e;
       for(e=n->routes; e; e=e->next)
 	rte_dump(e);
     }
   FIB_WALK_END;
-  WALK_LIST(a, t->hooks)
-    debug("\tAnnounces routes to protocol %s\n", a->proto->name);
   debug("\n");
 }
 
@@ -1493,23 +1625,6 @@ rt_dump_all(void)
 }
 
 static inline void
-rt_schedule_prune(rtable *tab)
-{
-  rt_mark_for_prune(tab);
-  ev_schedule(tab->rt_event);
-}
-
-static inline void
-rt_schedule_gc(rtable *tab)
-{
-  if (tab->gc_scheduled)
-    return;
-
-  tab->gc_scheduled = 1;
-  ev_schedule(tab->rt_event);
-}
-
-static inline void
 rt_schedule_hcu(rtable *tab)
 {
   if (tab->hcu_scheduled)
@@ -1522,50 +1637,33 @@ rt_schedule_hcu(rtable *tab)
 static inline void
 rt_schedule_nhu(rtable *tab)
 {
-  if (tab->nhu_state == 0)
+  if (tab->nhu_state == NHU_CLEAN)
+    ev_schedule(tab->rt_event);
+
+  /* state change:
+   *   NHU_CLEAN   -> NHU_SCHEDULED
+   *   NHU_RUNNING -> NHU_DIRTY
+   */
+  tab->nhu_state |= NHU_SCHEDULED;
+}
+
+void
+rt_schedule_prune(rtable *tab)
+{
+  if (tab->prune_state == 0)
     ev_schedule(tab->rt_event);
 
   /* state change 0->1, 2->3 */
-  tab->nhu_state |= 1;
+  tab->prune_state |= 1;
 }
 
-
-static void
-rt_prune_nets(rtable *tab)
-{
-  struct fib_iterator fit;
-  int ncnt = 0, ndel = 0;
-
-#ifdef DEBUGGING
-  fib_check(&tab->fib);
-#endif
-
-  FIB_ITERATE_INIT(&fit, &tab->fib);
-again:
-  FIB_ITERATE_START(&tab->fib, &fit, f)
-    {
-      net *n = (net *) f;
-      ncnt++;
-      if (!n->routes)		/* Orphaned FIB entry */
-	{
-	  FIB_ITERATE_PUT(&fit, f);
-	  fib_delete(&tab->fib, f);
-	  ndel++;
-	  goto again;
-	}
-    }
-  FIB_ITERATE_END(f);
-  DBG("Pruned %d of %d networks\n", ndel, ncnt);
-
-  tab->gc_counter = 0;
-  tab->gc_time = now;
-  tab->gc_scheduled = 0;
-}
 
 static void
 rt_event(void *ptr)
 {
   rtable *tab = ptr;
+
+  rt_lock_table(tab);
 
   if (tab->hcu_scheduled)
     rt_update_hostcache(tab);
@@ -1574,35 +1672,23 @@ rt_event(void *ptr)
     rt_next_hop_update(tab);
 
   if (tab->prune_state)
-    if (!rt_prune_table(tab))
-      {
-	/* Table prune unfinished */
-	ev_schedule(tab->rt_event);
-	return;
-      }
+    rt_prune_table(tab);
 
-  if (tab->gc_scheduled)
-    {
-      rt_prune_nets(tab);
-      rt_prune_sources(); // FIXME this should be moved to independent event
-    }
+  rt_unlock_table(tab);
 }
 
 void
-rt_setup(pool *p, rtable *t, char *name, struct rtable_config *cf)
+rt_setup(pool *p, rtable *t, struct rtable_config *cf)
 {
   bzero(t, sizeof(*t));
-  fib_init(&t->fib, p, sizeof(net), 0, rte_init);
-  t->name = name;
+  t->name = cf->name;
   t->config = cf;
-  init_list(&t->hooks);
-  if (cf)
-    {
-      t->rt_event = ev_new(p);
-      t->rt_event->hook = rt_event;
-      t->rt_event->data = t;
-      t->gc_time = now;
-    }
+  t->addr_type = cf->addr_type;
+  fib_init(&t->fib, p, t->addr_type, sizeof(net), OFFSETOF(net, n), 0, NULL);
+  init_list(&t->channels);
+
+  t->rt_event = ev_new_init(p, rt_event, t);
+  t->gc_time = current_time();
 }
 
 /**
@@ -1616,64 +1702,88 @@ rt_init(void)
 {
   rta_init();
   rt_table_pool = rp_new(&root_pool, "Routing tables");
-  rte_update_pool = lp_new(rt_table_pool, 4080);
+  rte_update_pool = lp_new_default(rt_table_pool);
   rte_slab = sl_new(rt_table_pool, sizeof(rte));
   init_list(&routing_tables);
 }
 
 
-static int
-rt_prune_step(rtable *tab, int *limit)
+/**
+ * rt_prune_table - prune a routing table
+ *
+ * The prune loop scans routing tables and removes routes belonging to flushing
+ * protocols, discarded routes and also stale network entries. It is called from
+ * rt_event(). The event is rescheduled if the current iteration do not finish
+ * the table. The pruning is directed by the prune state (@prune_state),
+ * specifying whether the prune cycle is scheduled or running, and there
+ * is also a persistent pruning iterator (@prune_fit).
+ *
+ * The prune loop is used also for channel flushing. For this purpose, the
+ * channels to flush are marked before the iteration and notified after the
+ * iteration.
+ */
+static void
+rt_prune_table(rtable *tab)
 {
   struct fib_iterator *fit = &tab->prune_fit;
+  int limit = 512;
+
+  struct channel *c;
+  node *n, *x;
 
   DBG("Pruning route table %s\n", tab->name);
 #ifdef DEBUGGING
   fib_check(&tab->fib);
 #endif
 
-  if (tab->prune_state == RPS_NONE)
-    return 1;
+  if (tab->prune_state == 0)
+    return;
 
-  if (tab->prune_state == RPS_SCHEDULED)
-    {
-      FIB_ITERATE_INIT(fit, &tab->fib);
-      tab->prune_state = RPS_RUNNING;
-    }
+  if (tab->prune_state == 1)
+  {
+    /* Mark channels to flush */
+    WALK_LIST2(c, n, tab->channels, table_node)
+      if (c->channel_state == CS_FLUSHING)
+	c->flush_active = 1;
+
+    FIB_ITERATE_INIT(fit, &tab->fib);
+    tab->prune_state = 2;
+  }
 
 again:
-  FIB_ITERATE_START(&tab->fib, fit, fn)
+  FIB_ITERATE_START(&tab->fib, fit, net, n)
     {
-      net *n = (net *) fn;
       rte *e;
 
     rescan:
       for (e=n->routes; e; e=e->next)
       {
-	if (e->sender->proto->flushing || (e->flags & REF_DISCARD))
+	if (e->sender->flush_active || (e->flags & REF_DISCARD))
 	  {
-	    if (*limit <= 0)
+	    if (limit <= 0)
 	      {
-		FIB_ITERATE_PUT(fit, fn);
-		return 0;
+		FIB_ITERATE_PUT(fit);
+		ev_schedule(tab->rt_event);
+		return;
 	      }
 
 	    rte_discard(e);
-	    (*limit)--;
+	    limit--;
 
 	    goto rescan;
 	  }
 
 	if (e->flags & REF_MODIFY)
 	  {
-	    if (*limit <= 0)
+	    if (limit <= 0)
 	      {
-		FIB_ITERATE_PUT(fit, fn);
-		return 0;
+		FIB_ITERATE_PUT(fit);
+		ev_schedule(tab->rt_event);
+		return;
 	      }
 
 	    rte_modify(e);
-	    (*limit)--;
+	    limit--;
 
 	    goto rescan;
 	  }
@@ -1681,73 +1791,51 @@ again:
 
       if (!n->routes)		/* Orphaned FIB entry */
 	{
-	  FIB_ITERATE_PUT(fit, fn);
-	  fib_delete(&tab->fib, fn);
+	  FIB_ITERATE_PUT(fit);
+	  fib_delete(&tab->fib, n);
 	  goto again;
 	}
     }
-  FIB_ITERATE_END(fn);
+  FIB_ITERATE_END;
 
 #ifdef DEBUGGING
   fib_check(&tab->fib);
 #endif
 
-  tab->prune_state = RPS_NONE;
-  return 1;
-}
+  tab->gc_counter = 0;
+  tab->gc_time = current_time();
 
-/**
- * rt_prune_table - prune a routing table
- * @tab: a routing table for pruning
- *
- * This function scans the routing table @tab and removes routes belonging to
- * flushing protocols, discarded routes and also stale network entries, in a
- * similar fashion like rt_prune_loop(). Returns 1 when all such routes are
- * pruned. Contrary to rt_prune_loop(), this function is not a part of the
- * protocol flushing loop, but it is called from rt_event() for just one routing
- * table.
- *
- * Note that rt_prune_table() and rt_prune_loop() share (for each table) the
- * prune state (@prune_state) and also the pruning iterator (@prune_fit).
- */
-static inline int
-rt_prune_table(rtable *tab)
-{
-  int limit = 512;
-  return rt_prune_step(tab, &limit);
-}
+  /* state change 2->0, 3->1 */
+  tab->prune_state &= 1;
 
-/**
- * rt_prune_loop - prune routing tables
- *
- * The prune loop scans routing tables and removes routes belonging to flushing
- * protocols, discarded routes and also stale network entries. Returns 1 when
- * all such routes are pruned. It is a part of the protocol flushing loop.
- */
-int
-rt_prune_loop(void)
-{
-  int limit = 512;
-  rtable *t;
+  if (tab->prune_state > 0)
+    ev_schedule(tab->rt_event);
 
-  WALK_LIST(t, routing_tables)
-    if (! rt_prune_step(t, &limit))
-      return 0;
+  /* FIXME: This should be handled in a better way */
+  rt_prune_sources();
 
-  return 1;
+  /* Close flushed channels */
+  WALK_LIST2_DELSAFE(c, n, x, tab->channels, table_node)
+    if (c->flush_active)
+      {
+	c->flush_active = 0;
+	channel_set_state(c, CS_DOWN);
+      }
+
+  return;
 }
 
 void
 rt_preconfig(struct config *c)
 {
-  struct symbol *s = cf_get_symbol("master");
-
   init_list(&c->tables);
-  c->master_rtc = rt_new_table(s);
+
+  rt_new_table(cf_get_symbol("master4"), NET_IP4);
+  rt_new_table(cf_get_symbol("master6"), NET_IP6);
 }
 
 
-/* 
+/*
  * Some functions for handing internal next hop updates
  * triggered by rt_schedule_nhu().
  */
@@ -1763,33 +1851,105 @@ rta_next_hop_outdated(rta *a)
   if (!he->src)
     return a->dest != RTD_UNREACHABLE;
 
-  return (a->iface != he->src->iface) || !ipa_equal(a->gw, he->gw) ||
-    (a->dest != he->dest) || (a->igp_metric != he->igp_metric) ||
-    !mpnh_same(a->nexthops, he->src->nexthops);
+  return (a->dest != he->dest) || (a->igp_metric != he->igp_metric) ||
+    (!he->nexthop_linkable) || !nexthop_same(&(a->nh), &(he->src->nh));
 }
 
-static inline void
-rta_apply_hostentry(rta *a, struct hostentry *he)
+void
+rta_apply_hostentry(rta *a, struct hostentry *he, mpls_label_stack *mls)
 {
   a->hostentry = he;
-  a->iface = he->src ? he->src->iface : NULL;
-  a->gw = he->gw;
   a->dest = he->dest;
   a->igp_metric = he->igp_metric;
-  a->nexthops = he->src ? he->src->nexthops : NULL;
+
+  if (a->dest != RTD_UNICAST)
+  {
+    /* No nexthop */
+no_nexthop:
+    a->nh = (struct nexthop) {};
+    if (mls)
+    { /* Store the label stack for later changes */
+      a->nh.labels_orig = a->nh.labels = mls->len;
+      memcpy(a->nh.label, mls->stack, mls->len * sizeof(u32));
+    }
+    return;
+  }
+
+  if (((!mls) || (!mls->len)) && he->nexthop_linkable)
+  { /* Just link the nexthop chain, no label append happens. */
+    memcpy(&(a->nh), &(he->src->nh), nexthop_size(&(he->src->nh)));
+    return;
+  }
+
+  struct nexthop *nhp = NULL, *nhr = NULL;
+  int skip_nexthop = 0;
+
+  for (struct nexthop *nh = &(he->src->nh); nh; nh = nh->next)
+  {
+    if (skip_nexthop)
+      skip_nexthop--;
+    else
+    {
+      nhr = nhp;
+      nhp = (nhp ? (nhp->next = lp_allocz(rte_update_pool, NEXTHOP_MAX_SIZE)) : &(a->nh));
+    }
+
+    nhp->iface = nh->iface;
+    nhp->weight = nh->weight;
+    if (mls)
+    {
+      nhp->labels = nh->labels + mls->len;
+      nhp->labels_orig = mls->len;
+      if (nhp->labels <= MPLS_MAX_LABEL_STACK)
+      {
+	memcpy(nhp->label, nh->label, nh->labels * sizeof(u32)); /* First the hostentry labels */
+	memcpy(&(nhp->label[nh->labels]), mls->stack, mls->len * sizeof(u32)); /* Then the bottom labels */
+      }
+      else
+      {
+	log(L_WARN "Sum of label stack sizes %d + %d = %d exceedes allowed maximum (%d)",
+	    nh->labels, mls->len, nhp->labels, MPLS_MAX_LABEL_STACK);
+	skip_nexthop++;
+	continue;
+      }
+    }
+    if (ipa_nonzero(nh->gw))
+    {
+      nhp->gw = nh->gw;			/* Router nexthop */
+      nhp->flags |= (nh->flags & RNF_ONLINK);
+    }
+    else if (ipa_nonzero(he->link))
+      nhp->gw = he->link;		/* Device nexthop with link-local address known */
+    else
+      nhp->gw = he->addr;		/* Device nexthop with link-local address unknown */
+  }
+
+  if (skip_nexthop)
+    if (nhr)
+      nhr->next = NULL;
+    else
+    {
+      a->dest = RTD_UNREACHABLE;
+      log(L_WARN "No valid nexthop remaining, setting route unreachable");
+      goto no_nexthop;
+    }
 }
 
 static inline rte *
 rt_next_hop_update_rte(rtable *tab UNUSED, rte *old)
 {
-  rta a;
-  memcpy(&a, old->attrs, sizeof(rta));
-  rta_apply_hostentry(&a, old->attrs->hostentry);
-  a.aflags = 0;
+  rta *a = alloca(RTA_MAX_SIZE);
+  memcpy(a, old->attrs, rta_size(old->attrs));
+
+  mpls_label_stack mls = { .len = a->nh.labels_orig };
+  memcpy(mls.stack, &a->nh.label[a->nh.labels - mls.len], mls.len * sizeof(u32));
+
+  rta_apply_hostentry(a, old->attrs->hostentry, &mls);
+  a->aflags = 0;
 
   rte *e = sl_alloc(rte_slab);
   memcpy(e, old, sizeof(rte));
-  e->attrs = rta_lookup(&a);
+  e->attrs = rta_lookup(a);
 
   return e;
 }
@@ -1870,49 +2030,61 @@ rt_next_hop_update(rtable *tab)
   struct fib_iterator *fit = &tab->nhu_fit;
   int max_feed = 32;
 
-  if (tab->nhu_state == 0)
+  if (tab->nhu_state == NHU_CLEAN)
     return;
 
-  if (tab->nhu_state == 1)
+  if (tab->nhu_state == NHU_SCHEDULED)
     {
       FIB_ITERATE_INIT(fit, &tab->fib);
-      tab->nhu_state = 2;
+      tab->nhu_state = NHU_RUNNING;
     }
 
-  FIB_ITERATE_START(&tab->fib, fit, fn)
+  FIB_ITERATE_START(&tab->fib, fit, net, n)
     {
       if (max_feed <= 0)
 	{
-	  FIB_ITERATE_PUT(fit, fn);
+	  FIB_ITERATE_PUT(fit);
 	  ev_schedule(tab->rt_event);
 	  return;
 	}
-      max_feed -= rt_next_hop_update_net(tab, (net *) fn);
+      max_feed -= rt_next_hop_update_net(tab, n);
     }
-  FIB_ITERATE_END(fn);
+  FIB_ITERATE_END;
 
-  /* state change 2->0, 3->1 */
+  /* State change:
+   *   NHU_DIRTY   -> NHU_SCHEDULED
+   *   NHU_RUNNING -> NHU_CLEAN
+   */
   tab->nhu_state &= 1;
 
-  if (tab->nhu_state > 0)
+  if (tab->nhu_state != NHU_CLEAN)
     ev_schedule(tab->rt_event);
 }
 
 
 struct rtable_config *
-rt_new_table(struct symbol *s)
+rt_new_table(struct symbol *s, uint addr_type)
 {
   /* Hack that allows to 'redefine' the master table */
-  if ((s->class == SYM_TABLE) && (s->def == new_config->master_rtc))
+  if ((s->class == SYM_TABLE) &&
+      (s->def == new_config->def_tables[addr_type]) &&
+      ((addr_type == NET_IP4) || (addr_type == NET_IP6)))
     return s->def;
 
   struct rtable_config *c = cfg_allocz(sizeof(struct rtable_config));
 
   cf_define_symbol(s, SYM_TABLE, c);
   c->name = s->name;
-  add_tail(&new_config->tables, &c->n);
+  c->addr_type = addr_type;
   c->gc_max_ops = 1000;
   c->gc_min_time = 5;
+
+  add_tail(&new_config->tables, &c->n);
+
+  /* First table of each type is kept as default */
+  if (! new_config->def_tables[addr_type])
+    new_config->def_tables[addr_type] = c;
+
   return c;
 }
 
@@ -1956,6 +2128,13 @@ rt_unlock_table(rtable *r)
     }
 }
 
+static struct rtable_config *
+rt_find_table_config(struct config *cf, char *name)
+{
+  struct symbol *sym = cf_find_symbol(cf, name);
+  return (sym && (sym->class == SYM_TABLE)) ? sym->def : NULL;
+}
+
 /**
  * rt_commit - commit new routing table configuration
  * @new: new configuration
@@ -1981,11 +2160,10 @@ rt_commit(struct config *new, struct config *old)
 	  rtable *ot = o->table;
 	  if (!ot->deleted)
 	    {
-	      struct symbol *sym = cf_find_symbol(new, o->name);
-	      if (sym && sym->class == SYM_TABLE && !new->shutdown)
+	      r = rt_find_table_config(new, o->name);
+	      if (r && (r->addr_type == o->addr_type) && !new->shutdown)
 		{
 		  DBG("\t%s: same\n", o->name);
-		  r = sym->def;
 		  r->table = ot;
 		  ot->name = r->name;
 		  ot->config = r;
@@ -2009,7 +2187,7 @@ rt_commit(struct config *new, struct config *old)
       {
 	rtable *t = mb_alloc(rt_table_pool, sizeof(struct rtable));
 	DBG("\t%s: created\n", r->name);
-	rt_setup(rt_table_pool, t, r->name, r);
+	rt_setup(rt_table_pool, t, r);
 	add_tail(&routing_tables, &t->n);
 	r->table = t;
       }
@@ -2017,130 +2195,261 @@ rt_commit(struct config *new, struct config *old)
 }
 
 static inline void
-do_feed_baby(struct proto *p, int type, struct announce_hook *h, net *n, rte *e)
+do_feed_channel(struct channel *c, net *n, rte *e)
 {
   rte_update_lock();
-  if (type == RA_ACCEPTED)
-    rt_notify_accepted(h, n, e, NULL, NULL, p->refeeding ? 2 : 1);
-  else if (type == RA_MERGED)
-    rt_notify_merged(h, n, NULL, NULL, e, p->refeeding ? e : NULL, p->refeeding);
-  else
-    rt_notify_basic(h, n, e, p->refeeding ? e : NULL, p->refeeding);
+  if (c->ra_mode == RA_ACCEPTED)
+    rt_notify_accepted(c, n, e, NULL, NULL, c->refeeding ? 2 : 1);
+  else if (c->ra_mode == RA_MERGED)
+    rt_notify_merged(c, n, NULL, NULL, e, c->refeeding ? e : NULL, c->refeeding);
+  else /* RA_BASIC */
+    rt_notify_basic(c, n, e, c->refeeding ? e : NULL, c->refeeding);
   rte_update_unlock();
 }
 
 /**
- * rt_feed_baby - advertise routes to a new protocol
- * @p: protocol to be fed
+ * rt_feed_channel - advertise all routes to a channel
+ * @c: channel to be fed
  *
- * This function performs one pass of advertisement of routes to a newly
- * initialized protocol. It's called by the protocol code as long as it
- * has something to do. (We avoid transferring all the routes in single
- * pass in order not to monopolize CPU time.)
+ * This function performs one pass of advertisement of routes to a channel that
+ * is in the ES_FEEDING state. It is called by the protocol code as long as it
+ * has something to do. (We avoid transferring all the routes in single pass in
+ * order not to monopolize CPU time.)
  */
 int
-rt_feed_baby(struct proto *p)
+rt_feed_channel(struct channel *c)
 {
-  struct announce_hook *h;
-  struct fib_iterator *fit;
+  struct fib_iterator *fit = &c->feed_fit;
   int max_feed = 256;
 
-  if (!p->feed_ahook)			/* Need to initialize first */
-    {
-      if (!p->ahooks)
-	return 1;
-      DBG("Announcing routes to new protocol %s\n", p->name);
-      p->feed_ahook = p->ahooks;
-      fit = p->feed_iterator = mb_alloc(p->pool, sizeof(struct fib_iterator));
-      goto next_hook;
-    }
-  fit = p->feed_iterator;
+  ASSERT(c->export_state == ES_FEEDING);
 
-again:
-  h = p->feed_ahook;
-  FIB_ITERATE_START(&h->table->fib, fit, fn)
+  if (!c->feed_active)
     {
-      net *n = (net *) fn;
+      FIB_ITERATE_INIT(fit, &c->table->fib);
+      c->feed_active = 1;
+    }
+
+  FIB_ITERATE_START(&c->table->fib, fit, net, n)
+    {
       rte *e = n->routes;
       if (max_feed <= 0)
 	{
-	  FIB_ITERATE_PUT(fit, fn);
+	  FIB_ITERATE_PUT(fit);
 	  return 0;
 	}
 
-      /* XXXX perhaps we should change feed for RA_ACCEPTED to not use 'new' */
+      /* FIXME: perhaps we should change feed for RA_ACCEPTED to not use 'new' */
 
-      if ((p->accept_ra_types == RA_OPTIMAL) ||
-	  (p->accept_ra_types == RA_ACCEPTED) ||
-	  (p->accept_ra_types == RA_MERGED))
+      if ((c->ra_mode == RA_OPTIMAL) ||
+	  (c->ra_mode == RA_ACCEPTED) ||
+	  (c->ra_mode == RA_MERGED))
 	if (rte_is_valid(e))
 	  {
-	    if (p->export_state != ES_FEEDING)
-	      return 1;  /* In the meantime, the protocol fell down. */
+	    /* In the meantime, the protocol may fell down */
+	    if (c->export_state != ES_FEEDING)
+	      goto done;
 
-	    do_feed_baby(p, p->accept_ra_types, h, n, e);
+	    do_feed_channel(c, n, e);
 	    max_feed--;
 	  }
 
-      if (p->accept_ra_types == RA_ANY)
+      if (c->ra_mode == RA_ANY)
 	for(e = n->routes; e; e = e->next)
 	  {
-	    if (p->export_state != ES_FEEDING)
-	      return 1;  /* In the meantime, the protocol fell down. */
+	    /* In the meantime, the protocol may fell down */
+	    if (c->export_state != ES_FEEDING)
+	      goto done;
 
 	    if (!rte_is_valid(e))
 	      continue;
 
-	    do_feed_baby(p, RA_ANY, h, n, e);
+	    do_feed_channel(c, n, e);
 	    max_feed--;
 	  }
     }
-  FIB_ITERATE_END(fn);
-  p->feed_ahook = h->next;
-  if (!p->feed_ahook)
-    {
-      mb_free(p->feed_iterator);
-      p->feed_iterator = NULL;
-      return 1;
-    }
+  FIB_ITERATE_END;
 
-next_hook:
-  h = p->feed_ahook;
-  FIB_ITERATE_INIT(fit, &h->table->fib);
-  goto again;
+done:
+  c->feed_active = 0;
+  return 1;
 }
 
 /**
  * rt_feed_baby_abort - abort protocol feeding
- * @p: protocol
+ * @c: channel
  *
- * This function is called by the protocol code when the protocol
- * stops or ceases to exist before the last iteration of rt_feed_baby()
- * has finished.
+ * This function is called by the protocol code when the protocol stops or
+ * ceases to exist during the feeding.
  */
 void
-rt_feed_baby_abort(struct proto *p)
+rt_feed_channel_abort(struct channel *c)
 {
-  if (p->feed_ahook)
+  if (c->feed_active)
     {
-      /* Unlink the iterator and exit */
-      fit_get(&p->feed_ahook->table->fib, p->feed_iterator);
-      p->feed_ahook = NULL;
+      /* Unlink the iterator */
+      fit_get(&c->table->fib, &c->feed_fit);
+      c->feed_active = 0;
     }
 }
 
 
-static inline unsigned
-ptr_hash(void *ptr)
+int
+rte_update_in(struct channel *c, const net_addr *n, rte *new, struct rte_src *src)
 {
-  uintptr_t p = (uintptr_t) ptr;
-  return p ^ (p << 8) ^ (p >> 16);
+  struct rtable *tab = c->in_table;
+  rte *old, **pos;
+  net *net;
+
+  if (new)
+  {
+    net = net_get(tab, n);
+
+    if (!new->pref)
+      new->pref = c->preference;
+
+    if (!rta_is_cached(new->attrs))
+      new->attrs = rta_lookup(new->attrs);
+  }
+  else
+  {
+    net = net_find(tab, n);
+
+    if (!net)
+      goto drop_withdraw;
+  }
+
+  /* Find the old rte */
+  for (pos = &net->routes; old = *pos; pos = &old->next)
+    if (old->attrs->src == src)
+    {
+      if (new && rte_same(old, new))
+	goto drop_update;
+
+      /* Remove the old rte */
+      *pos = old->next;
+      rte_free_quick(old);
+      tab->rt_count--;
+
+      break;
+    }
+
+  if (!new)
+  {
+    if (!old)
+      goto drop_withdraw;
+
+    return 1;
+  }
+
+  struct channel_limit *l = &c->rx_limit;
+  if (l->action && !old)
+  {
+    if (tab->rt_count >= l->limit)
+      channel_notify_limit(c, l, PLD_RX, tab->rt_count);
+
+    if (l->state == PLS_BLOCKED)
+    {
+      rte_trace_in(D_FILTERS, c->proto, new, "ignored [limit]");
+      goto drop_update;
+    }
+  }
+
+  /* Insert the new rte */
+  rte *e = rte_do_cow(new);
+  e->flags |= REF_COW;
+  e->net = net;
+  e->sender = c;
+  e->lastmod = current_time();
+  e->next = *pos;
+  *pos = e;
+  tab->rt_count++;
+  return 1;
+
+drop_update:
+  c->stats.imp_updates_received++;
+  c->stats.imp_updates_ignored++;
+  rte_free(new);
+  return 0;
+
+drop_withdraw:
+  c->stats.imp_withdraws_received++;
+  c->stats.imp_withdraws_ignored++;
+  return 0;
 }
 
-static inline unsigned
+int
+rt_reload_channel(struct channel *c)
+{
+  struct rtable *tab = c->in_table;
+  struct fib_iterator *fit = &c->reload_fit;
+  int max_feed = 64;
+
+  ASSERT(c->channel_state == CS_UP);
+
+  if (!c->reload_active)
+  {
+    FIB_ITERATE_INIT(fit, &tab->fib);
+    c->reload_active = 1;
+  }
+
+  FIB_ITERATE_START(&tab->fib, fit, net, n)
+  {
+    if (max_feed <= 0)
+    {
+      FIB_ITERATE_PUT(fit);
+      return 0;
+    }
+
+    for (rte *e = n->routes; e; e = e->next)
+    {
+      rte_update2(c, n->n.addr, rte_do_cow(e), e->attrs->src);
+      max_feed--;
+    }
+  }
+  FIB_ITERATE_END;
+
+  c->reload_active = 0;
+  return 1;
+}
+
+void
+rt_reload_channel_abort(struct channel *c)
+{
+  if (c->reload_active)
+  {
+    /* Unlink the iterator */
+    fit_get(&c->in_table->fib, &c->reload_fit);
+    c->reload_active = 0;
+  }
+}
+
+void
+rt_prune_sync(rtable *t, int all)
+{
+  FIB_WALK(&t->fib, net, n)
+  {
+    rte *e, **ee = &n->routes;
+    while (e = *ee)
+    {
+      if (all || (e->flags & (REF_STALE | REF_DISCARD)))
+      {
+	*ee = e->next;
+	rte_free_quick(e);
+	t->rt_count--;
+      }
+      else
+	ee = &e->next;
+    }
+  }
+  FIB_WALK_END;
+}
+
+
+static inline u32
 hc_hash(ip_addr a, rtable *dep)
 {
-  return (ipa_hash(a) ^ ptr_hash(dep)) & 0xffff;
+  return ipa_hash(a) ^ ptr_hash(dep);
 }
 
 static inline void
@@ -2174,7 +2483,7 @@ hc_alloc_table(struct hostcache *hc, unsigned order)
 {
   uint hsize = 1 << order;
   hc->hash_order = order;
-  hc->hash_shift = 16 - order;
+  hc->hash_shift = 32 - order;
   hc->hash_max = (order >= HC_HI_ORDER) ? ~0U : (hsize HC_HI_MARK);
   hc->hash_min = (order <= HC_LO_ORDER) ?  0U : (hsize HC_LO_MARK);
 
@@ -2204,12 +2513,12 @@ hc_new_hostentry(struct hostcache *hc, ip_addr a, ip_addr ll, rtable *dep, unsig
 {
   struct hostentry *he = sl_alloc(hc->slab);
 
-  he->addr = a;
-  he->link = ll;
-  he->tab = dep;
-  he->hash_key = k;
-  he->uc = 0;
-  he->src = NULL;
+  *he = (struct hostentry) {
+    .addr = a,
+    .link = ll,
+    .tab = dep,
+    .hash_key = k,
+  };
 
   add_tail(&hc->hostentries, &he->ln);
   hc_insert(hc, he);
@@ -2245,7 +2554,7 @@ rt_init_hostcache(rtable *tab)
   hc_alloc_table(hc, HC_DEF_ORDER);
   hc->slab = sl_new(rt_table_pool, sizeof(struct hostentry));
 
-  hc->lp = lp_new(rt_table_pool, 1008);
+  hc->lp = lp_new(rt_table_pool, LP_GOOD_SIZE(1024));
   hc->trie = f_new_trie(hc->lp, sizeof(struct f_trie_node));
 
   tab->hostcache = hc;
@@ -2275,12 +2584,10 @@ rt_free_hostcache(rtable *tab)
 static void
 rt_notify_hostcache(rtable *tab, net *net)
 {
-  struct hostcache *hc = tab->hostcache;
-
   if (tab->hcu_scheduled)
     return;
 
-  if (trie_match_prefix(hc->trie, net->n.prefix, net->n.pxlen))
+  if (trie_match_net(tab->hostcache->trie, net->n.addr))
     rt_schedule_hcu(tab);
 }
 
@@ -2296,7 +2603,7 @@ if_local_addr(ip_addr a, struct iface *i)
   return 0;
 }
 
-static u32 
+static u32
 rt_get_igp_metric(rte *rt)
 {
   eattr *ea = ea_find(rt->attrs->eattrs, EA_GEN_IGP_METRIC);
@@ -2318,8 +2625,7 @@ rt_get_igp_metric(rte *rt)
     return rt->u.rip.metric;
 #endif
 
-  /* Device routes */
-  if ((a->dest != RTD_ROUTER) && (a->dest != RTD_MULTIPATH))
+  if (a->source == RTS_DEVICE)
     return 0;
 
   return IGP_METRIC_UNKNOWN;
@@ -2329,57 +2635,58 @@ static int
 rt_update_hostentry(rtable *tab, struct hostentry *he)
 {
   rta *old_src = he->src;
+  int direct = 0;
   int pxlen = 0;
 
-  /* Reset the hostentry */ 
+  /* Reset the hostentry */
   he->src = NULL;
-  he->gw = IPA_NONE;
   he->dest = RTD_UNREACHABLE;
+  he->nexthop_linkable = 0;
   he->igp_metric = 0;
 
-  net *n = net_route(tab, he->addr, MAX_PREFIX_LENGTH);
+  net_addr he_addr;
+  net_fill_ip_host(&he_addr, he->addr);
+  net *n = net_route(tab, &he_addr);
   if (n)
     {
       rte *e = n->routes;
       rta *a = e->attrs;
-      pxlen = n->n.pxlen;
+      pxlen = n->n.addr->pxlen;
 
       if (a->hostentry)
 	{
 	  /* Recursive route should not depend on another recursive route */
-	  log(L_WARN "Next hop address %I resolvable through recursive route for %I/%d",
-	      he->addr, n->n.prefix, pxlen);
+	  log(L_WARN "Next hop address %I resolvable through recursive route for %N",
+	      he->addr, n->n.addr);
 	  goto done;
 	}
 
-      if (a->dest == RTD_DEVICE)
+      if (a->dest == RTD_UNICAST)
 	{
-	  if (if_local_addr(he->addr, a->iface))
-	    {
-	      /* The host address is a local address, this is not valid */
-	      log(L_WARN "Next hop address %I is a local address of iface %s",
-		  he->addr, a->iface->name);
-	      goto done;
-      	    }
+	  for (struct nexthop *nh = &(a->nh); nh; nh = nh->next)
+	    if (ipa_zero(nh->gw))
+	      {
+		if (if_local_addr(he->addr, nh->iface))
+		  {
+		    /* The host address is a local address, this is not valid */
+		    log(L_WARN "Next hop address %I is a local address of iface %s",
+			he->addr, nh->iface->name);
+		    goto done;
+		  }
 
-	  /* The host is directly reachable, use link as a gateway */
-	  he->gw = he->link;
-	  he->dest = RTD_ROUTER;
-	}
-      else
-	{
-	  /* The host is reachable through some route entry */
-	  he->gw = a->gw;
-	  he->dest = a->dest;
+		direct++;
+	      }
 	}
 
       he->src = rta_clone(a);
+      he->dest = a->dest;
+      he->nexthop_linkable = !direct;
       he->igp_metric = rt_get_igp_metric(e);
     }
 
- done:
+done:
   /* Add a prefix range to the trie */
-  trie_add_prefix(tab->hostcache->trie, he->addr, MAX_PREFIX_LENGTH, pxlen, MAX_PREFIX_LENGTH);
+  trie_add_prefix(tab->hostcache->trie, &he_addr, pxlen, he_addr.pxlen);
 
   rta_free(old_src);
   return old_src != he->src;
@@ -2412,7 +2719,7 @@ rt_update_hostcache(rtable *tab)
   tab->hcu_scheduled = 0;
 }
 
-static struct hostentry *
+struct hostentry *
 rt_get_hostentry(rtable *tab, ip_addr a, ip_addr ll, rtable *dep)
 {
   struct hostentry *he;
@@ -2420,277 +2727,17 @@ rt_get_hostentry(rtable *tab, ip_addr a, ip_addr ll, rtable *dep)
   if (!tab->hostcache)
     rt_init_hostcache(tab);
 
-  uint k = hc_hash(a, dep);
+  u32 k = hc_hash(a, dep);
   struct hostcache *hc = tab->hostcache;
   for (he = hc->hash_table[k >> hc->hash_shift]; he != NULL; he = he->next)
     if (ipa_equal(he->addr, a) && (he->tab == dep))
       return he;
 
-  he = hc_new_hostentry(hc, a, ll, dep, k);
+  he = hc_new_hostentry(hc, a, ipa_zero(ll) ? a : ll, dep, k);
   rt_update_hostentry(tab, he);
   return he;
 }
 
-void
-rta_set_recursive_next_hop(rtable *dep, rta *a, rtable *tab, ip_addr *gw, ip_addr *ll)
-{
-  rta_apply_hostentry(a, rt_get_hostentry(tab, *gw, *ll, dep));
-}
-
-
-/*
- *  CLI commands
- */
-
-static byte *
-rt_format_via(rte *e)
-{
-  rta *a = e->attrs;
-
-  /* Max text length w/o IP addr and interface name is 16 */
-  static byte via[STD_ADDRESS_P_LENGTH+sizeof(a->iface->name)+16];
-
-  switch (a->dest)
-    {
-    case RTD_ROUTER:	bsprintf(via, "via %I on %s", a->gw, a->iface->name); break;
-    case RTD_DEVICE:	bsprintf(via, "dev %s", a->iface->name); break;
-    case RTD_BLACKHOLE:	bsprintf(via, "blackhole"); break;
-    case RTD_UNREACHABLE:	bsprintf(via, "unreachable"); break;
-    case RTD_PROHIBIT:	bsprintf(via, "prohibited"); break;
-    case RTD_MULTIPATH:	bsprintf(via, "multipath"); break;
-    default:		bsprintf(via, "???");
-    }
-  return via;
-}
-
-static void
-rt_show_rte(struct cli *c, byte *ia, rte *e, struct rt_show_data *d, ea_list *tmpa)
-{
-  byte from[STD_ADDRESS_P_LENGTH+8];
-  byte tm[TM_DATETIME_BUFFER_SIZE], info[256];
-  rta *a = e->attrs;
-  int primary = (e->net->routes == e);
-  int sync_error = (e->net->n.flags & KRF_SYNC_ERROR);
-  void (*get_route_info)(struct rte *, byte *buf, struct ea_list *attrs);
-  struct mpnh *nh;
-
-  tm_format_datetime(tm, &config->tf_route, e->lastmod);
-  if (ipa_nonzero(a->from) && !ipa_equal(a->from, a->gw))
-    bsprintf(from, " from %I", a->from);
-  else
-    from[0] = 0;
-
-  get_route_info = a->src->proto->proto->get_route_info;
-  if (get_route_info || d->verbose)
-    {
-      /* Need to normalize the extended attributes */
-      ea_list *t = tmpa;
-      t = ea_append(t, a->eattrs);
-      tmpa = alloca(ea_scan(t));
-      ea_merge(t, tmpa);
-      ea_sort(tmpa);
-    }
-  if (get_route_info)
-    get_route_info(e, info, tmpa);
-  else
-    bsprintf(info, " (%d)", e->pref);
-  cli_printf(c, -1007, "%-18s %s [%s %s%s]%s%s", ia, rt_format_via(e), a->src->proto->name,
-	     tm, from, primary ? (sync_error ? " !" : " *") : "", info);
-  for (nh = a->nexthops; nh; nh = nh->next)
-    cli_printf(c, -1007, "\tvia %I on %s weight %d", nh->gw, nh->iface->name, nh->weight + 1);
-  if (d->verbose)
-    rta_show(c, a, tmpa);
-}
-
-static void
-rt_show_net(struct cli *c, net *n, struct rt_show_data *d)
-{
-  rte *e, *ee;
-  byte ia[STD_ADDRESS_P_LENGTH+8];
-  struct ea_list *tmpa;
-  struct announce_hook *a = NULL;
-  int first = 1;
-  int pass = 0;
-
-  bsprintf(ia, "%I/%d", n->n.prefix, n->n.pxlen);
-
-  if (d->export_mode)
-    {
-      if (! d->export_protocol->rt_notify)
-	return;
-
-      a = proto_find_announce_hook(d->export_protocol, d->table);
-      if (!a)
-	return;
-    }
-
-  for (e = n->routes; e; e = e->next)
-    {
-      if (rte_is_filtered(e) != d->filtered)
-	continue;
-
-      d->rt_counter++;
-      d->net_counter += first;
-      first = 0;
-
-      if (pass)
-	continue;
-
-      ee = e;
-      rte_update_lock();		/* We use the update buffer for filtering */
-      tmpa = rte_make_tmp_attrs(e, rte_update_pool);
-
-      /* Special case for merged export */
-      if ((d->export_mode == RSEM_EXPORT) && (d->export_protocol->accept_ra_types == RA_MERGED))
-        {
-	  rte *rt_free;
-	  e = rt_export_merged(a, n, &rt_free, &tmpa, rte_update_pool, 1);
-	  pass = 1;
-
-	  if (!e)
-	  { e = ee; goto skip; }
-	}
-      else if (d->export_mode)
-	{
-	  struct proto *ep = d->export_protocol;
-	  int ic = ep->import_control ? ep->import_control(ep, &e, &tmpa, rte_update_pool) : 0;
-
-	  if (ep->accept_ra_types == RA_OPTIMAL || ep->accept_ra_types == RA_MERGED)
-	    pass = 1;
-
-	  if (ic < 0)
-	    goto skip;
-
-	  if (d->export_mode > RSEM_PREEXPORT)
-	    {
-	      /*
-	       * FIXME - This shows what should be exported according to current
-	       * filters, but not what was really exported. 'configure soft'
-	       * command may change the export filter and do not update routes.
-	       */
-	      int do_export = (ic > 0) ||
-		(f_run(a->out_filter, &e, &tmpa, rte_update_pool,
-		       FF_FORCE_TMPATTR | FF_SILENT) <= F_ACCEPT);
-
-	      if (do_export != (d->export_mode == RSEM_EXPORT))
-		goto skip;
-
-	      if ((d->export_mode == RSEM_EXPORT) && (ep->accept_ra_types == RA_ACCEPTED))
-		pass = 1;
-	    }
-	}
-
-      if (d->show_protocol && (d->show_protocol != e->attrs->src->proto))
-	goto skip;
-
-      if (f_run(d->filter, &e, &tmpa, rte_update_pool, FF_FORCE_TMPATTR) > F_ACCEPT)
-	goto skip;
-
-      d->show_counter++;
-      if (d->stats < 2)
-	rt_show_rte(c, ia, e, d, tmpa);
-      ia[0] = 0;
-
-    skip:
-      if (e != ee)
-      {
-	rte_free(e);
-	e = ee;
-      }
-      rte_update_unlock();
-
-      if (d->primary_only)
-	break;
-    }
-}
-
-static void
-rt_show_cont(struct cli *c)
-{
-  struct rt_show_data *d = c->rover;
-#ifdef DEBUGGING
-  unsigned max = 4;
-#else
-  unsigned max = 64;
-#endif
-  struct fib *fib = &d->table->fib;
-  struct fib_iterator *it = &d->fit;
-
-  FIB_ITERATE_START(fib, it, f)
-    {
-      net *n = (net *) f;
-      if (d->running_on_config && d->running_on_config != config)
-	{
-	  cli_printf(c, 8004, "Stopped due to reconfiguration");
-	  goto done;
-	}
-      if (d->export_protocol && (d->export_protocol->export_state == ES_DOWN))
-	{
-	  cli_printf(c, 8005, "Protocol is down");
-	  goto done;
-	}
-      if (!max--)
-	{
-	  FIB_ITERATE_PUT(it, f);
-	  return;
-	}
-      rt_show_net(c, n, d);
-    }
-  FIB_ITERATE_END(f);
-  if (d->stats)
-    cli_printf(c, 14, "%d of %d routes for %d networks", d->show_counter, d->rt_counter, d->net_counter);
-  else
-    cli_printf(c, 0, "");
-done:
-  c->cont = c->cleanup = NULL;
-}
-
-static void
-rt_show_cleanup(struct cli *c)
-{
-  struct rt_show_data *d = c->rover;
-
-  /* Unlink the iterator */
-  fit_get(&d->table->fib, &d->fit);
-}
-
-void
-rt_show(struct rt_show_data *d)
-{
-  net *n;
-
-  /* Default is either a master table or a table related to a respective protocol */
-  if (!d->table && d->export_protocol) d->table = d->export_protocol->table;
-  if (!d->table && d->show_protocol) d->table = d->show_protocol->table;
-  if (!d->table) d->table = config->master_rtc->table;
-
-  /* Filtered routes are neither exported nor have sensible ordering */
-  if (d->filtered && (d->export_mode || d->primary_only))
-    cli_msg(0, "");
-
-  if (d->pxlen == 256)
-    {
-      FIB_ITERATE_INIT(&d->fit, &d->table->fib);
-      this_cli->cont = rt_show_cont;
-      this_cli->cleanup = rt_show_cleanup;
-      this_cli->rover = d;
-    }
-  else
-    {
-      if (d->show_for)
-	n = net_route(d->table, d->prefix, d->pxlen);
-      else
-	n = net_find(d->table, d->prefix, d->pxlen);
-
-      if (n)
-	rt_show_net(this_cli, n, d);
-
-      if (d->rt_counter)
-	cli_msg(0, "");
-      else
-	cli_msg(8001, "Network not in table");
-    }
-}
 
 /*
  *  Documentation for functions declared inline in route.h
@@ -2701,26 +2748,24 @@ rt_show(struct rt_show_data *d)
  * net_find - find a network entry
  * @tab: a routing table
  * @addr: address of the network
- * @len: length of the network prefix
  *
  * net_find() looks up the given network in routing table @tab and
  * returns a pointer to its &net entry or %NULL if no such network
  * exists.
  */
-static inline net *net_find(rtable *tab, ip_addr addr, unsigned len)
+static inline net *net_find(rtable *tab, net_addr *addr)
 { DUMMY; }
 
 /**
  * net_get - obtain a network entry
  * @tab: a routing table
  * @addr: address of the network
- * @len: length of the network prefix
  *
  * net_get() looks up the given network in routing table @tab and
  * returns a pointer to its &net entry. If no such entry exists, it's
  * created.
  */
-static inline net *net_get(rtable *tab, ip_addr addr, unsigned len)
+static inline net *net_get(rtable *tab, net_addr *addr)
 { DUMMY; }
 
 /**

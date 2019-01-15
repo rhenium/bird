@@ -77,11 +77,13 @@ struct mrt_table_dump_state {
   struct fib_iterator fit;		/* Iterator in processed table */
   int table_open;			/* Whether iterator is linked */
 
+  int ipv4;				/* Processed table is IPv4 */
   int add_path;				/* Current message subtype is *_ADDPATH */
   int want_add_path;			/* Want *_ADDPATH message later */
   int max;				/* Decreasing counter of dumped routes */
   u32 seqnum;				/* MRT message sequence number */
-  bird_clock_t time_offset;		/* Time offset between monotonic and real time */
+  btime time_offset;			/* Time offset between monotonic and real time */
+  struct bgp_write_state *bws;		/*   */
 
   u16 peer_count;			/* Number of peers */
   u32 peer_count_offset;		/* Buffer offset to store peer_count later */

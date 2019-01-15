@@ -1,5 +1,6 @@
-source=bgp.c attrs.c packets.c
-root-rel=../../
-dir-name=proto/bgp
+src := attrs.c bgp.c packets.c
+obj := $(src-o-files)
+$(all-daemon)
+$(cf-local)
 
-include ../../Rules
+tests_objs := $(tests_objs) $(src-o-files)

@@ -58,7 +58,7 @@ ip6_mkmask(uint n)
   return a;
 }
 
-int
+uint
 ip6_masklen(ip6_addr *a)
 {
   int i, j, n;
@@ -67,12 +67,12 @@ ip6_masklen(ip6_addr *a)
     if (a->addr[i] != ~0U)
     {
       j = u32_masklen(a->addr[i]);
-      if (j < 0)
+      if (j == 255)
 	return j;
       n += j;
       while (++i < 4)
 	if (a->addr[i])
-	  return -1;
+	  return 255;
       break;
     }
 
@@ -306,7 +306,7 @@ ip6_pton(const char *a, ip6_addr *o)
 
     if (*a == ':' && a[1])
       a++;
-    else if (*a == '.' && (i == 6 || i < 6 && hfil >= 0))
+    else if (*a == '.' && (i == 6 || (i < 6 && hfil >= 0)))
     {				/* Embedded IPv4 address */
       ip4_addr x;
       if (!ip4_pton(start, &x))

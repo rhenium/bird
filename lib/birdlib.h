@@ -9,8 +9,7 @@
 #ifndef _BIRD_BIRDLIB_H_
 #define _BIRD_BIRDLIB_H_
 
-#include "timer.h"
-#include "alloca.h"
+#include "lib/alloca.h"
 
 /* Ugly structure offset handling macros */
 
@@ -41,6 +40,12 @@ struct align_probe { char x; long int y; };
 #define CALL(fn, args...) ({ if (fn) fn(args); })
 #define ADVANCE(w, r, l) ({ r -= l; w += l; })
 
+static inline int uint_cmp(uint i1, uint i2)
+{ return (int)(i1 > i2) - (int)(i1 < i2); }
+
+static inline int u64_cmp(u64 i1, u64 i2)
+{ return (int)(i1 > i2) - (int)(i1 < i2); }
+
 
 /* Bitfield macros */
 
@@ -55,34 +60,20 @@ struct align_probe { char x; long int y; };
 #define NULL ((void *) 0)
 #endif
 
-#ifndef IPV6
-#define IP_VERSION 4
-#else
-#define IP_VERSION 6
-#endif
-
-
 /* Macros for gcc attributes */
 
 #define NORET __attribute__((noreturn))
 #define UNUSED __attribute__((unused))
 #define PACKED __attribute__((packed))
 
-#ifdef IPV6
-#define UNUSED4
-#define UNUSED6 UNUSED
-#else
-#define UNUSED4 UNUSED
-#define UNUSED6
-#endif
-
 /* Microsecond time */
 
 typedef s64 btime;
+//typedef s64 bird_clock_t;
 
-#define S_	*1000000
-#define MS_	*1000
-#define US_	*1
+#define S_	* (btime) 1000000
+#define MS_	* (btime) 1000
+#define US_	* (btime) 1
 #define TO_S	/1000000
 #define TO_MS	/1000
 #define TO_US	/1
@@ -91,39 +82,26 @@ typedef s64 btime;
 #define S	S_
 #define MS	MS_
 #define US	US_
+#define NS	/1000
 #endif
+
+#define TIME_INFINITY ((s64) 0x7fffffffffffffff)
 
 
 /* Rate limiting */
 
 struct tbf {
-  bird_clock_t timestamp;		/* Last update */
-  u16 count;				/* Available tokens */
+  btime timestamp;			/* Last update */
+  u64 count;				/* Available micro-tokens */
   u16 burst;				/* Max number of tokens */
-  u16 rate;				/* Rate of replenishment */
-  u16 mark;				/* Whether last op was limited */
+  u16 rate;				/* Rate of replenishment (tokens / sec) */
+  u32 drop;				/* Number of failed request since last successful */
 };
 
 /* Default TBF values for rate limiting log messages */
 #define TBF_DEFAULT_LOG_LIMITS { .rate = 1, .burst = 5 }
 
-void tbf_update(struct tbf *f);
-
-static inline int
-tbf_limit(struct tbf *f)
-{
-  tbf_update(f);
-
-  if (!f->count)
-  {
-    f->mark = 1;
-    return 1;
-  }
-
-  f->count--;
-  f->mark = 0;
-  return 0;
-}
+int tbf_limit(struct tbf *f);
 
 
 /* Logging and dying */
@@ -163,7 +141,7 @@ void bug(const char *msg, ...) NORET;
 #define L_FATAL "\010"			/* Fatal errors */
 #define L_BUG "\011"			/* BIRD bugs */
 
-void debug(const char *msg, ...);		/* Printf to debug output */
+void debug(const char *msg, ...);	/* Printf to debug output */
 
 /* Debugging */
 
@@ -174,9 +152,9 @@ void debug(const char *msg, ...);		/* Printf to debug output */
 #endif
 
 #ifdef DEBUGGING
-#define ASSERT(x) do { if (!(x)) bug("Assertion `%s' failed at %s:%d", #x, __FILE__, __LINE__); } while(0)
+#define ASSERT(x) do { if (!(x)) bug("Assertion '%s' failed at %s:%d", #x, __FILE__, __LINE__); } while(0)
 #else
-#define ASSERT(x) do { } while(0)
+#define ASSERT(x) do { if (!(x)) log(L_BUG "Assertion '%s' failed at %s:%d", #x, __FILE__, __LINE__); } while(0)
 #endif
 
 /* Pseudorandom numbers */

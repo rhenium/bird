@@ -30,7 +30,7 @@
 #define ICMPV6_RA 134
 
 #define MAX_INITIAL_RTR_ADVERTISEMENTS 3
-#define MAX_INITIAL_RTR_ADVERT_INTERVAL 16
+#define MAX_INITIAL_RTR_ADVERT_INTERVAL (16 S_)
 
 #define DEFAULT_MAX_RA_INT 600
 #define DEFAULT_MIN_DELAY 3
@@ -50,9 +50,7 @@ struct radv_config
   list rdnss_list;		/* Global list of RDNSS configs (struct radv_rdnss_config) */
   list dnssl_list;		/* Global list of DNSSL configs (struct radv_dnssl_config) */
 
-  ip_addr trigger_prefix;	/* Prefix of a trigger route, if defined */
-  u8 trigger_pxlen;		/* Pxlen of a trigger route, if defined */
-  u8 trigger_valid;		/* Whether a trigger route is defined */
+  net_addr trigger;		/* Prefix of a trigger route, if defined */
   u8 propagate_routes;		/* Do we propagate more specific routes (RFC 4191)? */
   u32 max_linger_time;		/* Maximum of interface route_linger_time */
 };
@@ -91,8 +89,7 @@ struct radv_iface_config
 struct radv_prefix_config
 {
   node n;
-  ip_addr prefix;
-  uint pxlen;
+  net_addr_ip6 prefix;
 
   u8 skip;			/* Do not include this prefix to RA */
   u8 onlink;			/* Standard options from RFC 4861 */
@@ -108,7 +105,7 @@ struct radv_rdnss_config
   node n;
   u32 lifetime;			/* Valid if lifetime_mult is 0 */
   u16 lifetime_mult;		/* Lifetime specified as multiple of max_ra_int */
-  ip_addr server;		/* IP address of recursive DNS server */
+  ip6_addr server;		/* IP address of recursive DNS server */
 };
 
 struct radv_dnssl_config
@@ -130,13 +127,14 @@ struct radv_dnssl_config
  */
 struct radv_route
 {
-  struct fib_node n;
   u32 lifetime;			/* Lifetime from an attribute */
   u8 lifetime_set;		/* Whether lifetime is defined */
   u8 preference;		/* Preference of the route, RA_PREF_* */
   u8 preference_set;		/* Whether preference is defined */
   u8 valid;			/* Whethe route is valid or withdrawn */
-  bird_clock_t changed;		/* Last time when the route changed */
+  btime changed;		/* Last time when the route changed */
+
+  struct fib_node n;
 };
 
 struct radv_proto
@@ -147,18 +145,18 @@ struct radv_proto
   u8 active;			/* Whether radv is active w.r.t. triggers */
   u8 fib_up;			/* FIB table (routes) is initialized */
   struct fib routes;		/* FIB table of specific routes (struct radv_route) */
-  bird_clock_t prune_time;	/* Next time of route table pruning */
+  btime prune_time;		/* Next time of route table pruning */
 };
 
 struct radv_prefix		/* One prefix we advertise */
 {
   node n;
-  ip_addr prefix;
-  u8 len;
+  net_addr_ip6 prefix;
+
   u8 valid;			/* Is the prefix valid? If not, we advertise it
 				   with 0 lifetime, so clients stop using it */
   u8 mark;			/* A temporary mark for processing */
-  bird_clock_t changed;		/* Last time when the prefix changed */
+  btime changed;		/* Last time when the prefix changed */
   struct radv_prefix_config *cf; /* The config tied to this prefix */
 };
 
@@ -171,14 +169,14 @@ struct radv_iface
   struct ifa *addr;		/* Link-local address of iface */
   struct pool *pool;		/* A pool for interface-specific things */
   list prefixes;		/* The prefixes we advertise (struct radv_prefix) */
-  bird_clock_t prune_time;	/* Next time of prefix list pruning */
-  bird_clock_t valid_time;	/* Cached packet is valid until first linger timeout */
+  btime prune_time;		/* Next time of prefix list pruning */
+  btime valid_time;		/* Cached packet is valid until first linger timeout */
 
   timer *timer;
   struct object_lock *lock;
   sock *sk;
 
-  bird_clock_t last;		/* Time of last sending of RA */
+  btime last;			/* Time of last sending of RA */
   u16 plen;			/* Length of prepared RA in tbuf, or 0 if not valid */
   byte initial;			/* How many RAs are still to be sent as initial */
 };
@@ -194,8 +192,8 @@ struct radv_iface
 #define RA_PREF_MASK	0x18
 
 /* Attributes */
-#define EA_RA_PREFERENCE	EA_CODE(EAP_RADV, 0)
-#define EA_RA_LIFETIME		EA_CODE(EAP_RADV, 1)
+#define EA_RA_PREFERENCE	EA_CODE(PROTOCOL_RADV, 0)
+#define EA_RA_LIFETIME		EA_CODE(PROTOCOL_RADV, 1)
 
 #ifdef LOCAL_DEBUG
 #define RADV_FORCE_DEBUG 1

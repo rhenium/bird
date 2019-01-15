@@ -9,10 +9,11 @@
 #ifndef _BIRD_CONF_H_
 #define _BIRD_CONF_H_
 
+#include "sysdep/config.h"
+#include "lib/ip.h"
+#include "lib/hash.h"
 #include "lib/resource.h"
 #include "lib/timer.h"
-#include "lib/hash.h"
-
 
 /* Configuration structure */
 
@@ -21,25 +22,22 @@ struct config {
   linpool *mem;				/* Linear pool containing configuration data */
   list protos;				/* Configured protocol instances (struct proto_config) */
   list tables;				/* Configured routing tables (struct rtable_config) */
-  list roa_tables;			/* Configured ROA tables (struct roa_table_config) */
   list logfiles;			/* Configured log files (sysdep) */
+  list tests;				/* Configured unit tests (f_bt_test_suite) */
 
   int mrtdump_file;			/* Configured MRTDump file (sysdep, fd in unix) */
   char *syslog_name;			/* Name used for syslog (NULL -> no syslog) */
-  struct rtable_config *master_rtc;	/* Configuration of master routing table */
+  struct rtable_config *def_tables[NET_MAX]; /* Default routing tables for each network */
   struct iface_patt *router_id_from;	/* Configured list of router ID iface patterns */
 
   u32 router_id;			/* Our Router ID */
-  ip_addr listen_bgp_addr;		/* Listening BGP socket should use this address */
-  unsigned listen_bgp_port;		/* Listening BGP socket should use this port (0 is default) */
-  u32 listen_bgp_flags;			/* Listening BGP socket should use these flags */
   unsigned proto_default_debug;		/* Default protocol debug mask */
   unsigned proto_default_mrtdump;	/* Default protocol mrtdump mask */
   struct timeformat tf_route;		/* Time format for 'show route' */
   struct timeformat tf_proto;		/* Time format for 'show protocol' */
   struct timeformat tf_log;		/* Time format for the logfile */
   struct timeformat tf_base;		/* Time format for other purposes */
-  u32 gr_wait;				/* Graceful restart wait timeout */
+  u32 gr_wait;				/* Graceful restart wait timeout (sec) */
 
   int cli_debug;			/* Tracing of CLI connections and commands */
   int latency_debug;			/* I/O loop tracks duration of each event */
@@ -56,22 +54,22 @@ struct config {
   struct config *fallback;		/* Link to regular config for CLI parsing */
   int obstacle_count;			/* Number of items blocking freeing of this config */
   int shutdown;				/* This is a pseudo-config for daemon shutdown */
-  bird_clock_t load_time;		/* When we've got this configuration */
+  btime load_time;			/* When we've got this configuration */
 };
 
 /* Please don't use these variables in protocols. Use proto_config->global instead. */
 extern struct config *config;		/* Currently active configuration */
 extern struct config *new_config;	/* Configuration being parsed */
 
-struct config *config_alloc(const byte *name);
+struct config *config_alloc(const char *name);
 int config_parse(struct config *);
 int cli_parse(struct config *);
 void config_free(struct config *);
-int config_commit(struct config *, int type, int timeout);
+int config_commit(struct config *, int type, uint timeout);
 int config_confirm(void);
 int config_undo(void);
 void config_init(void);
-void cf_error(char *msg, ...) NORET;
+void cf_error(const char *msg, ...) NORET;
 void config_add_obstacle(struct config *);
 void config_del_obstacle(struct config *);
 void order_shutdown(void);
@@ -129,10 +127,12 @@ struct sym_scope {
 #define SYM_FUNCTION 3
 #define SYM_FILTER 4
 #define SYM_TABLE 5
-#define SYM_ROA 6
+#define SYM_ATTRIBUTE 6
 
 #define SYM_VARIABLE 0x100	/* 0x100-0x1ff are variable types */
+#define SYM_VARIABLE_RANGE SYM_VARIABLE ... (SYM_VARIABLE | 0xff)
 #define SYM_CONSTANT 0x200	/* 0x200-0x2ff are variable types */
+#define SYM_CONSTANT_RANGE SYM_CONSTANT ... (SYM_CONSTANT | 0xff)
 
 #define SYM_TYPE(s) (((struct f_val *) (s)->def)->type)
 #define SYM_VAL(s) (((struct f_val *) (s)->def)->val)
@@ -171,6 +171,7 @@ static inline int cf_symbol_is_constant(struct symbol *sym)
 
 /* Parser */
 
+extern char *cf_text;
 int cf_parse(void);
 
 /* Sysdep hooks */

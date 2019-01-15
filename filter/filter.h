@@ -36,6 +36,8 @@
   F(FI_MATCH,			  0, '~') \
   F(FI_NOT_MATCH,		'!', '~') \
   F(FI_DEFINED,			'd', 'e') \
+  F(FI_TYPE,			  0, 'T') \
+  F(FI_IS_V4,			'I', 'i') \
   F(FI_SET,			  0, 's') \
   F(FI_CONSTANT,		  0, 'c') \
   F(FI_VARIABLE,		  0, 'V') \
@@ -51,7 +53,11 @@
   F(FI_PREF_GET,		  0, 'P') \
   F(FI_PREF_SET,		'P', 'S') \
   F(FI_LENGTH,			  0, 'L') \
+  F(FI_ROA_MAXLEN,		'R', 'M') \
+  F(FI_ROA_ASN,			'R', 'A') \
+  F(FI_SADR_SRC,		'n', 's') \
   F(FI_IP,			'c', 'p') \
+  F(FI_ROUTE_DISTINGUISHER,	'R', 'D') \
   F(FI_AS_PATH_FIRST,		'a', 'f') \
   F(FI_AS_PATH_LAST,		'a', 'l') \
   F(FI_AS_PATH_LAST_NAG,	'a', 'L') \
@@ -63,27 +69,36 @@
   F(FI_EMPTY,			  0, 'E') \
   F(FI_PATH_PREPEND,		'A', 'p') \
   F(FI_CLIST_ADD_DEL,		'C', 'a') \
-  F(FI_ROA_CHECK,		'R', 'C')
+  F(FI_ROA_CHECK,		'R', 'C') \
+  F(FI_FORMAT,			  0, 'F') \
+  F(FI_ASSERT,			'a', 's')
 
 enum f_instruction_code {
 #define F(c,a,b) \
-  c = FI__TWOCHAR(a,b),
+  c,
 FI__LIST
 #undef F
+  FI__MAX,
 } PACKED;
+
+const char *f_instruction_name(enum f_instruction_code fi);
 
 struct f_inst {		/* Instruction */
   struct f_inst *next;	/* Structure is 16 bytes, anyway */
   enum f_instruction_code fi_code;
-  u16 aux;
+  u16 aux;		/* Extension to instruction code, T_*, EA_*, EAF_*  */
+  union {
+    uint i;
+    void *p;
+  } a1;			/* The first argument */
+  union {
+    uint i;
+    void *p;
+  } a2;			/* The second argument */
   union {
     int i;
     void *p;
-  } a1;
-  union {
-    int i;
-    void *p;
-  } a2;
+  } a3;			/* The third argument */
   int lineno;
 };
 
@@ -93,38 +108,22 @@ struct f_inst {		/* Instruction */
 /* Not enough fields in f_inst for three args used by roa_check() */
 struct f_inst_roa_check {
   struct f_inst i;
-  struct roa_table_config *rtc;
+  struct rtable_config *rtc;
 };
-
-struct f_inst3 {
-  struct f_inst i;
-  union {
-    int i;
-    void *p;
-  } a3;
-};
-
-#define INST3(x) (((struct f_inst3 *) x)->a3)
-
 
 struct f_prefix {
-  ip_addr ip;
-  int len;
-#define LEN_MASK 0xff
-#define LEN_PLUS  0x1000000
-#define LEN_MINUS 0x2000000
-#define LEN_RANGE 0x4000000
-  /* If range then prefix must be in range (len >> 16 & 0xff, len >> 8 & 0xff) */
+  net_addr net;
+  u8 lo, hi;
 };
 
 struct f_val {
-  int type;
+  int type;		/* T_*  */
   union {
     uint i;
     u64 ec;
     lcomm lc;
-    /*    ip_addr ip; Folded into prefix */
-    struct f_prefix px;
+    ip_addr ip;
+    const net_addr *net;
     char *s;
     struct f_tree *t;
     struct f_trie *ti;
@@ -159,7 +158,7 @@ static inline struct f_static_attr f_new_static_attr(int f_type, int code, int r
 { return (struct f_static_attr) { .f_type = f_type, .sa_code = code, .readonly = readonly }; }
 struct f_tree *f_new_tree(void);
 struct f_inst *f_generate_complex(int operation, int operation_aux, struct f_dynamic_attr da, struct f_inst *argument);
-struct f_inst *f_generate_roa_check(struct symbol *sym, struct f_inst *prefix, struct f_inst *asn);
+struct f_inst *f_generate_roa_check(struct rtable_config *table, struct f_inst *prefix, struct f_inst *asn);
 
 
 struct f_tree *build_tree(struct f_tree *);
@@ -168,32 +167,15 @@ int same_tree(struct f_tree *t1, struct f_tree *t2);
 void tree_format(struct f_tree *t, buffer *buf);
 
 struct f_trie *f_new_trie(linpool *lp, uint node_size);
-void *trie_add_prefix(struct f_trie *t, ip_addr px, int plen, int l, int h);
-int trie_match_prefix(struct f_trie *t, ip_addr px, int plen);
+void *trie_add_prefix(struct f_trie *t, const net_addr *n, uint l, uint h);
+int trie_match_net(struct f_trie *t, const net_addr *n);
 int trie_same(struct f_trie *t1, struct f_trie *t2);
 void trie_format(struct f_trie *t, buffer *buf);
-
-void fprefix_get_bounds(struct f_prefix *px, int *l, int *h);
-
-static inline void
-trie_add_fprefix(struct f_trie *t, struct f_prefix *px)
-{
-  int l, h;
-  fprefix_get_bounds(px, &l, &h);
-  trie_add_prefix(t, px->ip, px->len & LEN_MASK, l, h);
-}
-
-static inline int
-trie_match_fprefix(struct f_trie *t, struct f_prefix *px)
-{
-  return trie_match_prefix(t, px->ip, px->len & LEN_MASK);
-}
-
 
 struct ea_list;
 struct rte;
 
-int f_run(struct filter *filter, struct rte **rte, struct ea_list **tmp_attrs, struct linpool *tmp_pool, int flags);
+int f_run(struct filter *filter, struct rte **rte, struct linpool *tmp_pool, int flags);
 struct f_val f_eval_rte(struct f_inst *expr, struct rte **rte, struct linpool *tmp_pool);
 struct f_val f_eval(struct f_inst *expr, struct linpool *tmp_pool);
 uint f_eval_int(struct f_inst *expr);
@@ -218,6 +200,7 @@ void val_format(struct f_val v, buffer *buf);
 
 #define FILTER_ACCEPT NULL
 #define FILTER_REJECT ((void *) 1)
+#define FILTER_UNDEF  ((void *) 2)	/* Used in BGP */
 
 /* Type numbers must be in 0..0xff range */
 #define T_MASK 0xff
@@ -242,7 +225,9 @@ void val_format(struct f_val v, buffer *buf);
 #define T_ENUM_RTC 0x33
 #define T_ENUM_RTD 0x34
 #define T_ENUM_ROA 0x35
-#define T_ENUM_RA_PREFERENCE 0x36
+#define T_ENUM_NETTYPE 0x36
+#define T_ENUM_RA_PREFERENCE 0x37
+
 /* new enums go here */
 #define T_ENUM_EMPTY 0x3f	/* Special hack for atomic_aggr */
 
@@ -250,7 +235,7 @@ void val_format(struct f_val v, buffer *buf);
 
 /* Bigger ones */
 #define T_IP 0x20
-#define T_PREFIX 0x21
+#define T_NET 0x21
 #define T_STRING 0x22
 #define T_PATH_MASK 0x23	/* mask for BGP path */
 #define T_PATH 0x24		/* BGP path */
@@ -259,6 +244,7 @@ void val_format(struct f_val v, buffer *buf);
 #define T_ECLIST 0x27		/* Extended community list */
 #define T_LC 0x28		/* Large community value, lcomm */
 #define T_LCLIST 0x29		/* Large community list */
+#define T_RD 0x2a		/* Route distinguisher for VPN addresses */
 
 #define T_RETURN 0x40
 #define T_SET 0x80
@@ -271,10 +257,9 @@ void val_format(struct f_val v, buffer *buf);
 #define SA_PROTO	 4
 #define SA_SOURCE	 5
 #define SA_SCOPE	 6
-#define SA_CAST		 7
-#define SA_DEST		 8
-#define SA_IFNAME	 9
-#define SA_IFINDEX	10
+#define SA_DEST    	 7
+#define SA_IFNAME  	 8
+#define SA_IFINDEX    	 9
 
 
 struct f_tree {
@@ -286,7 +271,7 @@ struct f_tree {
 struct f_trie_node
 {
   ip_addr addr, mask, accept;
-  int plen;
+  uint plen;
   struct f_trie_node *c[2];
 };
 
@@ -300,7 +285,26 @@ struct f_trie
 
 #define NEW_F_VAL struct f_val * val; val = cfg_alloc(sizeof(struct f_val));
 
-#define FF_FORCE_TMPATTR 1		/* Force all attributes to be temporary */
 #define FF_SILENT 2			/* Silent filter execution */
+
+/* Custom route attributes */
+struct custom_attribute {
+  resource r;
+  struct f_dynamic_attr *fda;
+  const char *name;
+};
+
+struct custom_attribute *ca_lookup(pool *p, const char *name, int ea_type);
+
+/* Bird Tests */
+struct f_bt_test_suite {
+  node n;			/* Node in config->tests */
+  struct f_inst *fn;		/* Root of function */
+  const char *fn_name;		/* Name of test */
+  const char *dsc;		/* Description */
+};
+
+/* Hook for call bt_assert() function in configuration */
+extern void (*bt_assert_hook)(int result, struct f_inst *assert);
 
 #endif

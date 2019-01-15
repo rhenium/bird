@@ -140,28 +140,103 @@ include   ^{WHITE}*include{WHITE}*\".*\"{WHITE}*;
   cf_include(start, end-start);
 }
 
-{DIGIT}+\.{DIGIT}+\.{DIGIT}+\.{DIGIT}+ {
-  ip4_addr a;
-  if (!ip4_pton(yytext, &a))
-    cf_error("Invalid IPv4 address %s", yytext);
+{DIGIT}+:{DIGIT}+ {
+  uint len1 UNUSED, len2;
+  u64 l;
+  char *e;
 
-#ifdef IPV6
-  cf_lval.i32 = ip4_to_u32(a);
-  return RTRID;
-#else
-  cf_lval.a = ipa_from_ip4(a);
-  return IPA;
-#endif
+  errno = 0;
+  l = strtoul(yytext, &e, 10);
+  if (e && (*e != ':') || (errno == ERANGE) || (l >> 32))
+    cf_error("ASN out of range");
+
+  if (l >> 16)
+  {
+    len1 = 32;
+    len2 = 16;
+    cf_lval.i64 = (2ULL << 48) | (((u64) l) << len2);
+  }
+  else
+  {
+    len1 = 16;
+    len2 = 32;
+    cf_lval.i64 = 0 | (((u64) l) << len2);
+  }
+
+  errno = 0;
+  l = strtoul(e+1, &e, 10);
+  if (e && *e || (errno == ERANGE) || (l >> len2))
+    cf_error("Number out of range");
+  cf_lval.i64 |= l;
+
+  return VPN_RD;
+}
+
+[02]:{DIGIT}+:{DIGIT}+ {
+  uint len1, len2;
+  u64 l;
+  char *e;
+
+  if (yytext[0] == '0')
+  {
+    cf_lval.i64 = 0;
+    len1 = 16;
+    len2 = 32;
+  }
+  else
+  {
+    cf_lval.i64 = 2ULL << 48;
+    len1 = 32;
+    len2 = 16;
+  }
+
+  errno = 0;
+  l = strtoul(yytext+2, &e, 10);
+  if (e && (*e != ':') || (errno == ERANGE) || (l >> len1))
+    cf_error("ASN out of range");
+  cf_lval.i64 |= ((u64) l) << len2;
+
+  errno = 0;
+  l = strtoul(e+1, &e, 10);
+  if (e && *e || (errno == ERANGE) || (l >> len2))
+    cf_error("Number out of range");
+  cf_lval.i64 |= l;
+
+  return VPN_RD;
+}
+
+{DIGIT}+\.{DIGIT}+\.{DIGIT}+\.{DIGIT}+:{DIGIT}+ {
+  unsigned long int l;
+  ip4_addr ip4;
+  char *e;
+
+  cf_lval.i64 = 1ULL << 48;
+
+  e = strchr(yytext, ':');
+  *e++ = '\0';
+  if (!ip4_pton(yytext, &ip4))
+    cf_error("Invalid IPv4 address %s in Route Distinguisher", yytext);
+  cf_lval.i64 |= ((u64) ip4_to_u32(ip4)) << 16;
+
+  errno = 0;
+  l = strtoul(e, &e, 10);
+  if (e && *e || (errno == ERANGE) || (l >> 16))
+    cf_error("Number out of range");
+  cf_lval.i64 |= l;
+
+  return VPN_RD;
+}
+
+{DIGIT}+\.{DIGIT}+\.{DIGIT}+\.{DIGIT}+ {
+  if (!ip4_pton(yytext, &cf_lval.ip4))
+    cf_error("Invalid IPv4 address %s", yytext);
+  return IP4;
 }
 
 ({XIGIT}*::|({XIGIT}*:){3,})({XIGIT}*|{DIGIT}+\.{DIGIT}+\.{DIGIT}+\.{DIGIT}+) {
-#ifdef IPV6
-  if (ipa_pton(yytext, &cf_lval.a))
-    return IPA;
-  cf_error("Invalid IPv6 address %s", yytext);
-#else
-  cf_error("This is an IPv4 router, therefore IPv6 addresses are not supported");
-#endif
+  if (!ip6_pton(yytext, &cf_lval.ip6))
+    cf_error("Invalid IPv6 address %s", yytext);
+  return IP6;
 }
 
 0x{XIGIT}+ {
@@ -229,6 +304,7 @@ else: {
 ["][^"\n]*["] {
   yytext[yyleng-1] = 0;
   cf_lval.t = cfg_strdup(yytext+1);
+  yytext[yyleng-1] = '"';
   return TEXT;
 }
 
@@ -664,8 +740,6 @@ cf_symbol_class_name(struct symbol *sym)
       return "filter";
     case SYM_TABLE:
       return "routing table";
-    case SYM_ROA:
-      return "ROA table";
     default:
       return "unknown type";
     }

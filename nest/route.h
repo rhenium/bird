@@ -11,7 +11,7 @@
 
 #include "lib/lists.h"
 #include "lib/resource.h"
-#include "lib/timer.h"
+#include "lib/net.h"
 
 struct ea_list;
 struct protocol;
@@ -36,11 +36,8 @@ struct cli;
 struct fib_node {
   struct fib_node *next;		/* Next in hash chain */
   struct fib_iterator *readers;		/* List of readers of this node */
-  byte pxlen;
-  byte flags;				/* User-defined */
-  byte x0, x1;				/* User-defined */
-  u32 uid;				/* Unique ID based on hash */
-  ip_addr prefix;			/* In host order */
+  byte flags;				/* User-defined, will be removed */
+  net_addr addr[0];
 };
 
 struct fib_iterator {			/* See lib/slists.h for an explanation */
@@ -51,7 +48,7 @@ struct fib_iterator {			/* See lib/slists.h for an explanation */
   uint hash;
 };
 
-typedef void (*fib_init_func)(struct fib_node *);
+typedef void (*fib_init_fn)(void *);
 
 struct fib {
   pool *fib_pool;			/* Pool holding all our data */
@@ -59,16 +56,26 @@ struct fib {
   struct fib_node **hash_table;		/* Node hash table */
   uint hash_size;			/* Number of hash table entries (a power of two) */
   uint hash_order;			/* Binary logarithm of hash_size */
-  uint hash_shift;			/* 16 - hash_log */
+  uint hash_shift;			/* 32 - hash_order */
+  uint addr_type;			/* Type of address data stored in fib (NET_*) */
+  uint node_size;			/* FIB node size, 0 for nonuniform */
+  uint node_offset;			/* Offset of fib_node struct inside of user data */
   uint entries;				/* Number of entries */
   uint entries_min, entries_max;	/* Entry count limits (else start rehashing) */
-  fib_init_func init;			/* Constructor */
+  fib_init_fn init;			/* Constructor */
 };
 
-void fib_init(struct fib *, pool *, unsigned node_size, unsigned hash_order, fib_init_func init);
-void *fib_find(struct fib *, ip_addr *, int);	/* Find or return NULL if doesn't exist */
-void *fib_get(struct fib *, ip_addr *, int); 	/* Find or create new if nonexistent */
-void *fib_route(struct fib *, ip_addr, int);	/* Longest-match routing lookup */
+static inline void * fib_node_to_user(struct fib *f, struct fib_node *e)
+{ return e ? (void *) ((char *) e - f->node_offset) : NULL; }
+
+static inline struct fib_node * fib_user_to_node(struct fib *f, void *e)
+{ return e ? (void *) ((char *) e + f->node_offset) : NULL; }
+
+void fib_init(struct fib *f, pool *p, uint addr_type, uint node_size, uint node_offset, uint hash_order, fib_init_fn init);
+void *fib_find(struct fib *, const net_addr *);	/* Find or return NULL if doesn't exist */
+void *fib_get_chain(struct fib *f, const net_addr *a); /* Find first node in linked list from hash table */
+void *fib_get(struct fib *, const net_addr *);	/* Find or create new if nonexistent */
+void *fib_route(struct fib *, const net_addr *); /* Longest-match routing lookup */
 void fib_delete(struct fib *, void *);	/* Remove fib entry */
 void fib_free(struct fib *);		/* Destroy the fib */
 void fib_check(struct fib *);		/* Consistency check for debugging */
@@ -79,34 +86,37 @@ void fit_put(struct fib_iterator *, struct fib_node *);
 void fit_put_next(struct fib *f, struct fib_iterator *i, struct fib_node *n, uint hpos);
 
 
-#define FIB_WALK(fib, z) do {					\
-	struct fib_node *z, **ff = (fib)->hash_table;		\
-	uint count = (fib)->hash_size;				\
-	while (count--)						\
-	  for(z = *ff++; z; z=z->next)
+#define FIB_WALK(fib, type, z) do {				\
+	struct fib_node *fn_, **ff_ = (fib)->hash_table;	\
+	uint count_ = (fib)->hash_size;				\
+	type *z;						\
+	while (count_--)					\
+	  for (fn_ = *ff_++; z = fib_node_to_user(fib, fn_); fn_=fn_->next)
 
 #define FIB_WALK_END } while (0)
 
 #define FIB_ITERATE_INIT(it, fib) fit_init(it, fib)
 
-#define FIB_ITERATE_START(fib, it, z) do {			\
-	struct fib_node *z = fit_get(fib, it);			\
-	uint count = (fib)->hash_size;				\
-	uint hpos = (it)->hash;					\
+#define FIB_ITERATE_START(fib, it, type, z) do {		\
+	struct fib_node *fn_ = fit_get(fib, it);		\
+	uint count_ = (fib)->hash_size;				\
+	uint hpos_ = (it)->hash;				\
+	type *z;						\
 	for(;;) {						\
-	  if (!z)						\
-            {							\
-	       if (++hpos >= count)				\
+	  if (!fn_)						\
+	    {							\
+	       if (++hpos_ >= count_)				\
 		 break;						\
-	       z = (fib)->hash_table[hpos];			\
+	       fn_ = (fib)->hash_table[hpos_];			\
 	       continue;					\
-	    }
+	    }							\
+	  z = fib_node_to_user(fib, fn_);
 
-#define FIB_ITERATE_END(z) z = z->next; } } while(0)
+#define FIB_ITERATE_END fn_ = fn_->next; } } while(0)
 
-#define FIB_ITERATE_PUT(it, z) fit_put(it, z)
+#define FIB_ITERATE_PUT(it) fit_put(it, fn_)
 
-#define FIB_ITERATE_PUT_NEXT(it, fib, z) fit_put_next(fib, it, z, hpos)
+#define FIB_ITERATE_PUT_NEXT(it, fib) fit_put_next(fib, it, fn_, hpos_)
 
 #define FIB_ITERATE_UNLINK(it, fib) fit_get(fib, it)
 
@@ -127,6 +137,7 @@ struct rtable_config {
   char *name;
   struct rtable *table;
   struct proto_config *krt_attached;	/* Kernel syncer attached to this table */
+  uint addr_type;			/* Type of address data stored in table (NET_*) */
   int gc_max_ops;			/* Maximum number of operations before GC is run */
   int gc_min_time;			/* Minimum time between two consecutive GC runs */
   byte sorted;				/* Routes of network are sorted according to rte_better() */
@@ -136,9 +147,11 @@ typedef struct rtable {
   node n;				/* Node in list of all tables */
   struct fib fib;
   char *name;				/* Name of this table */
-  list hooks;				/* List of announcement hooks */
+  list channels;			/* List of attached channels (struct channel) */
+  uint addr_type;			/* Type of address data stored in table (NET_*) */
   int pipe_busy;			/* Pipe loop detection */
   int use_count;			/* Number of protocols using this table */
+  u32 rt_count;				/* Number of routes in the table */
   struct hostcache *hostcache;
   struct rtable_config *config;		/* Configuration of this table */
   struct config *deleted;		/* Table doesn't exist in current configuration,
@@ -146,9 +159,8 @@ typedef struct rtable {
 					 * obstacle from this routing table.
 					 */
   struct event *rt_event;		/* Routing table event */
+  btime gc_time;			/* Time of last GC */
   int gc_counter;			/* Number of operations since last GC */
-  bird_clock_t gc_time;			/* Time of last GC */
-  byte gc_scheduled;			/* GC is scheduled */
   byte prune_state;			/* Table prune state, 1 -> scheduled, 2-> running */
   byte hcu_scheduled;			/* Hostcache update is scheduled */
   byte nhu_state;			/* Next Hop Update state */
@@ -156,13 +168,14 @@ typedef struct rtable {
   struct fib_iterator nhu_fit;		/* Next Hop Update FIB iterator */
 } rtable;
 
-#define RPS_NONE	0
-#define RPS_SCHEDULED	1
-#define RPS_RUNNING	2
+#define NHU_CLEAN	0
+#define NHU_SCHEDULED	1
+#define NHU_RUNNING	2
+#define NHU_DIRTY	3
 
 typedef struct network {
-  struct fib_node n;			/* FIB flags reserved for kernel syncer */
   struct rte *routes;			/* Available routes for this network */
+  struct fib_node n;			/* FIB flags reserved for kernel syncer */
 } net;
 
 struct hostcache {
@@ -187,20 +200,20 @@ struct hostentry {
   unsigned hash_key;			/* Hash key */
   unsigned uc;				/* Use count */
   struct rta *src;			/* Source rta entry */
-  ip_addr gw;				/* Chosen next hop */
   byte dest;				/* Chosen route destination type (RTD_...) */
+  byte nexthop_linkable;		/* Nexthop list is completely non-device */
   u32 igp_metric;			/* Chosen route IGP metric */
 };
 
 typedef struct rte {
   struct rte *next;
   net *net;				/* Network this RTE belongs to */
-  struct announce_hook *sender;		/* Announce hook used to send the route to the routing table */
+  struct channel *sender;		/* Channel used to send the route to the routing table */
   struct rta *attrs;			/* Attributes of this route */
   byte flags;				/* Flags (REF_...) */
   byte pflags;				/* Protocol-specific flags */
   word pref;				/* Route preference */
-  bird_clock_t lastmod;			/* Last modified */
+  btime lastmod;			/* Last modified */
   union {				/* Protocol-dependent data (metrics etc.) */
 #ifdef CONFIG_RIP
     struct {
@@ -224,6 +237,7 @@ typedef struct rte {
 #endif
 #ifdef CONFIG_BABEL
     struct {
+      u16 seqno;			/* Babel seqno */
       u16 metric;			/* Babel metric */
       u64 router_id;			/* Babel router id */
     } babel;
@@ -252,12 +266,13 @@ static inline int rte_is_filtered(rte *r) { return !!(r->flags & REF_FILTERED); 
 
 
 /* Types of route announcement, also used as flags */
+#define RA_UNDEF	0		/* Undefined RA type */
 #define RA_OPTIMAL	1		/* Announcement of optimal route change */
 #define RA_ACCEPTED	2		/* Announcement of first accepted route */
 #define RA_ANY		3		/* Announcement of any route change */
 #define RA_MERGED	4		/* Announcement of optimal route merged with next ones */
 
-/* Return value of import_control() callback */
+/* Return value of preexport() callback */
 #define RIC_ACCEPT	1		/* Accepted by protocol */
 #define RIC_PROCESS	0		/* Process it through import filter */
 #define RIC_REJECT	-1		/* Rejected by protocol */
@@ -271,18 +286,23 @@ void rt_preconfig(struct config *);
 void rt_commit(struct config *new, struct config *old);
 void rt_lock_table(rtable *);
 void rt_unlock_table(rtable *);
-void rt_setup(pool *, rtable *, char *, struct rtable_config *);
-static inline net *net_find(rtable *tab, ip_addr addr, unsigned len) { return (net *) fib_find(&tab->fib, &addr, len); }
-static inline net *net_get(rtable *tab, ip_addr addr, unsigned len) { return (net *) fib_get(&tab->fib, &addr, len); }
+void rt_setup(pool *, rtable *, struct rtable_config *);
+static inline net *net_find(rtable *tab, const net_addr *addr) { return (net *) fib_find(&tab->fib, addr); }
+static inline net *net_find_valid(rtable *tab, const net_addr *addr)
+{ net *n = net_find(tab, addr); return (n && rte_is_valid(n->routes)) ? n : NULL; }
+static inline net *net_get(rtable *tab, const net_addr *addr) { return (net *) fib_get(&tab->fib, addr); }
+void *net_route(rtable *tab, const net_addr *n);
+int net_roa_check(rtable *tab, const net_addr *n, u32 asn);
 rte *rte_find(net *net, struct rte_src *src);
 rte *rte_get_temp(struct rta *);
-void rte_update2(struct announce_hook *ah, net *net, rte *new, struct rte_src *src);
+void rte_update2(struct channel *c, const net_addr *n, rte *new, struct rte_src *src);
 /* rte_update() moved to protocol.h to avoid dependency conflicts */
-int rt_examine(rtable *t, ip_addr prefix, int pxlen, struct proto *p, struct filter *filter);
-rte *rt_export_merged(struct announce_hook *ah, net *net, rte **rt_free, struct ea_list **tmpa, linpool *pool, int silent);
-void rt_refresh_begin(rtable *t, struct announce_hook *ah);
-void rt_refresh_end(rtable *t, struct announce_hook *ah);
-void rt_modify_stale(rtable *t, struct announce_hook *ah);
+int rt_examine(rtable *t, net_addr *a, struct proto *p, struct filter *filter);
+rte *rt_export_merged(struct channel *c, net *net, rte **rt_free, linpool *pool, int silent);
+void rt_refresh_begin(rtable *t, struct channel *c);
+void rt_refresh_end(rtable *t, struct channel *c);
+void rt_modify_stale(rtable *t, struct channel *c);
+void rt_schedule_prune(rtable *t);
 void rte_dump(rte *);
 void rte_free(rte *);
 rte *rte_do_cow(rte *);
@@ -290,35 +310,54 @@ static inline rte * rte_cow(rte *r) { return (r->flags & REF_COW) ? rte_do_cow(r
 rte *rte_cow_rta(rte *r, linpool *lp);
 void rt_dump(rtable *);
 void rt_dump_all(void);
-int rt_feed_baby(struct proto *p);
-void rt_feed_baby_abort(struct proto *p);
-int rt_prune_loop(void);
-struct rtable_config *rt_new_table(struct symbol *s);
+int rt_feed_channel(struct channel *c);
+void rt_feed_channel_abort(struct channel *c);
+int rte_update_in(struct channel *c, const net_addr *n, rte *new, struct rte_src *src);
+int rt_reload_channel(struct channel *c);
+void rt_reload_channel_abort(struct channel *c);
+void rt_prune_sync(rtable *t, int all);
+struct rtable_config *rt_new_table(struct symbol *s, uint addr_type);
 
-static inline void
-rt_mark_for_prune(rtable *tab)
-{
-  if (tab->prune_state == RPS_RUNNING)
-    fit_get(&tab->fib, &tab->prune_fit);
 
-  tab->prune_state = RPS_SCHEDULED;
-}
+/* Default limit for ECMP next hops, defined in sysdep code */
+extern const int rt_default_ecmp;
+
+struct rt_show_data_rtable {
+  node n;
+  rtable *table;
+  struct channel *export_channel;
+};
 
 struct rt_show_data {
-  ip_addr prefix;
-  unsigned pxlen;
-  rtable *table;
+  net_addr *addr;
+  list tables;
+  struct rt_show_data_rtable *tab;	/* Iterator over table list */
+  struct rt_show_data_rtable *last_table; /* Last table in output */
+  struct fib_iterator fit;		/* Iterator over networks in table */
+  int verbose, tables_defined_by;
   struct filter *filter;
-  int verbose;
-  struct fib_iterator fit;
   struct proto *show_protocol;
   struct proto *export_protocol;
-  int export_mode, primary_only, filtered;
+  struct channel *export_channel;
   struct config *running_on_config;
-  int net_counter, rt_counter, show_counter;
-  int stats, show_for;
+  int export_mode, primary_only, filtered, stats, show_for;
+
+  int table_open;			/* Iteration (fit) is open */
+  int net_counter, rt_counter, show_counter, table_counter;
+  int net_counter_last, rt_counter_last, show_counter_last;
 };
+
 void rt_show(struct rt_show_data *);
+struct rt_show_data_rtable * rt_show_add_table(struct rt_show_data *d, rtable *t);
+
+/* Value of table definition mode in struct rt_show_data */
+#define RSD_TDB_DEFAULT	  0		/* no table specified */
+#define RSD_TDB_INDIRECT  0		/* show route ... protocol P ... */
+#define RSD_TDB_ALL	  RSD_TDB_SET			/* show route ... table all ... */
+#define RSD_TDB_DIRECT	  RSD_TDB_SET | RSD_TDB_NMN	/* show route ... table X table Y ... */
+
+#define RSD_TDB_SET	  0x1		/* internal: show empty tables */
+#define RSD_TDB_NMN	  0x2		/* internal: need matching net */
 
 /* Value of export_mode in struct rt_show_data */
 #define RSEM_NONE	0		/* Export mode not used */
@@ -334,13 +373,20 @@ void rt_show(struct rt_show_data *);
  *	construction of BGP route attribute lists.
  */
 
-/* Multipath next-hop */
-struct mpnh {
+/* Nexthop structure */
+struct nexthop {
   ip_addr gw;				/* Next hop */
   struct iface *iface;			/* Outgoing interface */
-  struct mpnh *next;
+  struct nexthop *next;
+  byte flags;
   byte weight;
+  byte labels_orig;			/* Number of labels before hostentry was applied */
+  byte labels;				/* Number of all labels */
+  u32 label[0];
 };
+
+#define RNF_ONLINK		0x1	/* Gateway is onlink regardless of IP ranges */
+
 
 struct rte_src {
   struct rte_src *next;			/* Hash chain */
@@ -353,22 +399,18 @@ struct rte_src {
 
 typedef struct rta {
   struct rta *next, **pprev;		/* Hash chain */
-  struct rte_src *src;			/* Route source that created the route */
-  unsigned uc;				/* Use count */
-  byte source;				/* Route source (RTS_...) */
-  byte scope;				/* Route scope (SCOPE_... -- see ip.h) */
-  byte cast;				/* Casting type (RTC_...) */
-  byte dest;				/* Route destination type (RTD_...) */
-  byte flags;				/* Route flags (RTF_...), now unused */
-  byte aflags;				/* Attribute cache flags (RTAF_...) */
-  u16 hash_key;				/* Hash over important fields */
-  u32 igp_metric;			/* IGP metric to next hop (for iBGP routes) */
-  ip_addr gw;				/* Next hop */
-  ip_addr from;				/* Advertising router */
-  struct hostentry *hostentry;		/* Hostentry for recursive next-hops */
-  struct iface *iface;			/* Outgoing interface */
-  struct mpnh *nexthops;		/* Next-hops for multipath routes */
+  u32 uc;				/* Use count */
+  u32 hash_key;				/* Hash over important fields */
   struct ea_list *eattrs;		/* Extended Attribute chain */
+  struct rte_src *src;			/* Route source that created the route */
+  struct hostentry *hostentry;		/* Hostentry for recursive next-hops */
+  ip_addr from;				/* Advertising router */
+  u32 igp_metric;			/* IGP metric to next hop (for iBGP routes) */
+  u8 source;				/* Route source (RTS_...) */
+  u8 scope;				/* Route scope (SCOPE_... -- see ip.h) */
+  u8 dest;				/* Route destination type (RTD_...) */
+  u8 aflags;
+  struct nexthop nh;			/* Next hop */
 } rta;
 
 #define RTS_DUMMY 0			/* Dummy route to be removed soon */
@@ -385,19 +427,21 @@ typedef struct rta {
 #define RTS_BGP 11			/* BGP route */
 #define RTS_PIPE 12			/* Inter-table wormhole */
 #define RTS_BABEL 13			/* Babel route */
+#define RTS_RPKI 14			/* Route Origin Authorization */
+#define RTS_PERF 15			/* Perf checker */
+#define RTS_MAX 16
 
 #define RTC_UNICAST 0
 #define RTC_BROADCAST 1
 #define RTC_MULTICAST 2
 #define RTC_ANYCAST 3			/* IPv6 Anycast */
 
-#define RTD_ROUTER 0			/* Next hop is neighbor router */
-#define RTD_DEVICE 1			/* Points to device */
+#define RTD_NONE 0			/* Undefined next hop */
+#define RTD_UNICAST 1			/* Next hop is neighbor router */
 #define RTD_BLACKHOLE 2			/* Silently drop packets */
 #define RTD_UNREACHABLE 3		/* Reject as unreachable */
 #define RTD_PROHIBIT 4			/* Administratively prohibited */
-#define RTD_MULTIPATH 5			/* Multipath route (nexthops != NULL) */
-#define RTD_NONE 6			/* Invalid RTD */
+#define RTD_MAX 5
 
 					/* Flags for net->n.flags, used by kernel syncer */
 #define KRF_INSTALLED 0x80		/* This route should be installed in the kernel */
@@ -409,9 +453,14 @@ typedef struct rta {
 					   protocol-specific metric is availabe */
 
 
+const char * rta_dest_names[RTD_MAX];
+
+static inline const char *rta_dest_name(uint n)
+{ return (n < RTD_MAX) ? rta_dest_names[n] : "???"; }
+
 /* Route has regular, reachable nexthop (i.e. not RTD_UNREACHABLE and like) */
 static inline int rte_is_reachable(rte *r)
-{ uint d = r->attrs->dest; return (d == RTD_ROUTER) || (d == RTD_DEVICE) || (d == RTD_MULTIPATH); }
+{ return r->attrs->dest == RTD_UNICAST; }
 
 
 /*
@@ -419,7 +468,7 @@ static inline int rte_is_reachable(rte *r)
  */
 
 typedef struct eattr {
-  word id;				/* EA_CODE(EAP_..., protocol-dependent ID) */
+  word id;				/* EA_CODE(PROTOCOL_..., protocol-dependent ID) */
   byte flags;				/* Protocol-dependent flags */
   byte type;				/* Attribute type and several flags (EAF_...) */
   union {
@@ -428,22 +477,20 @@ typedef struct eattr {
   } u;
 } eattr;
 
-#define EAP_GENERIC 0			/* Generic attributes */
-#define EAP_BGP 1			/* BGP attributes */
-#define EAP_RIP 2			/* RIP */
-#define EAP_OSPF 3			/* OSPF */
-#define EAP_KRT 4			/* Kernel route attributes */
-#define EAP_BABEL 5			/* Babel attributes */
-#define EAP_RADV 6			/* Router advertisment attributes */
-#define EAP_MAX 7
 
 #define EA_CODE(proto,id) (((proto) << 8) | (id))
-#define EA_PROTO(ea) ((ea) >> 8)
 #define EA_ID(ea) ((ea) & 0xff)
+#define EA_PROTO(ea) ((ea) >> 8)
+#define EA_CUSTOM(id) ((id) | EA_CUSTOM_BIT)
+#define EA_IS_CUSTOM(ea) ((ea) & EA_CUSTOM_BIT)
+#define EA_CUSTOM_ID(ea) ((ea) & ~EA_CUSTOM_BIT)
 
-#define EA_GEN_IGP_METRIC EA_CODE(EAP_GENERIC, 0)
+const char *ea_custom_name(uint ea);
+
+#define EA_GEN_IGP_METRIC EA_CODE(PROTOCOL_NONE, 0)
 
 #define EA_CODE_MASK 0xffff
+#define EA_CUSTOM_BIT 0x8000
 #define EA_ALLOW_UNDEF 0x10000		/* ea_find: allow EAF_TYPE_UNDEF */
 #define EA_BIT(n) ((n) << 24)		/* Used in bitfield accessors */
 
@@ -460,13 +507,22 @@ typedef struct eattr {
 #define EAF_TYPE_UNDEF 0x1f		/* `force undefined' entry */
 #define EAF_EMBEDDED 0x01		/* Data stored in eattr.u.data (part of type spec) */
 #define EAF_VAR_LENGTH 0x02		/* Attribute length is variable (part of type spec) */
-#define EAF_ORIGINATED 0x40		/* The attribute has originated locally */
+#define EAF_ORIGINATED 0x20		/* The attribute has originated locally */
+#define EAF_FRESH 0x40			/* An uncached attribute (e.g. modified in export filter) */
 #define EAF_TEMP 0x80			/* A temporary attribute (the one stored in the tmp attr list) */
 
-struct adata {
+typedef struct adata {
   uint length;				/* Length of data */
   byte data[0];
-};
+} adata;
+
+static inline struct adata *
+lp_alloc_adata(struct linpool *pool, uint len)
+{
+  struct adata *ad = lp_alloc(pool, sizeof(struct adata) + len);
+  ad->length = len;
+  return ad;
+}
 
 static inline int adata_same(struct adata *a, struct adata *b)
 { return (a->length == b->length && !memcmp(a->data, b->data, a->length)); }
@@ -508,14 +564,71 @@ uint ea_hash(ea_list *e);	/* Calculate 16-bit hash value */
 ea_list *ea_append(ea_list *to, ea_list *what);
 void ea_format_bitfield(struct eattr *a, byte *buf, int bufsize, const char **names, int min, int max);
 
-int mpnh__same(struct mpnh *x, struct mpnh *y); /* Compare multipath nexthops */
-static inline int mpnh_same(struct mpnh *x, struct mpnh *y)
-{ return (x == y) || mpnh__same(x, y); }
-struct mpnh *mpnh_merge(struct mpnh *x, struct mpnh *y, int rx, int ry, int max, linpool *lp);
-void mpnh_insert(struct mpnh **n, struct mpnh *y);
-int mpnh_is_sorted(struct mpnh *x);
+#define ea_normalize(ea) do { \
+  if (ea->next) { \
+    ea_list *t = alloca(ea_scan(ea)); \
+    ea_merge(ea, t); \
+    ea = t; \
+  } \
+  ea_sort(ea); \
+} while(0) \
+
+static inline eattr *
+ea_set_attr(ea_list **to, struct linpool *pool, uint id, uint flags, uint type, uintptr_t val)
+{
+  ea_list *a = lp_alloc(pool, sizeof(ea_list) + sizeof(eattr));
+  eattr *e = &a->attrs[0];
+
+  a->flags = EALF_SORTED;
+  a->count = 1;
+  a->next = *to;
+  *to = a;
+
+  e->id = id;
+  e->type = type;
+  e->flags = flags;
+
+  if (type & EAF_EMBEDDED)
+    e->u.data = (u32) val;
+  else
+    e->u.ptr = (struct adata *) val;
+
+  return e;
+}
+
+static inline void
+ea_set_attr_u32(ea_list **to, struct linpool *pool, uint id, uint flags, uint type, u32 val)
+{ ea_set_attr(to, pool, id, flags, type, (uintptr_t) val); }
+
+static inline void
+ea_set_attr_ptr(ea_list **to, struct linpool *pool, uint id, uint flags, uint type, struct adata *val)
+{ ea_set_attr(to, pool, id, flags, type, (uintptr_t) val); }
+
+static inline void
+ea_set_attr_data(ea_list **to, struct linpool *pool, uint id, uint flags, uint type, void *data, uint len)
+{
+  struct adata *a = lp_alloc_adata(pool, len);
+  memcpy(a->data, data, len);
+  ea_set_attr(to, pool, id, flags, type, (uintptr_t) a);
+}
+
+
+#define NEXTHOP_MAX_SIZE (sizeof(struct nexthop) + sizeof(u32)*MPLS_MAX_LABEL_STACK)
+
+static inline size_t nexthop_size(const struct nexthop *nh)
+{ return sizeof(struct nexthop) + sizeof(u32)*nh->labels; }
+int nexthop__same(struct nexthop *x, struct nexthop *y); /* Compare multipath nexthops */
+static inline int nexthop_same(struct nexthop *x, struct nexthop *y)
+{ return (x == y) || nexthop__same(x, y); }
+struct nexthop *nexthop_merge(struct nexthop *x, struct nexthop *y, int rx, int ry, int max, linpool *lp);
+static inline void nexthop_link(struct rta *a, struct nexthop *from)
+{ memcpy(&a->nh, from, nexthop_size(from)); }
+void nexthop_insert(struct nexthop **n, struct nexthop *y);
+int nexthop_is_sorted(struct nexthop *x);
 
 void rta_init(void);
+static inline size_t rta_size(const rta *a) { return sizeof(rta) + sizeof(u32)*a->nh.labels; }
+#define RTA_MAX_SIZE (sizeof(rta) + sizeof(u32)*MPLS_MAX_LABEL_STACK)
 rta *rta_lookup(rta *);			/* Get rta equivalent to this one, uc++ */
 static inline int rta_is_cached(rta *r) { return r->aflags & RTAF_CACHED; }
 static inline rta *rta_clone(rta *r) { r->uc++; return r; }
@@ -525,8 +638,16 @@ rta *rta_do_cow(rta *o, linpool *lp);
 static inline rta * rta_cow(rta *r, linpool *lp) { return rta_is_cached(r) ? rta_do_cow(r, lp) : r; }
 void rta_dump(rta *);
 void rta_dump_all(void);
-void rta_show(struct cli *, rta *, ea_list *);
-void rta_set_recursive_next_hop(rtable *dep, rta *a, rtable *tab, ip_addr *gw, ip_addr *ll);
+void rta_show(struct cli *, rta *);
+
+struct hostentry * rt_get_hostentry(rtable *tab, ip_addr a, ip_addr ll, rtable *dep);
+void rta_apply_hostentry(rta *a, struct hostentry *he, mpls_label_stack *mls);
+
+static inline void
+rta_set_recursive_next_hop(rtable *dep, rta *a, rtable *tab, ip_addr gw, ip_addr ll, mpls_label_stack *mls)
+{
+  rta_apply_hostentry(a, rt_get_hostentry(tab, gw, ll, dep), mls);
+}
 
 /*
  * rta_set_recursive_next_hop() acquires hostentry from hostcache and fills
@@ -553,100 +674,25 @@ void rta_set_recursive_next_hop(rtable *dep, rta *a, rtable *tab, ip_addr *gw, i
 static inline void rt_lock_hostentry(struct hostentry *he) { if (he) he->uc++; }
 static inline void rt_unlock_hostentry(struct hostentry *he) { if (he) he->uc--; }
 
-
-extern struct protocol *attr_class_to_protocol[EAP_MAX];
-
 /*
  *	Default protocol preferences
  */
 
-#define DEF_PREF_DIRECT	    	240	/* Directly connected */
+#define DEF_PREF_DIRECT		240	/* Directly connected */
 #define DEF_PREF_STATIC		200	/* Static route */
 #define DEF_PREF_OSPF		150	/* OSPF intra-area, inter-area and type 1 external routes */
 #define DEF_PREF_BABEL		130	/* Babel */
 #define DEF_PREF_RIP		120	/* RIP */
 #define DEF_PREF_BGP		100	/* BGP */
-#define DEF_PREF_PIPE		70	/* Routes piped from other tables */
+#define DEF_PREF_RPKI		100	/* RPKI */
 #define DEF_PREF_INHERITED	10	/* Routes inherited from other routing daemons */
-
 
 /*
  *	Route Origin Authorization
  */
 
-struct roa_item {
-  u32 asn;
-  byte maxlen;
-  byte src;
-  struct roa_item *next;
-};
-
-struct roa_node {
-  struct fib_node n;
-  struct roa_item *items;
-  // u32 cached_asn;
-};
-
-struct roa_table {
-  node n;				/* Node in roa_table_list */
-  struct fib fib;
-  char *name;				/* Name of this ROA table */
-  struct roa_table_config *cf;		/* Configuration of this ROA table */
-};
-
-struct roa_item_config {
-  ip_addr prefix;
-  byte pxlen, maxlen;
-  u32 asn;
-  struct roa_item_config *next;
-};
-
-struct roa_table_config {
-  node n;				/* Node in config->rpa_tables */
-  char *name;				/* Name of this ROA table */
-  struct roa_table *table;
-
-  struct roa_item_config *roa_items;	/* Preconfigured ROA items */
-
-  // char *filename;
-  // int gc_max_ops;			/* Maximum number of operations before GC is run */
-  // int gc_min_time;			/* Minimum time between two consecutive GC runs */
-};
-
-struct roa_show_data {
-  struct fib_iterator fit;
-  struct roa_table *table;
-  ip_addr prefix;
-  byte pxlen;
-  byte mode;				/* ROA_SHOW_* values */
-  u32 asn;				/* Filter ASN, 0 -> all */
-};
-
 #define ROA_UNKNOWN	0
 #define ROA_VALID	1
 #define ROA_INVALID	2
-
-#define ROA_SRC_ANY	0
-#define ROA_SRC_CONFIG	1
-#define ROA_SRC_DYNAMIC	2
-
-#define ROA_SHOW_ALL	0
-#define ROA_SHOW_PX	1
-#define ROA_SHOW_IN	2
-#define ROA_SHOW_FOR	3
-
-extern struct roa_table *roa_table_default;
-
-void roa_add_item(struct roa_table *t, ip_addr prefix, byte pxlen, byte maxlen, u32 asn, byte src);
-void roa_delete_item(struct roa_table *t, ip_addr prefix, byte pxlen, byte maxlen, u32 asn, byte src);
-void roa_flush(struct roa_table *t, byte src);
-byte roa_check(struct roa_table *t, ip_addr prefix, byte pxlen, u32 asn);
-struct roa_table_config * roa_new_table_config(struct symbol *s);
-void roa_add_item_config(struct roa_table_config *rtc, ip_addr prefix, byte pxlen, byte maxlen, u32 asn);
-void roa_init(void);
-void roa_preconfig(struct config *c);
-void roa_commit(struct config *new, struct config *old);
-void roa_show(struct roa_show_data *d);
-
 
 #endif

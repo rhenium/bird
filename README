@@ -19,7 +19,7 @@ Public License.
 What do we support
 ==================
 
-	o  Both IPv4 and IPv6 (use --enable-ipv6 when configuring)
+	o  Both IPv4 and IPv6
 	o  Multiple routing tables
 	o  Border Gateway Protocol (BGPv4)
 	o  Routing Information Protocol (RIPv2, RIPng)

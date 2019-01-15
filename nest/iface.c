@@ -32,10 +32,13 @@
 #include "lib/resource.h"
 #include "lib/string.h"
 #include "conf/conf.h"
+#include "sysdep/unix/krt.h"
 
 static pool *if_pool;
 
 list iface_list;
+
+static void if_recalc_preferred(struct iface *i);
 
 /**
  * ifa_dump - dump interface address
@@ -46,10 +49,11 @@ list iface_list;
 void
 ifa_dump(struct ifa *a)
 {
-  debug("\t%I, net %I/%-2d bc %I -> %I%s%s%s\n", a->ip, a->prefix, a->pxlen, a->brd, a->opposite,
-	(a->flags & IF_UP) ? "" : " DOWN",
-	(a->flags & IA_PRIMARY) ? "" : " SEC",
-	(a->flags & IA_PEER) ? "PEER" : "");
+  debug("\t%I, net %N bc %I -> %I%s%s%s%s\n", a->ip, &a->prefix, a->brd, a->opposite,
+	(a->flags & IA_PRIMARY) ? " PRIMARY" : "",
+	(a->flags & IA_SECONDARY) ? " SEC" : "",
+	(a->flags & IA_HOST) ? " HOST" : "",
+	(a->flags & IA_PEER) ? " PEER" : "");
 }
 
 /**
@@ -89,7 +93,8 @@ if_dump(struct iface *i)
   WALK_LIST(a, i->addrs)
     {
       ifa_dump(a);
-      ASSERT((a != i->addr) == !(a->flags & IA_PRIMARY));
+      ASSERT(!!(a->flags & IA_PRIMARY) ==
+	     ((a == i->addr4) || (a == i->addr6) || (a == i->llv6)));
     }
 }
 
@@ -140,12 +145,13 @@ if_copy(struct iface *to, struct iface *from)
 static inline void
 ifa_send_notify(struct proto *p, unsigned c, struct ifa *a)
 {
-  if (p->ifa_notify && (!p->vrf || p->vrf == a->iface->master))
+  if (p->ifa_notify &&
+      (p->proto_state != PS_DOWN) &&
+      (!p->vrf || p->vrf == a->iface->master))
     {
       if (p->debug & D_IFACES)
-	log(L_TRACE "%s <%s address %I/%d on interface %s %s",
-	    p->name, (a->flags & IA_PRIMARY) ? " primary" : "",
-	    a->prefix, a->pxlen, a->iface->name,
+	log(L_TRACE "%s < address %N on interface %s %s",
+	    p->name, &a->prefix, a->iface->name,
 	    (c & IF_CHANGE_UP) ? "added" : "removed");
       p->ifa_notify(p, c, a);
     }
@@ -158,7 +164,7 @@ ifa_notify_change_(unsigned c, struct ifa *a)
 
   DBG("IFA change notification (%x) for %s:%I\n", c, a->iface->name, a->ip);
 
-  WALK_LIST(p, active_proto_list)
+  WALK_LIST(p, proto_list)
     ifa_send_notify(p, c, a);
 }
 
@@ -177,7 +183,9 @@ ifa_notify_change(unsigned c, struct ifa *a)
 static inline void
 if_send_notify(struct proto *p, unsigned c, struct iface *i)
 {
-  if (p->if_notify && (!p->vrf || p->vrf == i->master))
+  if (p->if_notify &&
+      (p->proto_state != PS_DOWN) &&
+      (!p->vrf || p->vrf == i->master))
     {
       if (p->debug & D_IFACES)
 	log(L_TRACE "%s < interface %s %s", p->name, i->name,
@@ -185,6 +193,7 @@ if_send_notify(struct proto *p, unsigned c, struct iface *i)
 	    (c & IF_CHANGE_DOWN) ? "goes down" :
 	    (c & IF_CHANGE_MTU) ? "changes MTU" :
 	    (c & IF_CHANGE_LINK) ? "changes link" :
+	    (c & IF_CHANGE_PREFERRED) ? "changes preferred address" :
 	    (c & IF_CHANGE_CREATE) ? "created" :
 	    "sends unknown event");
       p->if_notify(p, c, i);
@@ -213,20 +222,14 @@ if_notify_change(unsigned c, struct iface *i)
 
   if (c & IF_CHANGE_DOWN)
     WALK_LIST(a, i->addrs)
-      {
-	a->flags = (i->flags & ~IA_FLAGS) | (a->flags & IA_FLAGS);
-	ifa_notify_change_(IF_CHANGE_DOWN, a);
-      }
+      ifa_notify_change_(IF_CHANGE_DOWN, a);
 
-  WALK_LIST(p, active_proto_list)
+  WALK_LIST(p, proto_list)
     if_send_notify(p, c, i);
 
   if (c & IF_CHANGE_UP)
     WALK_LIST(a, i->addrs)
-      {
-	a->flags = (i->flags & ~IA_FLAGS) | (a->flags & IA_FLAGS);
-	ifa_notify_change_(IF_CHANGE_UP, a);
-      }
+      ifa_notify_change_(IF_CHANGE_UP, a);
 
   if (c & IF_CHANGE_UP)
     neigh_if_up(i);
@@ -235,25 +238,25 @@ if_notify_change(unsigned c, struct iface *i)
     neigh_if_link(i);
 }
 
-static unsigned
-if_recalc_flags(struct iface *i, unsigned flags)
+static uint
+if_recalc_flags(struct iface *i UNUSED, uint flags)
 {
-  if ((flags & (IF_SHUTDOWN | IF_TMP_DOWN)) ||
-      !(flags & IF_ADMIN_UP) ||
-      !i->addr ||
-      (i->master_index && !i->master))
-    flags &= ~IF_UP;
-  else
+  if ((flags & IF_ADMIN_UP) &&
+      !(flags & (IF_SHUTDOWN | IF_TMP_DOWN)) &&
+      !(i->master_index && !i->master))
     flags |= IF_UP;
+  else
+    flags &= ~IF_UP;
+
   return flags;
 }
 
 static void
-if_change_flags(struct iface *i, unsigned flags)
+if_change_flags(struct iface *i, uint flags)
 {
-  unsigned of = i->flags;
-
+  uint of = i->flags;
   i->flags = if_recalc_flags(i, flags);
+
   if ((i->flags ^ of) & IF_UP)
     if_notify_change((i->flags & IF_UP) ? IF_CHANGE_UP : IF_CHANGE_DOWN, i);
 }
@@ -301,7 +304,6 @@ if_update(struct iface *new)
   WALK_LIST(i, iface_list)
     if (!strcmp(new->name, i->name))
       {
-	new->addr = i->addr;
 	new->flags = if_recalc_flags(new, new->flags);
 	c = if_what_changed(i, new);
 	if (c & IF_CHANGE_TOO_MUCH)	/* Changed a lot, convert it to down/up */
@@ -309,10 +311,13 @@ if_update(struct iface *new)
 	    DBG("Interface %s changed too much -- forcing down/up transition\n", i->name);
 	    if_change_flags(i, i->flags | IF_TMP_DOWN);
 	    rem_node(&i->n);
-	    new->addr = i->addr;
+	    new->addr4 = i->addr4;
+	    new->addr6 = i->addr6;
+	    new->llv6 = i->llv6;
+	    new->sysdep = i->sysdep;
 	    memcpy(&new->addrs, &i->addrs, sizeof(i->addrs));
 	    memcpy(i, new, sizeof(*i));
-	    i->flags &= ~IF_UP; /* IF_TMP_DOWN will be added later */
+	    i->flags &= ~IF_UP;		/* IF_TMP_DOWN will be added later */
 	    goto newif;
 	  }
 
@@ -343,13 +348,16 @@ if_start_update(void)
     {
       i->flags &= ~IF_UPDATED;
       WALK_LIST(a, i->addrs)
-	a->flags &= ~IF_UPDATED;
+	a->flags &= ~IA_UPDATED;
     }
 }
 
 void
 if_end_partial_update(struct iface *i)
 {
+  if (i->flags & IF_NEEDS_RECALC)
+    if_recalc_preferred(i);
+
   if (i->flags & IF_TMP_DOWN)
     if_change_flags(i, i->flags & ~IF_TMP_DOWN);
 }
@@ -367,7 +375,7 @@ if_end_update(void)
       else
 	{
 	  WALK_LIST_DELSAFE(a, b, i->addrs)
-	    if (!(a->flags & IF_UPDATED))
+	    if (!(a->flags & IA_UPDATED))
 	      ifa_delete(a);
 	  if_end_partial_update(i);
 	}
@@ -465,61 +473,101 @@ if_get_by_name(char *name)
   return i;
 }
 
-struct ifa *kif_choose_primary(struct iface *i);
-
-static int
-ifa_recalc_primary(struct iface *i)
+static inline void
+if_set_preferred(struct ifa **pos, struct ifa *new)
 {
+  if (*pos)
+    (*pos)->flags &= ~IA_PRIMARY;
+  if (new)
+    new->flags |= IA_PRIMARY;
+
+  *pos = new;
+}
+
+static void
+if_recalc_preferred(struct iface *i)
+{
+  /*
+   * Preferred address selection priority:
+   * 1) Address configured in Device protocol
+   * 2) Sysdep IPv4 address (BSD)
+   * 3) Old preferred address
+   * 4) First address in list
+   */
+
+  struct kif_iface_config *ic = kif_get_iface_config(i);
+  struct ifa *a4 = i->addr4, *a6 = i->addr6, *ll = i->llv6;
+  ip_addr pref_v4 = ic->pref_v4;
+  uint change = 0;
+
+  if (kif_update_sysdep_addr(i))
+    change |= IF_CHANGE_SYSDEP;
+
+  /* BSD sysdep address */
+  if (ipa_zero(pref_v4) && ip4_nonzero(i->sysdep))
+    pref_v4 = ipa_from_ip4(i->sysdep);
+
   struct ifa *a;
-  int c = 0;
-
-#ifdef IPV6
-  struct ifa *ll = NULL;
-
   WALK_LIST(a, i->addrs)
-    if (ipa_is_link_local(a->ip) && (!ll || (a == i->llv6)))
-      ll = a;
-
-  c = (ll != i->llv6);
-  i->llv6 = ll;
-#endif
-
-  a = kif_choose_primary(i);
-
-  if (a == i->addr)
-    return c;
-
-  if (i->addr)
-    i->addr->flags &= ~IA_PRIMARY;
-
-  if (a)
     {
-      a->flags |= IA_PRIMARY;
-      rem_node(&a->n);
-      add_head(&i->addrs, &a->n);
+      /* Secondary address is never selected */
+      if (a->flags & IA_SECONDARY)
+	continue;
+
+      if (ipa_is_ip4(a->ip)) {
+	if (!a4 || ipa_equal(a->ip, pref_v4))
+	  a4 = a;
+      } else if (!ipa_is_link_local(a->ip)) {
+	if (!a6 || ipa_equal(a->ip, ic->pref_v6))
+	  a6 = a;
+      } else {
+	if (!ll || ipa_equal(a->ip, ic->pref_ll))
+	  ll = a;
+      }
     }
 
-  i->addr = a;
-  return 1;
+  if ((a4 != i->addr4) || (i->flags & IF_LOST_ADDR4))
+  {
+    if_set_preferred(&i->addr4, a4);
+    change |= IF_CHANGE_ADDR4;
+  }
+
+  if ((a6 != i->addr6) || (i->flags & IF_LOST_ADDR6))
+  {
+    if_set_preferred(&i->addr6, a6);
+    change |= IF_CHANGE_ADDR6;
+  }
+
+  if ((ll != i->llv6) || (i->flags & IF_LOST_LLV6))
+  {
+    if_set_preferred(&i->llv6, ll);
+    change |= IF_CHANGE_LLV6;
+  }
+
+  i->flags &= ~(IF_NEEDS_RECALC | IF_LOST_ADDR4 | IF_LOST_ADDR6 | IF_LOST_LLV6);
+
+  if (change)
+    if_notify_change(change, i);
 }
 
 void
-ifa_recalc_all_primary_addresses(void)
+if_recalc_all_preferred_addresses(void)
 {
   struct iface *i;
 
   WALK_LIST(i, iface_list)
-    {
-      if (ifa_recalc_primary(i))
-	if_change_flags(i, i->flags | IF_TMP_DOWN);
-    }
+  {
+    if_recalc_preferred(i);
+
+    if (i->flags & IF_TMP_DOWN)
+      if_change_flags(i, i->flags & ~IF_TMP_DOWN);
+  }
 }
 
 static inline int
 ifa_same(struct ifa *a, struct ifa *b)
 {
-  return ipa_equal(a->ip, b->ip) && ipa_equal(a->prefix, b->prefix) &&
-    a->pxlen == b->pxlen;
+  return ipa_equal(a->ip, b->ip) && net_equal(&a->prefix, &b->prefix);
 }
 
 
@@ -545,25 +593,23 @@ ifa_update(struct ifa *a)
 	    b->scope == a->scope &&
 	    !((b->flags ^ a->flags) & IA_PEER))
 	  {
-	    b->flags |= IF_UPDATED;
+	    b->flags |= IA_UPDATED;
 	    return b;
 	  }
 	ifa_delete(b);
 	break;
       }
 
-#ifndef IPV6
-  if ((i->flags & IF_BROADCAST) && !ipa_nonzero(a->brd))
-    log(L_ERR "Missing broadcast address for interface %s", i->name);
-#endif
+  if ((a->prefix.type == NET_IP4) && (i->flags & IF_BROADCAST) && ipa_zero(a->brd))
+    log(L_WARN "Missing broadcast address for interface %s", i->name);
 
   b = mb_alloc(if_pool, sizeof(struct ifa));
   memcpy(b, a, sizeof(struct ifa));
   add_tail(&i->addrs, &b->n);
-  b->flags = (i->flags & ~IA_FLAGS) | (a->flags & IA_FLAGS);
-  if (ifa_recalc_primary(i))
-    if_change_flags(i, i->flags | IF_TMP_DOWN);
-  if (b->flags & IF_UP)
+  b->flags |= IA_UPDATED;
+
+  i->flags |= IF_NEEDS_RECALC;
+  if (i->flags & IF_UP)
     ifa_notify_change(IF_CHANGE_CREATE | IF_CHANGE_UP, b);
   return b;
 }
@@ -586,25 +632,33 @@ ifa_delete(struct ifa *a)
     if (ifa_same(b, a))
       {
 	rem_node(&b->n);
-	if (b->flags & IF_UP)
+
+	if (b->flags & IA_PRIMARY)
 	  {
-	    b->flags &= ~IF_UP;
-	    ifa_notify_change(IF_CHANGE_DOWN, b);
+	    /*
+	     * We unlink deleted preferred address and mark for recalculation.
+	     * FIXME: This could break if we make iface scan non-atomic, as
+	     * protocols still could use the freed address until they get
+	     * if_notify from preferred route recalculation. We should fix and
+	     * simplify this in the future by having struct ifa refcounted
+	     */
+	    if (b == i->addr4) { i->addr4 = NULL; i->flags |= IF_LOST_ADDR4; }
+	    if (b == i->addr6) { i->addr6 = NULL; i->flags |= IF_LOST_ADDR6; }
+	    if (b == i->llv6)  { i->llv6 = NULL;  i->flags |= IF_LOST_LLV6; }
+	    i->flags |= IF_NEEDS_RECALC;
 	  }
-	if ((b->flags & IA_PRIMARY) || (b == ifa_llv6(i)))
-	  {
-	    if_change_flags(i, i->flags | IF_TMP_DOWN);
-	    ifa_recalc_primary(i);
-	  }
+
+	if (i->flags & IF_UP)
+	  ifa_notify_change(IF_CHANGE_DOWN, b);
+
 	mb_free(b);
 	return;
       }
 }
 
 u32
-if_choose_router_id(struct iface_patt *mask UNUSED6, u32 old_id UNUSED6)
+if_choose_router_id(struct iface_patt *mask, u32 old_id)
 {
-#ifndef IPV6
   struct iface *i;
   struct ifa *a, *b;
 
@@ -617,6 +671,9 @@ if_choose_router_id(struct iface_patt *mask UNUSED6, u32 old_id UNUSED6)
 
       WALK_LIST(a, i->addrs)
 	{
+	  if (a->prefix.type != NET_IP4)
+	    continue;
+
 	  if (a->flags & IA_SECONDARY)
 	    continue;
 
@@ -641,10 +698,6 @@ if_choose_router_id(struct iface_patt *mask UNUSED6, u32 old_id UNUSED6)
     log(L_INFO "Chosen router ID %R according to interface %s", id, b->iface->name);
 
   return id;
-
-#else
-  return 0;
-#endif
 }
 
 /**
@@ -687,17 +740,17 @@ iface_patt_match(struct iface_patt *ifp, struct iface *i, struct ifa *a)
 	    continue;
 	}
 
-      if (p->pxlen == 0)
+      if (p->prefix.pxlen == 0)
 	return pos;
 
       if (!a)
 	continue;
 
-      if (ipa_in_net(a->ip, p->prefix, p->pxlen))
+      if (ipa_in_netX(a->ip, &p->prefix))
 	return pos;
 
       if ((a->flags & IA_PEER) &&
-	  ipa_in_net(a->opposite, p->prefix, p->pxlen))
+	  ipa_in_netX(a->opposite, &p->prefix))
 	return pos;
 
       continue;
@@ -731,8 +784,7 @@ iface_plists_equal(struct iface_patt *pa, struct iface_patt *pb)
 	  (!x->pattern && y->pattern) ||	/* This nasty lines where written by me... :-( Feela */
 	  (!y->pattern && x->pattern) ||
 	  ((x->pattern != y->pattern) && strcmp(x->pattern, y->pattern)) ||
-	  !ipa_equal(x->prefix, y->prefix) ||
-	  (x->pxlen != y->pxlen))
+	  !net_equal(&x->prefix, &y->prefix))
 	return 0;
       x = (void *) x->n.next;
       y = (void *) y->n.next;
@@ -765,16 +817,17 @@ iface_patts_equal(list *a, list *b, int (*comp)(struct iface_patt *, struct ifac
 static void
 if_show_addr(struct ifa *a)
 {
-  byte opp[STD_ADDRESS_P_LENGTH + 16];
+  byte *flg, opp[IPA_MAX_TEXT_LENGTH + 16];
+
+  flg = (a->flags & IA_PRIMARY) ? "Preferred, " : (a->flags & IA_SECONDARY) ? "Secondary, " : "";
 
   if (ipa_nonzero(a->opposite))
-    bsprintf(opp, ", opposite %I", a->opposite);
+    bsprintf(opp, "opposite %I, ", a->opposite);
   else
     opp[0] = 0;
-  cli_msg(-1003, "\t%I/%d (%s%s, scope %s)",
-	  a->ip, a->pxlen,
-	  (a->flags & IA_PRIMARY) ? "Primary" : (a->flags & IA_SECONDARY) ? "Secondary" : "Unselected",
-	  opp, ip_scope_text(a->scope));
+
+  cli_msg(-1003, "\t%I/%d (%s%sscope %s)",
+	  a->ip, a->prefix.pxlen, flg, opp, ip_scope_text(a->scope));
 }
 
 void
@@ -795,7 +848,7 @@ if_show(void)
       else if (i->master_index)
 	bsprintf(mbuf, " master=#%u", i->master_index);
 
-      cli_msg(-1001, "%s %s (index=%d%s)", i->name, (i->flags & IF_UP) ? "up" : "DOWN", i->index, mbuf);
+      cli_msg(-1001, "%s %s (index=%d%s)", i->name, (i->flags & IF_UP) ? "up" : "down", i->index, mbuf);
       if (!(i->flags & IF_MULTIACCESS))
 	type = "PtP";
       else
@@ -809,10 +862,13 @@ if_show(void)
 	      (i->flags & IF_LOOPBACK) ? " Loopback" : "",
 	      (i->flags & IF_IGNORE) ? " Ignored" : "",
 	      i->mtu);
-      if (i->addr)
-	if_show_addr(i->addr);
+
       WALK_LIST(a, i->addrs)
-	if (a != i->addr)
+	if (a->prefix.type == NET_IP4)
+	  if_show_addr(a);
+
+      WALK_LIST(a, i->addrs)
+	if (a->prefix.type == NET_IP6)
 	  if_show_addr(a);
     }
   cli_msg(0, "");
@@ -822,19 +878,28 @@ void
 if_show_summary(void)
 {
   struct iface *i;
-  byte addr[STD_ADDRESS_P_LENGTH + 16];
 
-  cli_msg(-2005, "interface state address");
+  cli_msg(-2005, "%-10s %-6s %-18s %s", "Interface", "State", "IPv4 address", "IPv6 address");
   WALK_LIST(i, iface_list)
     {
+      byte a4[IPA_MAX_TEXT_LENGTH + 17];
+      byte a6[IPA_MAX_TEXT_LENGTH + 17];
+
       if (i->flags & IF_SHUTDOWN)
 	continue;
 
-      if (i->addr)
-	bsprintf(addr, "%I/%d", i->addr->ip, i->addr->pxlen);
+      if (i->addr4)
+	bsprintf(a4, "%I/%d", i->addr4->ip, i->addr4->prefix.pxlen);
       else
-	addr[0] = 0;
-      cli_msg(-1005, "%-9s %-5s %s", i->name, (i->flags & IF_UP) ? "up" : "DOWN", addr);
+	a4[0] = 0;
+
+      if (i->addr6)
+	bsprintf(a6, "%I/%d", i->addr6->ip, i->addr6->prefix.pxlen);
+      else
+	a6[0] = 0;
+
+      cli_msg(-1005, "%-10s %-6s %-18s %s",
+	      i->name, (i->flags & IF_UP) ? "up" : "down", a4, a6);
     }
   cli_msg(0, "");
 }

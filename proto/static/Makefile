@@ -1,6 +1,6 @@
-source=static.c
-root-rel=../../
-dir-name=proto/static
+src := static.c
+obj := $(src-o-files)
+$(all-daemon)
+$(cf-local)
 
-include ../../Rules
-
+tests_objs := $(tests_objs) $(src-o-files)

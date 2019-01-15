@@ -60,7 +60,7 @@
  * the new one. When the consumer processes everything in the buffer
  * queue, it calls cli_written(), tha frees all buffers (except the
  * first one) and schedules cli.event .
- * 
+ *
  */
 
 #include "nest/bird.h"
@@ -136,7 +136,7 @@ cli_printf(cli *c, int code, char *msg, ...)
     }
   else if (cd == CLI_ASYNC_CODE)
     {
-      size = 1; buf[0] = '+'; 
+      size = 1; buf[0] = '+';
       errcode = cd;
     }
   else
@@ -316,7 +316,8 @@ cli_new(void *priv)
   c->event->hook = cli_event;
   c->event->data = c;
   c->cont = cli_hello;
-  c->parser_pool = lp_new(c->pool, 4096);
+  c->parser_pool = lp_new_default(c->pool);
+  c->show_pool = lp_new_default(c->pool);
   c->rx_buf = mb_alloc(c->pool, CLI_RX_BUF_SIZE);
   ev_schedule(c->event);
   return c;

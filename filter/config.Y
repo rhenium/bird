@@ -35,6 +35,7 @@ f_valid_set_type(int type)
   case T_IP:
   case T_EC:
   case T_LC:
+  case T_RD:
     return 1;
 
   default:
@@ -227,7 +228,6 @@ f_generate_ec(u16 kind, struct f_inst *tk, struct f_inst *tv)
       cf_error("Can't operate with key of non-integer/IPv4 type in EC constructor");
   }
 
-#ifndef IPV6
   /* IP->Quad implicit conversion */
   else if (tk->fi_code == FI_CONSTANT_INDIRECT) {
     c1 = 1;
@@ -239,13 +239,12 @@ f_generate_ec(u16 kind, struct f_inst *tk, struct f_inst *tv)
     else if (val->type == T_QUAD) {
       ipv4_used = 1; key = val->val.i;
     }
-    else if (val->type == T_IP) {
-      ipv4_used = 1; key = ipa_to_u32(val->val.px.ip);
+    else if ((val->type == T_IP) && ipa_is_ip4(val->val.ip)) {
+      ipv4_used = 1; key = ipa_to_u32(val->val.ip);
     }
     else
       cf_error("Can't operate with key of non-integer/IPv4 type in EC constructor");
   }
-#endif
 
   if (tv->fi_code == FI_CONSTANT) {
     if (tv->aux != T_INT)
@@ -306,12 +305,10 @@ f_generate_lc(struct f_inst *t1, struct f_inst *t2, struct f_inst *t3)
   }
   else
   {
-    rv = cfg_allocz(sizeof(struct f_inst3));
-    rv->lineno = ifs->lino;
-    rv->fi_code = FI_LC_CONSTRUCT;
+    rv = f_new_inst(FI_LC_CONSTRUCT);
     rv->a1.p = t1;
     rv->a2.p = t2;
-    INST3(rv).p = t3;
+    rv->a3.p = t3;
   }
 
   return rv;
@@ -320,8 +317,7 @@ f_generate_lc(struct f_inst *t1, struct f_inst *t2, struct f_inst *t3)
 static inline struct f_inst *
 f_generate_path_mask(struct f_path_mask *t)
 {
-  struct f_path_mask *tt;
-  for (tt = t; tt; tt = tt->next) {
+  for (struct f_path_mask *tt = t; tt; tt = tt->next) {
     if (tt->kind == PM_ASN_EXPR) {
       struct f_inst *mrv = f_new_inst(FI_PATHMASK_CONSTRUCT);
       mrv->a1.p = t;
@@ -339,24 +335,90 @@ f_generate_path_mask(struct f_path_mask *t)
   return rv;
 }
 
+/*
+ * Remove all new lines and doubled whitespaces
+ * and convert all tabulators to spaces
+ * and return a copy of string
+ */
+char *
+assert_copy_expr(const char *start, size_t len)
+{
+  /* XXX: Allocates maybe a little more memory than we really finally need */
+  char *str = cfg_alloc(len + 1);
+
+  char *dst = str;
+  const char *src = start - 1;
+  const char *end = start + len;
+  while (++src < end)
+  {
+    if (*src == '\n')
+      continue;
+
+    /* Skip doubled whitespaces */
+    if (src != start)
+    {
+      const char *prev = src - 1;
+      if ((*src == ' ' || *src == '\t') && (*prev == ' ' || *prev == '\t'))
+	continue;
+    }
+
+    if (*src == '\t')
+      *dst = ' ';
+    else
+      *dst = *src;
+
+    dst++;
+  }
+  *dst = '\0';
+
+  return str;
+}
+
+/*
+ * assert_done - create f_instruction of bt_assert
+ * @expr: expression in bt_assert()
+ * @start: pointer to first char of test expression
+ * @end: pointer to the last char of test expression
+ */
+static struct f_inst *
+assert_done(struct f_inst *expr, const char *start, const char *end)
+{
+  struct f_inst *i;
+  i = f_new_inst(FI_ASSERT);
+  i->a1.p = expr;
+
+  if (end >= start)
+  {
+    i->a2.p = assert_copy_expr(start, end - start + 1);
+  }
+  else
+  {
+    /* this is a break of lexer buffer */
+    i->a2.p = "???";
+  }
+
+  return i;
+}
 
 CF_DECLS
 
 CF_KEYWORDS(FUNCTION, PRINT, PRINTN, UNSET, RETURN,
 	ACCEPT, REJECT, ERROR, QUITBIRD,
-	INT, BOOL, IP, PREFIX, PAIR, QUAD, EC, LC,
+	INT, BOOL, IP, TYPE, PREFIX, RD, PAIR, QUAD, EC, LC,
 	SET, STRING, BGPMASK, BGPPATH, CLIST, ECLIST, LCLIST,
 	IF, THEN, ELSE, CASE,
 	TRUE, FALSE, RT, RO, UNKNOWN, GENERIC,
-	FROM, GW, NET, MASK, PROTO, SOURCE, SCOPE, CAST, DEST, IFNAME, IFINDEX,
+	FROM, GW, NET, MASK, PROTO, SOURCE, SCOPE, DEST, IFNAME, IFINDEX,
 	PREFERENCE,
-	LEN,
+	ROA_CHECK, ASN, SRC,
+	IS_V4, IS_V6,
+	LEN, MAXLEN,
 	DEFINED,
 	ADD, DELETE, CONTAINS, RESET,
 	PREPEND, FIRST, LAST, LAST_NONAGGREGATED, MATCH,
-	ROA_CHECK,
 	EMPTY,
-	FILTER, WHERE, EVAL)
+	FILTER, WHERE, EVAL, ATTRIBUTE,
+	BT_ASSERT, BT_TEST_SUITE, FORMAT)
 
 %nonassoc THEN
 %nonassoc ELSE
@@ -369,13 +431,15 @@ CF_KEYWORDS(FUNCTION, PRINT, PRINTN, UNSET, RETURN,
 %type <i32> cnum
 %type <e> pair_item ec_item lc_item set_item switch_item set_items switch_items switch_body
 %type <trie> fprefix_set
-%type <v> set_atom switch_atom fprefix fprefix_s fipa
+%type <v> set_atom switch_atom fipa
+%type <px> fprefix
 %type <s> decls declsn one_decl function_params
-%type <h> bgp_path bgp_path_tail1 bgp_path_tail2
+%type <h> bgp_path bgp_path_tail
+%type <t> get_cf_position
 
 CF_GRAMMAR
 
-CF_ADDTO(conf, filter_def)
+conf: filter_def ;
 filter_def:
    FILTER SYM { $2 = cf_define_symbol($2, SYM_FILTER, NULL); cf_push_scope( $2 ); }
      filter_body {
@@ -386,16 +450,37 @@ filter_def:
    }
  ;
 
-CF_ADDTO(conf, filter_eval)
+conf: filter_eval ;
 filter_eval:
    EVAL term { f_eval_int($2); }
+ ;
+
+conf: custom_attr ;
+custom_attr: ATTRIBUTE type SYM ';' {
+  cf_define_symbol($3, SYM_ATTRIBUTE, ca_lookup(new_config->pool, $3->name, $2)->fda);
+};
+
+conf: bt_test_suite ;
+bt_test_suite:
+ BT_TEST_SUITE '(' SYM ',' text ')' {
+  if (!($3->class & SYM_FUNCTION))
+    cf_error("Function expected");
+
+  struct f_bt_test_suite *t = cfg_alloc(sizeof(struct f_bt_test_suite));
+  t->fn = $3->def;
+  t->fn_name = $3->name;
+  t->dsc = $5;
+
+  add_tail(&new_config->tests, &t->n);
+ }
  ;
 
 type:
    INT { $$ = T_INT; }
  | BOOL { $$ = T_BOOL; }
  | IP { $$ = T_IP; }
- | PREFIX { $$ = T_PREFIX; }
+ | RD { $$ = T_RD; }
+ | PREFIX { $$ = T_NET; }
  | PAIR { $$ = T_PAIR; }
  | QUAD { $$ = T_QUAD; }
  | EC { $$ = T_EC; }
@@ -413,11 +498,12 @@ type:
 	  case T_QUAD:
 	  case T_EC:
 	  case T_LC:
+	  case T_RD:
 	  case T_IP:
 	       $$ = T_SET;
 	       break;
 
-	  case T_PREFIX:
+	  case T_NET:
 	       $$ = T_PREFIX_SET;
 	    break;
 
@@ -509,7 +595,7 @@ function_body:
    }
  ;
 
-CF_ADDTO(conf, function_def)
+conf: function_def ;
 function_def:
    FUNCTION SYM { DBG( "Beginning of function %s\n", $2->name );
      $2 = cf_define_symbol($2, SYM_FUNCTION, NULL);
@@ -548,7 +634,8 @@ block:
  * Complex types, their bison value is struct f_val
  */
 fipa:
-   IPA %prec PREFIX_DUMMY { $$.type = T_IP; $$.val.px.ip = $1; }
+   IP4 %prec PREFIX_DUMMY { $$.type = T_IP; $$.val.ip = ipa_from_ip4($1); }
+ | IP6 %prec PREFIX_DUMMY { $$.type = T_IP; $$.val.ip = ipa_from_ip6($1); }
  ;
 
 
@@ -561,10 +648,10 @@ fipa:
  */
 
 set_atom:
-   NUM   { $$.type = T_INT; $$.val.i = $1; }
- | RTRID { $$.type = T_QUAD; $$.val.i = $1; }
- | fipa  { $$ = $1; }
- | ENUM  { $$.type = pair_a($1); $$.val.i = pair_b($1); }
+   NUM    { $$.type = T_INT; $$.val.i = $1; }
+ | fipa   { $$ = $1; }
+ | VPN_RD { $$.type = T_RD; $$.val.ec = $1; }
+ | ENUM   { $$.type = pair_a($1); $$.val.i = pair_b($1); }
  | '(' term ')' {
      $$ = f_eval($2, cfg_mem);
      if (!f_valid_set_type($$.type)) cf_error("Set-incompatible type");
@@ -579,7 +666,6 @@ set_atom:
 switch_atom:
    NUM   { $$.type = T_INT; $$.val.i = $1; }
  | '(' term ')' { $$.type = T_INT; $$.val.i = f_eval_int($2); }
- | RTRID { $$.type = T_QUAD; $$.val.i = $1; }
  | fipa  { $$ = $1; }
  | ENUM  { $$.type = pair_a($1); $$.val.i = pair_b($1); }
  ;
@@ -652,26 +738,20 @@ switch_items:
  | switch_items ',' switch_item { $$ = f_merge_items($1, $3); }
  ;
 
-fprefix_s:
-   IPA '/' NUM %prec '/' {
-     if (($3 < 0) || ($3 > MAX_PREFIX_LENGTH) || !ip_is_prefix($1, $3)) cf_error("Invalid network prefix: %I/%d.", $1, $3);
-     $$.type = T_PREFIX; $$.val.px.ip = $1; $$.val.px.len = $3;
-   }
- ;
-
 fprefix:
-   fprefix_s { $$ = $1; }
- | fprefix_s '+' { $$ = $1; $$.val.px.len |= LEN_PLUS; }
- | fprefix_s '-' { $$ = $1; $$.val.px.len |= LEN_MINUS; }
- | fprefix_s '{' NUM ',' NUM '}' {
-     if (! ((0 <= $3) && ($3 <= $5) && ($5 <= MAX_PREFIX_LENGTH))) cf_error("Invalid prefix pattern range: {%d, %d}.", $3, $5);
-     $$ = $1; $$.val.px.len |= LEN_RANGE | ($3 << 16) | ($5 << 8);
+   net_ip_	{ $$.net = $1; $$.lo = $1.pxlen; $$.hi = $1.pxlen; }
+ | net_ip_ '+'	{ $$.net = $1; $$.lo = $1.pxlen; $$.hi = net_max_prefix_length[$1.type]; }
+ | net_ip_ '-'	{ $$.net = $1; $$.lo = 0; $$.hi = $1.pxlen; }
+ | net_ip_ '{' NUM ',' NUM '}' {
+     $$.net = $1; $$.lo = $3; $$.hi = $5;
+     if (($3 > $5) || ($5 > net_max_prefix_length[$1.type]))
+       cf_error("Invalid prefix pattern range: {%u, %u}", $3, $5);
    }
  ;
 
 fprefix_set:
-   fprefix { $$ = f_new_trie(cfg_mem, sizeof(struct f_trie_node)); trie_add_fprefix($$, &($1.val.px)); }
- | fprefix_set ',' fprefix { $$ = $1; trie_add_fprefix($$, &($3.val.px)); }
+   fprefix { $$ = f_new_trie(cfg_mem, sizeof(struct f_trie_node)); trie_add_prefix($$, &($1.net), $1.lo, $1.hi); }
+ | fprefix_set ',' fprefix { $$ = $1; trie_add_prefix($$, &($3.net), $3.lo, $3.hi); }
  ;
 
 switch_body: /* EMPTY */ { $$ = NULL; }
@@ -699,23 +779,16 @@ bgp_path_expr:
  ;
 
 bgp_path:
-   PO  bgp_path_tail1 PC  { $$ = $2; }
- | '/' bgp_path_tail2 '/' { $$ = $2; }
+   PO  bgp_path_tail PC  { $$ = $2; }
  ;
 
-bgp_path_tail1:
-   NUM bgp_path_tail1		{ $$ = cfg_allocz(sizeof(struct f_path_mask)); $$->next = $2; $$->kind = PM_ASN; $$->val = $1; }
- | NUM DDOT NUM bgp_path_tail1	{ $$ = cfg_allocz(sizeof(struct f_path_mask)); $$->next = $4; $$->kind = PM_ASN_RANGE; $$->val = $1; $$->val2 = $3; }
- | '*' bgp_path_tail1		{ $$ = cfg_allocz(sizeof(struct f_path_mask)); $$->next = $2; $$->kind = PM_ASTERISK; }
- | '?' bgp_path_tail1		{ $$ = cfg_allocz(sizeof(struct f_path_mask)); $$->next = $2; $$->kind = PM_QUESTION; }
- | bgp_path_expr bgp_path_tail1	{ $$ = cfg_allocz(sizeof(struct f_path_mask)); $$->next = $2; $$->kind = PM_ASN_EXPR; $$->val = (uintptr_t) $1; }
+bgp_path_tail:
+   NUM bgp_path_tail		{ $$ = cfg_allocz(sizeof(struct f_path_mask)); $$->next = $2; $$->kind = PM_ASN; $$->val = $1; }
+ | NUM DDOT NUM bgp_path_tail	{ $$ = cfg_allocz(sizeof(struct f_path_mask)); $$->next = $4; $$->kind = PM_ASN_RANGE; $$->val = $1; $$->val2 = $3; }
+ | '*' bgp_path_tail		{ $$ = cfg_allocz(sizeof(struct f_path_mask)); $$->next = $2; $$->kind = PM_ASTERISK; }
+ | '?' bgp_path_tail		{ $$ = cfg_allocz(sizeof(struct f_path_mask)); $$->next = $2; $$->kind = PM_QUESTION; }
+ | bgp_path_expr bgp_path_tail	{ $$ = cfg_allocz(sizeof(struct f_path_mask)); $$->next = $2; $$->kind = PM_ASN_EXPR; $$->val = (uintptr_t) $1; }
  | 				{ $$ = NULL; }
- ;
-
-bgp_path_tail2:
-   NUM bgp_path_tail2 { $$ = cfg_allocz(sizeof(struct f_path_mask)); $$->next = $2; $$->kind = PM_ASN; $$->val = $1; }
- | '?' bgp_path_tail2 { $$ = cfg_allocz(sizeof(struct f_path_mask)); $$->next = $2; $$->kind = PM_ASTERISK; }
- | 		      { $$ = NULL; }
  ;
 
 constant:
@@ -723,9 +796,9 @@ constant:
  | TRUE   { $$ = f_new_inst(FI_CONSTANT); $$->aux = T_BOOL; $$->a2.i = 1;  }
  | FALSE  { $$ = f_new_inst(FI_CONSTANT); $$->aux = T_BOOL; $$->a2.i = 0;  }
  | TEXT   { $$ = f_new_inst(FI_CONSTANT); $$->aux = T_STRING; $$->a2.p = $1; }
- | fipa	   { NEW_F_VAL; $$ = f_new_inst(FI_CONSTANT_INDIRECT); $$->a1.p = val; *val = $1; }
- | fprefix_s {NEW_F_VAL; $$ = f_new_inst(FI_CONSTANT_INDIRECT); $$->a1.p = val; *val = $1; }
- | RTRID  { $$ = f_new_inst(FI_CONSTANT); $$->aux = T_QUAD;  $$->a2.i = $1; }
+ | fipa	  { NEW_F_VAL; $$ = f_new_inst(FI_CONSTANT_INDIRECT); $$->a1.p = val; *val = $1; }
+ | VPN_RD { NEW_F_VAL; $$ = f_new_inst(FI_CONSTANT_INDIRECT); val->type = T_RD; val->val.ec = $1; $$->a1.p = val; }
+ | net_   { NEW_F_VAL; $$ = f_new_inst(FI_CONSTANT_INDIRECT); val->type = T_NET; val->val.net = $1; $$->a1.p = val; }
  | '[' set_items ']' { DBG( "We've got a set here..." ); $$ = f_new_inst(FI_CONSTANT); $$->aux = T_SET; $$->a2.p = build_tree($2); DBG( "ook\n" ); }
  | '[' fprefix_set ']' { $$ = f_new_inst(FI_CONSTANT); $$->aux = T_PREFIX_SET;  $$->a2.p = $2; }
  | ENUM	  { $$ = f_new_inst(FI_CONSTANT); $$->aux = $1 >> 16; $$->a2.i = $1 & 0xffff; }
@@ -738,13 +811,6 @@ constructor:
  | bgp_path { $$ = f_generate_path_mask($1); }
  ;
 
-
-/*
- *  Maybe there are no dynamic attributes defined by protocols.
- *  For such cases, we force the dynamic_attr list to contain
- *  at least an invalid token, so it is syntantically correct.
- */
-CF_ADDTO(dynamic_attr, INVALID_TOKEN { $$ = (struct f_dynamic_attr) {}; })
 
 rtadot: /* EMPTY, we are not permitted RTA. prefix */
  ;
@@ -773,24 +839,31 @@ function_call:
 
 symbol:
    SYM {
-     switch ($1->class & 0xff00) {
-       case SYM_CONSTANT: $$ = f_new_inst(FI_CONSTANT_INDIRECT); break;
-       case SYM_VARIABLE: $$ = f_new_inst(FI_VARIABLE); break;
-       default: cf_error("%s: variable expected.", $1->name);
+     switch ($1->class & 0xffff) {
+       case SYM_CONSTANT_RANGE:
+         $$ = f_new_inst(FI_CONSTANT_INDIRECT);
+	 goto cv_common;
+       case SYM_VARIABLE_RANGE:
+         $$ = f_new_inst(FI_VARIABLE);
+       cv_common:
+         $$->a1.p = $1->def;
+         $$->a2.p = $1->name;
+	 break;
+       case SYM_ATTRIBUTE:
+         $$ = f_new_inst_da(FI_EA_GET, *((struct f_dynamic_attr *) $1->def));
+	 break;
+       default:
+         cf_error("%s: variable expected.", $1->name);
      }
-
-     $$->a1.p = $1->def;
-     $$->a2.p = $1->name;
    }
 
 static_attr:
    FROM    { $$ = f_new_static_attr(T_IP,         SA_FROM,	1); }
  | GW      { $$ = f_new_static_attr(T_IP,         SA_GW,	1); }
- | NET     { $$ = f_new_static_attr(T_PREFIX,     SA_NET,	0); }
+ | NET     { $$ = f_new_static_attr(T_NET,	  SA_NET,	0); }
  | PROTO   { $$ = f_new_static_attr(T_STRING,     SA_PROTO,	0); }
  | SOURCE  { $$ = f_new_static_attr(T_ENUM_RTS,   SA_SOURCE,	0); }
  | SCOPE   { $$ = f_new_static_attr(T_ENUM_SCOPE, SA_SCOPE,	1); }
- | CAST    { $$ = f_new_static_attr(T_ENUM_RTC,   SA_CAST,	0); }
  | DEST    { $$ = f_new_static_attr(T_ENUM_RTD,   SA_DEST,	1); }
  | IFNAME  { $$ = f_new_static_attr(T_STRING,     SA_IFNAME,	1); }
  | IFINDEX { $$ = f_new_static_attr(T_INT,        SA_IFINDEX,	0); }
@@ -825,8 +898,14 @@ term:
 
  | rtadot dynamic_attr { $$ = f_new_inst_da(FI_EA_GET, $2); }
 
+ | term '.' IS_V4 { $$ = f_new_inst(FI_IS_V4); $$->a1.p = $1; }
+ | term '.' TYPE { $$ = f_new_inst(FI_TYPE); $$->a1.p = $1; }
  | term '.' IP { $$ = f_new_inst(FI_IP); $$->a1.p = $1; $$->aux = T_IP; }
+ | term '.' RD { $$ = f_new_inst(FI_ROUTE_DISTINGUISHER); $$->a1.p = $1; $$->aux = T_RD; }
  | term '.' LEN { $$ = f_new_inst(FI_LENGTH); $$->a1.p = $1; }
+ | term '.' MAXLEN { $$ = f_new_inst(FI_ROA_MAXLEN); $$->a1.p = $1; }
+ | term '.' ASN { $$ = f_new_inst(FI_ROA_ASN); $$->a1.p = $1; }
+ | term '.' SRC { $$ = f_new_inst(FI_SADR_SRC); $$->a1.p = $1; }
  | term '.' MASK '(' term ')' { $$ = f_new_inst(FI_IP_MASK); $$->a1.p = $1; $$->a2.p = $5; }
  | term '.' FIRST { $$ = f_new_inst(FI_AS_PATH_FIRST); $$->a1.p = $1; }
  | term '.' LAST  { $$ = f_new_inst(FI_AS_PATH_LAST); $$->a1.p = $1; }
@@ -849,8 +928,12 @@ term:
  | DELETE '(' term ',' term ')' { $$ = f_new_inst(FI_CLIST_ADD_DEL); $$->a1.p = $3; $$->a2.p = $5; $$->aux = 'd'; }
  | FILTER '(' term ',' term ')' { $$ = f_new_inst(FI_CLIST_ADD_DEL); $$->a1.p = $3; $$->a2.p = $5; $$->aux = 'f'; }
 
- | ROA_CHECK '(' SYM ')' { $$ = f_generate_roa_check($3, NULL, NULL); }
- | ROA_CHECK '(' SYM ',' term ',' term ')' { $$ = f_generate_roa_check($3, $5, $7); }
+ | ROA_CHECK '(' rtable ')' { $$ = f_generate_roa_check($3, NULL, NULL); }
+ | ROA_CHECK '(' rtable ',' term ',' term ')' { $$ = f_generate_roa_check($3, $5, $7); }
+
+ | FORMAT '(' term ')' {  $$ = f_new_inst(FI_FORMAT); $$->a1.p = $3; }
+
+/* | term '.' LEN { $$->code = P('P','l'); } */
 
 /* function_call is inlined here */
  | SYM '(' var_list ')' {
@@ -931,11 +1014,15 @@ cmd:
    }
  | SYM '=' term ';' {
      DBG( "Ook, we'll set value\n" );
-     if (($1->class & ~T_MASK) != SYM_VARIABLE)
-       cf_error( "You may set only variables." );
-     $$ = f_new_inst(FI_SET);
-     $$->a1.p = $1;
-     $$->a2.p = $3;
+     if ($1->class == SYM_ATTRIBUTE) {
+       $$ = f_new_inst_da(FI_EA_SET, *((struct f_dynamic_attr *) $1->def));
+       $$->a1.p = $3;
+     } else if (($1->class & ~T_MASK) == SYM_VARIABLE) {
+       $$ = f_new_inst(FI_SET);
+       $$->a1.p = $1;
+       $$->a2.p = $3;
+     } else
+       cf_error( "Symbol `%s' is read-only.", $1->name );
    }
  | RETURN term ';' {
      DBG( "Ook, we'll return the value\n" );
@@ -969,12 +1056,18 @@ cmd:
       $$->a2.p = build_tree( $4 );
    }
 
-
  | rtadot dynamic_attr '.' EMPTY ';' { $$ = f_generate_empty($2); }
  | rtadot dynamic_attr '.' PREPEND '(' term ')' ';'   { $$ = f_generate_complex( FI_PATH_PREPEND, 'x', $2, $6 ); }
  | rtadot dynamic_attr '.' ADD '(' term ')' ';'       { $$ = f_generate_complex( FI_CLIST_ADD_DEL, 'a', $2, $6 ); }
  | rtadot dynamic_attr '.' DELETE '(' term ')' ';'    { $$ = f_generate_complex( FI_CLIST_ADD_DEL, 'd', $2, $6 ); }
  | rtadot dynamic_attr '.' FILTER '(' term ')' ';'    { $$ = f_generate_complex( FI_CLIST_ADD_DEL, 'f', $2, $6 ); }
+ | BT_ASSERT '(' get_cf_position term get_cf_position ')' ';' { $$ = assert_done($4, $3 + 1, $5 - 1); }
  ;
+
+get_cf_position:
+{
+  $$ = cf_text;
+};
+
 
 CF_END

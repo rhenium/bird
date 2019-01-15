@@ -118,16 +118,17 @@ static char * number(char * str, long num, int base, int size, int precision,
  * @fmt: format string
  * @args: a list of arguments to be formatted
  *
- * This functions acts like ordinary sprintf() except that it checks
- * available space to avoid buffer overflows and it allows some more
- * format specifiers: |%I| for formatting of IP addresses (any non-zero
- * width is automatically replaced by standard IP address width which
- * depends on whether we use IPv4 or IPv6; |%#I| gives hexadecimal format),
- * |%R| for Router / Network ID (u32 value printed as IPv4 address)
- * |%lR| for 64bit Router / Network ID (u64 value printed as eight :-separated octets)
- * and |%m| resp. |%M| for error messages (uses strerror() to translate @errno code to
- * message text). On the other hand, it doesn't support floating
- * point numbers.
+ * This functions acts like ordinary sprintf() except that it checks available
+ * space to avoid buffer overflows and it allows some more format specifiers:
+ * |%I| for formatting of IP addresses (width of 1 is automatically replaced by
+ * standard IP address width which depends on whether we use IPv4 or IPv6; |%I4|
+ * or |%I6| can be used for explicit ip4_addr / ip6_addr arguments, |%N| for
+ * generic network addresses (net_addr *), |%R| for Router / Network ID (u32
+ * value printed as IPv4 address), |%lR| for 64bit Router / Network ID (u64
+ * value printed as eight :-separated octets), |%t| for time values (btime) with
+ * specified subsecond precision, and |%m| resp. |%M| for error messages (uses
+ * strerror() to translate @errno code to message text). On the other hand, it
+ * doesn't support floating point numbers.
  *
  * Result: number of characters of the output string or -1 if
  * the buffer space was insufficient.
@@ -139,9 +140,11 @@ int bvsnprintf(char *buf, int size, const char *fmt, va_list args)
 	int i, base;
 	u32 x;
 	u64 X;
+	btime t;
+	s64 t1, t2;
 	char *str, *start;
 	const char *s;
-	char ipbuf[MAX(STD_ADDRESS_P_LENGTH,ROUTER_ID_64_LENGTH)+1];
+	char ipbuf[NET_MAX_TEXT_LENGTH+1];
 	struct iface *iface;
 
 	int flags;		/* flags to number() */
@@ -158,7 +161,7 @@ int bvsnprintf(char *buf, int size, const char *fmt, va_list args)
 			*str++ = *fmt;
 			continue;
 		}
-			
+
 		/* process flags */
 		flags = 0;
 		repeat:
@@ -170,7 +173,7 @@ int bvsnprintf(char *buf, int size, const char *fmt, va_list args)
 				case '#': flags |= SPECIAL; goto repeat;
 				case '0': flags |= ZEROPAD; goto repeat;
 			}
-		
+
 		/* get field width */
 		field_width = -1;
 		if (is_digit(*fmt))
@@ -188,7 +191,7 @@ int bvsnprintf(char *buf, int size, const char *fmt, va_list args)
 		/* get the precision */
 		precision = -1;
 		if (*fmt == '.') {
-			++fmt;	
+			++fmt;
 			if (is_digit(*fmt))
 				precision = skip_atoi(&fmt);
 			else if (*fmt == '*') {
@@ -238,6 +241,14 @@ int bvsnprintf(char *buf, int size, const char *fmt, va_list args)
 		case 'M':
 			s = strerror(va_arg(args, int));
 			goto str;
+		case 'N': {
+			net_addr *n = va_arg(args, net_addr *);
+			if (field_width == 1)
+				field_width = net_max_text_length[n->type];
+			net_format(n, ipbuf, sizeof(ipbuf));
+			s = ipbuf;
+			goto str;
+			}
 		case 's':
 			s = va_arg(args, char *);
 			if (!s)
@@ -259,6 +270,17 @@ int bvsnprintf(char *buf, int size, const char *fmt, va_list args)
 				*str++ = ' ';
 			continue;
 
+		case 'V': {
+			const char *vfmt = va_arg(args, const char *);
+			va_list *vargs = va_arg(args, va_list *);
+			int res = bvsnprintf(str, size, vfmt, *vargs);
+			if (res < 0)
+				return -1;
+			str += res;
+			size -= res;
+			continue;
+			}
+
 		case 'p':
 			if (field_width == -1) {
 				field_width = 2*sizeof(void *);
@@ -270,7 +292,6 @@ int bvsnprintf(char *buf, int size, const char *fmt, va_list args)
 			if (!str)
 				return -1;
 			continue;
-
 
 		case 'n':
 			if (qualifier == 'l') {
@@ -284,14 +305,35 @@ int bvsnprintf(char *buf, int size, const char *fmt, va_list args)
 
 		/* IP address */
 		case 'I':
-			if (flags & SPECIAL)
-				ipa_ntox(va_arg(args, ip_addr), ipbuf);
-			else {
-				ipa_ntop(va_arg(args, ip_addr), ipbuf);
-				if (field_width == 1)
-					field_width = STD_ADDRESS_P_LENGTH;
+			if (fmt[1] == '4') {
+				/* Explicit IPv4 address */
+				ip4_addr a = va_arg(args, ip4_addr);
+				ip4_ntop(a, ipbuf);
+				i = IP4_MAX_TEXT_LENGTH;
+				fmt++;
+			} else if (fmt[1] == '6') {
+				/* Explicit IPv6 address */
+				ip6_addr a = va_arg(args, ip6_addr);
+				ip6_ntop(a, ipbuf);
+				i = IP6_MAX_TEXT_LENGTH;
+				fmt++;
+			} else {
+				/* Just IP address */
+				ip_addr a = va_arg(args, ip_addr);
+
+				if (ipa_is_ip4(a)) {
+					ip4_ntop(ipa_to_ip4(a), ipbuf);
+					i = IP4_MAX_TEXT_LENGTH;
+				} else {
+					ip6_ntop(ipa_to_ip6(a), ipbuf);
+					i = IP6_MAX_TEXT_LENGTH;
+				}
 			}
+
 			s = ipbuf;
+			if (field_width == 1)
+				field_width = i;
+
 			goto str;
 
 		/* Interface scope after link-local IP address */
@@ -311,7 +353,7 @@ int bvsnprintf(char *buf, int size, const char *fmt, va_list args)
 
 		/* Router/Network ID - essentially IPv4 address in u32 value */
 		case 'R':
-			if(qualifier == 'l') {
+			if (qualifier == 'l') {
 				X = va_arg(args, u64);
 				bsprintf(ipbuf, "%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
 					((X >> 56) & 0xff),
@@ -326,14 +368,54 @@ int bvsnprintf(char *buf, int size, const char *fmt, va_list args)
 			else
 			{
 				x = va_arg(args, u32);
-				bsprintf(ipbuf, "%d.%d.%d.%d",
-					((x >> 24) & 0xff),
-					((x >> 16) & 0xff),
-					((x >> 8) & 0xff),
-					(x & 0xff));
+				ip4_ntop(ip4_from_u32(x), ipbuf);
 			}
 			s = ipbuf;
 			goto str;
+
+		case 't':
+			t = va_arg(args, btime);
+			t1 = t TO_S;
+			t2 = t - t1 S;
+
+			if (precision < 0)
+			  precision = 3;
+
+			if (precision > 6)
+			  precision = 6;
+
+			/* Compute field_width for second part */
+			if ((precision > 0) && (field_width > 0))
+			  field_width -= (1 + precision);
+
+			if (field_width < 0)
+			  field_width = 0;
+
+			/* Print seconds */
+			flags |= SIGN;
+			str = number(str, t1, 10, field_width, 0, flags, size);
+			if (!str)
+			  return -1;
+
+			if (precision > 0)
+			{
+			  size -= (str-start);
+			  start = str;
+
+			  if ((1 + precision) > size)
+			    return -1;
+
+			  /* Convert microseconds to requested precision */
+			  for (i = precision; i < 6; i++)
+			    t2 /= 10;
+
+			  /* Print sub-seconds */
+			  *str++ = '.';
+			  str = number(str, t2, 10, precision, 0, ZEROPAD, size - 1);
+			  if (!str)
+			    return -1;
+			}
+			goto done;
 
 		/* integer number formats - set up the flags and "break" */
 		case 'o':
@@ -342,6 +424,7 @@ int bvsnprintf(char *buf, int size, const char *fmt, va_list args)
 
 		case 'X':
 			flags |= LARGE;
+			/* fallthrough */
 		case 'x':
 			base = 16;
 			break;
@@ -376,6 +459,7 @@ int bvsnprintf(char *buf, int size, const char *fmt, va_list args)
 		str = number(str, num, base, field_width, precision, flags, size);
 		if (!str)
 			return -1;
+	done:	;
 	}
 	if (!size)
 		return -1;
@@ -442,6 +526,10 @@ int
 buffer_vprint(buffer *buf, const char *fmt, va_list args)
 {
   int i = bvsnprintf((char *) buf->pos, buf->end - buf->pos, fmt, args);
+
+  if ((i < 0) && (buf->pos < buf->end))
+    *buf->pos = 0;
+
   buf->pos = (i >= 0) ? (buf->pos + i) : buf->end;
   return i;
 }
@@ -453,8 +541,11 @@ buffer_print(buffer *buf, const char *fmt, ...)
   int i;
 
   va_start(args, fmt);
-  i=bvsnprintf((char *) buf->pos, buf->end - buf->pos, fmt, args);
+  i = bvsnprintf((char *) buf->pos, buf->end - buf->pos, fmt, args);
   va_end(args);
+
+  if ((i < 0) && (buf->pos < buf->end))
+    *buf->pos = 0;
 
   buf->pos = (i >= 0) ? (buf->pos + i) : buf->end;
   return i;
@@ -464,13 +555,13 @@ void
 buffer_puts(buffer *buf, const char *str)
 {
   byte *bp = buf->pos;
-  byte *be = buf->end;
+  byte *be = buf->end - 1;
 
   while (bp < be && *str)
     *bp++ = *str++;
 
-  if (bp < be)
+  if (bp <= be)
     *bp = 0;
 
-  buf->pos = bp;
+  buf->pos = (bp < be) ? bp : buf->end;
 }

@@ -9,7 +9,7 @@
 #ifndef _BIRD_IP_H_
 #define _BIRD_IP_H_
 
-#include "lib/endian.h"
+#include "sysdep/unix/endian.h"
 #include "lib/string.h"
 #include "lib/bitops.h"
 #include "lib/unaligned.h"
@@ -31,6 +31,13 @@
 #define IP4_NONE		_MI4(0)
 #define IP6_NONE		_MI6(0,0,0,0)
 
+#define IP4_MAX_PREFIX_LENGTH	32
+#define IP6_MAX_PREFIX_LENGTH	128
+
+#define IP4_MAX_TEXT_LENGTH	15	/* "255.255.255.255" */
+#define IP6_MAX_TEXT_LENGTH	39	/* "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff" */
+#define IPA_MAX_TEXT_LENGTH	39
+
 #define IP4_MIN_MTU		576
 #define IP6_MIN_MTU		1280
 
@@ -39,19 +46,6 @@
 #define IP4_HEADER_LENGTH	20
 #define IP6_HEADER_LENGTH	40
 #define UDP_HEADER_LENGTH	8
-
-
-#ifdef IPV6
-#define MAX_PREFIX_LENGTH 128
-#define BITS_PER_IP_ADDRESS 128
-#define STD_ADDRESS_P_LENGTH 39
-#define SIZE_OF_IP_HEADER 40
-#else
-#define MAX_PREFIX_LENGTH 32
-#define BITS_PER_IP_ADDRESS 32
-#define STD_ADDRESS_P_LENGTH 15
-#define SIZE_OF_IP_HEADER 24
-#endif
 
 
 #ifdef DEBUGGING
@@ -84,8 +78,6 @@ typedef struct ip6_addr {
 #define _I3(a) ((a).addr[3])
 
 
-#ifdef IPV6
-
 /* Structure ip_addr may contain both IPv4 and IPv6 addresses */
 typedef ip6_addr ip_addr;
 #define IPA_NONE IP6_NONE
@@ -101,24 +93,8 @@ typedef ip6_addr ip_addr;
 #define ipa_is_ip4(a) ip6_is_v4mapped(a)
 #define ipa_is_ip6(a) (! ip6_is_v4mapped(a))
 
-#else
-
-/* Provisionary ip_addr definition same as ip4_addr */
-typedef ip4_addr ip_addr;
-#define IPA_NONE IP4_NONE
-
-#define ipa_from_ip4(x) x
-#define ipa_from_ip6(x) IPA_NONE
-#define ipa_from_u32(x) ipa_from_ip4(ip4_from_u32(x))
-
-#define ipa_to_ip4(x) x
-#define ipa_to_ip6(x) IP6_NONE
-#define ipa_to_u32(x) ip4_to_u32(ipa_to_ip4(x))
-
-#define ipa_is_ip4(a) 1
-#define ipa_is_ip6(a) 0
-
-#endif
+#define IPA_NONE4 ipa_from_ip4(IP4_NONE)
+#define IPA_NONE6 ipa_from_ip6(IP6_NONE)
 
 
 /*
@@ -183,7 +159,6 @@ static inline ip6_addr ip6_not(ip6_addr a)
 { return _MI6(~_I0(a), ~_I1(a), ~_I2(a), ~_I3(a)); }
 
 
-#ifdef IPV6
 #define ipa_equal(x,y) ip6_equal(x,y)
 #define ipa_zero(x) ip6_zero(x)
 #define ipa_nonzero(x) ip6_nonzero(x)
@@ -191,19 +166,8 @@ static inline ip6_addr ip6_not(ip6_addr a)
 #define ipa_or(x,y) ip6_or(x,y)
 #define ipa_xor(x,y) ip6_xor(x,y)
 #define ipa_not(x) ip6_not(x)
-#else
-#define ipa_equal(x,y) ip4_equal(x,y)
-#define ipa_zero(x) ip4_zero(x)
-#define ipa_nonzero(x) ip4_nonzero(x)
-#define ipa_and(x,y) ip4_and(x,y)
-#define ipa_or(x,y) ip4_or(x,y)
-#define ipa_xor(x,y) ip4_xor(x,y)
-#define ipa_not(x) ip4_not(x)
-#endif
 
 
-
-#ifdef IPV6
 /*
  * A zero address is either a token for invalid/unused, or the prefix of default
  * routes. These functions should be used in the second case, where both IPv4
@@ -216,42 +180,15 @@ static inline int ipa_zero2(ip_addr a)
 static inline int ipa_nonzero2(ip_addr a)
 { return _I0(a) || _I1(a) || ((_I2(a) != 0) && (_I2(a) != 0xffff)) || _I3(a); }
 
-#else
-#define ipa_zero2(x) ip4_zero(x)
-#define ipa_nonzero2(x) ip4_nonzero(x)
-#endif
-
 
 /*
  *	Hash and compare functions
  */
 
-static inline uint ip4_hash(ip4_addr a)
-{
-  /* Returns a 16-bit value */
-  u32 x = _I(a);
-  x ^= x >> 16;
-  x ^= x << 10;
-  return x & 0xffff;
-}
+static inline u32 ip4_hash(ip4_addr a)
+{ return u32_hash(_I(a)); }
 
-static inline u32 ip4_hash32(ip4_addr a)
-{
-  /* Returns a 32-bit value, although low-order bits are not mixed */
-  u32 x = _I(a);
-  x ^= x << 16;
-  x ^= x << 12;
-  return x;
-}
-
-static inline uint ip6_hash(ip6_addr a)
-{
-  /* Returns a 16-bit hash key */
-  u32 x = _I0(a) ^ _I1(a) ^ _I2(a) ^ _I3(a);
-  return (x ^ (x >> 16) ^ (x >> 8)) & 0xffff;
-}
-
-static inline u32 ip6_hash32(ip6_addr a)
+static inline u32 ip6_hash(ip6_addr a)
 {
   /* Returns a 32-bit hash key, although low-order bits are not mixed */
   u32 x = _I0(a) ^ _I1(a) ^ _I2(a) ^ _I3(a);
@@ -263,16 +200,8 @@ static inline int ip4_compare(ip4_addr a, ip4_addr b)
 
 int ip6_compare(ip6_addr a, ip6_addr b);
 
-
-#ifdef IPV6
 #define ipa_hash(x) ip6_hash(x)
-#define ipa_hash32(x) ip6_hash32(x)
 #define ipa_compare(x,y) ip6_compare(x,y)
-#else
-#define ipa_hash(x) ip4_hash(x)
-#define ipa_hash32(x) ip4_hash32(x)
-#define ipa_compare(x,y) ip4_compare(x,y)
-#endif
 
 
 /*
@@ -303,17 +232,13 @@ static inline int ip6_is_link_local(ip6_addr a)
 static inline int ip6_is_v4mapped(ip6_addr a)
 { return _I0(a) == 0 && _I1(a) == 0 && _I2(a) == 0xffff; }
 
-#ifdef IPV6
 #define ipa_classify(x) ip6_classify(&(x))
 #define ipa_is_link_local(x) ip6_is_link_local(x)
-#else
-#define ipa_classify(x) ip4_classify(x)
-#define ipa_is_link_local(x) 0
-#endif
 
 static inline int ip4_is_unicast(ip4_addr a)
 { return _I(a) < 0xe0000000; }
 
+/* XXXX remove */
 static inline int ipa_classify_net(ip_addr a)
 { return ipa_zero2(a) ? (IADDR_HOST | SCOPE_UNIVERSE) : ipa_classify(a); }
 
@@ -325,11 +250,11 @@ static inline int ipa_classify_net(ip_addr a)
 static inline ip4_addr ip4_mkmask(uint n)
 { return _MI4(u32_mkmask(n)); }
 
-static inline int ip4_masklen(ip4_addr a)
+static inline uint ip4_masklen(ip4_addr a)
 { return u32_masklen(_I(a)); }
 
 ip6_addr ip6_mkmask(uint n);
-int ip6_masklen(ip6_addr *a);
+uint ip6_masklen(ip6_addr *a);
 
 /* ipX_pxlen() requires that x != y */
 static inline uint ip4_pxlen(ip4_addr a, ip4_addr b)
@@ -351,6 +276,18 @@ static inline u32 ip4_getbit(ip4_addr a, uint pos)
 static inline u32 ip6_getbit(ip6_addr a, uint pos)
 { return a.addr[pos / 32] & (0x80000000 >> (pos % 32)); }
 
+static inline u32 ip4_setbit(ip4_addr *a, uint pos)
+{ return _I(*a) |= (0x80000000 >> pos); }
+
+static inline u32 ip6_setbit(ip6_addr *a, uint pos)
+{ return a->addr[pos / 32] |= (0x80000000 >> (pos % 32)); }
+
+static inline u32 ip4_clrbit(ip4_addr *a, uint pos)
+{ return _I(*a) &= ~(0x80000000 >> pos); }
+
+static inline u32 ip6_clrbit(ip6_addr *a, uint pos)
+{ return a->addr[pos / 32] &= ~(0x80000000 >> (pos % 32)); }
+
 static inline ip4_addr ip4_opposite_m1(ip4_addr a)
 { return _MI4(_I(a) ^ 1); }
 
@@ -365,21 +302,8 @@ static inline ip6_addr ip6_opposite_m2(ip6_addr a)
 
 ip4_addr ip4_class_mask(ip4_addr ad);
 
-#ifdef IPV6
-#define ipa_mkmask(x) ip6_mkmask(x)
-#define ipa_masklen(x) ip6_masklen(&x)
-#define ipa_pxlen(x,y) ip6_pxlen(x,y)
-#define ipa_getbit(x,n) ip6_getbit(x,n)
 #define ipa_opposite_m1(x) ip6_opposite_m1(x)
 #define ipa_opposite_m2(x) ip6_opposite_m2(x)
-#else
-#define ipa_mkmask(x) ip4_mkmask(x)
-#define ipa_masklen(x) ip4_masklen(x)
-#define ipa_pxlen(x,y) ip4_pxlen(x,y)
-#define ipa_getbit(x,n) ip4_getbit(x,n)
-#define ipa_opposite_m1(x) ip4_opposite_m1(x)
-#define ipa_opposite_m2(x) ip4_opposite_m2(x)
-#endif
 
 
 /*
@@ -398,14 +322,33 @@ static inline ip6_addr ip6_hton(ip6_addr a)
 static inline ip6_addr ip6_ntoh(ip6_addr a)
 { return _MI6(ntohl(_I0(a)), ntohl(_I1(a)), ntohl(_I2(a)), ntohl(_I3(a))); }
 
-#ifdef IPV6
-#define ipa_hton(x) x = ip6_hton(x)
-#define ipa_ntoh(x) x = ip6_ntoh(x)
-#else
-#define ipa_hton(x) x = ip4_hton(x)
-#define ipa_ntoh(x) x = ip4_ntoh(x)
-#endif
+#define MPLS_MAX_LABEL_STACK 8
+typedef struct mpls_label_stack {
+  uint len;
+  u32 stack[MPLS_MAX_LABEL_STACK];
+} mpls_label_stack;
 
+static inline int
+mpls_get(const char *buf, int buflen, u32 *stack)
+{
+  for (int i=0; (i<MPLS_MAX_LABEL_STACK) && (i*4+3 < buflen); i++)
+  {
+    u32 s = get_u32(buf + i*4);
+    stack[i] = s >> 12;
+    if (s & 0x100)
+      return i+1;
+  }
+  return -1;
+}
+
+static inline int
+mpls_put(char *buf, int len, u32 *stack)
+{
+  for (int i=0; i<len; i++)
+    put_u32(buf + i*4, stack[i] << 12 | (i+1 == len ? 0x100 : 0));
+
+  return len*4;
+}
 
 /*
  *	Unaligned data access (in network order)
@@ -436,15 +379,6 @@ static inline void * put_ip6(void *buf, ip6_addr a)
   return buf+16;
 }
 
-// XXXX these functions must be redesigned or removed
-#ifdef IPV6
-#define get_ipa(x) get_ip6(x)
-#define put_ipa(x,y) put_ip6(x,y)
-#else
-#define get_ipa(x) get_ip4(x)
-#define put_ipa(x,y) put_ip4(x,y)
-#endif
-
 
 /*
  *	Binary/text form conversions
@@ -462,34 +396,11 @@ static inline char * ip6_ntox(ip6_addr a, char *b)
 int ip4_pton(const char *a, ip4_addr *o);
 int ip6_pton(const char *a, ip6_addr *o);
 
-// XXXX these functions must be redesigned or removed
-#ifdef IPV6
-#define ipa_ntop(x,y) ip6_ntop(x,y)
-#define ipa_ntox(x,y) ip6_ntox(x,y)
-#define ipa_pton(x,y) ip6_pton(x,y)
-#else
-#define ipa_ntop(x,y) ip4_ntop(x,y)
-#define ipa_ntox(x,y) ip4_ntox(x,y)
-#define ipa_pton(x,y) ip4_pton(x,y)
-#endif
-
 
 /*
  *	Miscellaneous
  */
 
-// XXXX review this
-
-#define ip_is_prefix(a,l) (!ipa_nonzero(ipa_and(a, ipa_not(ipa_mkmask(l)))))
-#define ipa_in_net(x,n,p) (ipa_zero(ipa_and(ipa_xor((n),(x)),ipa_mkmask(p))))
-#define net_in_net(n1,l1,n2,l2) (((l1) >= (l2)) && (ipa_zero(ipa_and(ipa_xor((n1),(n2)),ipa_mkmask(l2)))))
-
 char *ip_scope_text(uint);
-
-struct prefix {
-  ip_addr addr;
-  uint len;
-};
-
 
 #endif

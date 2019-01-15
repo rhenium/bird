@@ -23,7 +23,7 @@ CF_KEYWORDS(MRT, TABLE, FILTER, FILENAME, PERIOD, ALWAYS, ADD, PATH, DUMP, TO)
 
 CF_GRAMMAR
 
-CF_ADDTO(proto, mrt_proto)
+proto: mrt_proto ;
 
 mrt_proto_start: proto_start MRT
 {
@@ -32,6 +32,7 @@ mrt_proto_start: proto_start MRT
 
 mrt_proto_item:
    proto_item
+ | TABLE rtable		{ MRT_CFG->table_cf = $2; }
  | TABLE TEXT		{ MRT_CFG->table_expr = $2; }
  | FILTER filter	{ MRT_CFG->filter = $2; }
  | where_filter		{ MRT_CFG->filter = $1; }

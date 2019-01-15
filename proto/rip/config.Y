@@ -32,34 +32,41 @@ rip_check_auth(void)
 
 CF_DECLS
 
-CF_KEYWORDS(RIP, ECMP, LIMIT, WEIGHT, INFINITY, METRIC, UPDATE, TIMEOUT,
+CF_KEYWORDS(RIP, NG, ECMP, LIMIT, WEIGHT, INFINITY, METRIC, UPDATE, TIMEOUT,
 	    GARBAGE, PORT, ADDRESS, MODE, BROADCAST, MULTICAST, PASSIVE,
 	    VERSION, SPLIT, HORIZON, POISON, REVERSE, CHECK, ZERO, TIME, BFD,
 	    AUTHENTICATION, NONE, PLAINTEXT, CRYPTOGRAPHIC, MD5, TTL, SECURITY,
 	    RX, TX, BUFFER, LENGTH, PRIORITY, ONLY, LINK, RIP_METRIC, RIP_TAG)
 
-%type <i> rip_auth
+%type <i> rip_variant rip_auth
 
 CF_GRAMMAR
 
-CF_ADDTO(proto, rip_proto)
+proto: rip_proto ;
 
-rip_proto_start: proto_start RIP
+rip_variant:
+   RIP    { $$ = 1; }
+ | RIP NG { $$ = 0; }
+ ;
+
+rip_proto_start: proto_start rip_variant
 {
   this_proto = proto_config_new(&proto_rip, $1);
+  this_proto->net_type = $2 ? NET_IP4 : NET_IP6;
+
   init_list(&RIP_CFG->patt_list);
-
-  RIP_CFG->rip2 = RIP_IS_V2;
+  RIP_CFG->rip2 = $2;
+  RIP_CFG->ecmp = rt_default_ecmp;
   RIP_CFG->infinity = RIP_DEFAULT_INFINITY;
-
-  RIP_CFG->min_timeout_time = 60;
-  RIP_CFG->max_garbage_time = 60;
+  RIP_CFG->min_timeout_time = 60 S_;
+  RIP_CFG->max_garbage_time = 60 S_;
 };
 
 rip_proto_item:
    proto_item
+ | proto_channel
  | ECMP bool		{ RIP_CFG->ecmp = $2 ? RIP_DEFAULT_ECMP_LIMIT : 0; }
- | ECMP bool LIMIT expr	{ RIP_CFG->ecmp = $2 ? $4 : 0; if ($4 < 0) cf_error("ECMP limit cannot be negative"); }
+ | ECMP bool LIMIT expr	{ RIP_CFG->ecmp = $2 ? $4 : 0; }
  | INFINITY expr	{ RIP_CFG->infinity = $2; }
  | INTERFACE rip_iface
  ;
@@ -86,6 +93,7 @@ rip_iface_start:
   RIP_IFACE->split_horizon = 1;
   RIP_IFACE->poison_reverse = 1;
   RIP_IFACE->check_zero = 1;
+  RIP_IFACE->check_link = 1;
   RIP_IFACE->ttl_security = rip_cfg_is_v2() ? 0 : 1;
   RIP_IFACE->rx_buffer = rip_cfg_is_v2() ? RIP_MAX_PKT_LENGTH : 0;
   RIP_IFACE->tx_length = rip_cfg_is_v2() ? RIP_MAX_PKT_LENGTH : 0;
@@ -131,7 +139,7 @@ rip_iface_item:
  | MODE MULTICAST	{ RIP_IFACE->mode = RIP_IM_MULTICAST; }
  | MODE BROADCAST	{ RIP_IFACE->mode = RIP_IM_BROADCAST; if (rip_cfg_is_ng()) cf_error("Broadcast not supported in RIPng"); }
  | PASSIVE bool		{ RIP_IFACE->passive = $2; }
- | ADDRESS ipa		{ RIP_IFACE->address = $2; }
+ | ADDRESS ipa		{ RIP_IFACE->address = $2; if (ipa_is_ip4($2) != rip_cfg_is_v2()) cf_error("IP address version mismatch"); }
  | PORT expr		{ RIP_IFACE->port = $2; if (($2<1) || ($2>65535)) cf_error("Invalid port number"); }
  | VERSION expr		{ RIP_IFACE->version = $2;
 			  if (rip_cfg_is_ng()) cf_error("Version not supported in RIPng");
@@ -141,9 +149,9 @@ rip_iface_item:
  | SPLIT HORIZON bool	{ RIP_IFACE->split_horizon = $3; }
  | POISON REVERSE bool	{ RIP_IFACE->poison_reverse = $3; }
  | CHECK ZERO bool	{ RIP_IFACE->check_zero = $3; }
- | UPDATE TIME expr	{ RIP_IFACE->update_time = $3; if ($3<=0) cf_error("Update time must be positive"); }
- | TIMEOUT TIME expr	{ RIP_IFACE->timeout_time = $3; if ($3<=0) cf_error("Timeout time must be positive"); }
- | GARBAGE TIME expr	{ RIP_IFACE->garbage_time = $3; if ($3<=0) cf_error("Garbage time must be positive"); }
+ | UPDATE TIME expr	{ RIP_IFACE->update_time = $3 S_; if ($3<=0) cf_error("Update time must be positive"); }
+ | TIMEOUT TIME expr	{ RIP_IFACE->timeout_time = $3 S_; if ($3<=0) cf_error("Timeout time must be positive"); }
+ | GARBAGE TIME expr	{ RIP_IFACE->garbage_time = $3 S_; if ($3<=0) cf_error("Garbage time must be positive"); }
  | ECMP WEIGHT expr	{ RIP_IFACE->ecmp_weight = $3 - 1; if (($3<1) || ($3>256)) cf_error("ECMP weight must be in range 1-256"); }
  | RX BUFFER expr	{ RIP_IFACE->rx_buffer = $3; if (($3<256) || ($3>65535)) cf_error("RX length must be in range 256-65535"); }
  | TX LENGTH expr	{ RIP_IFACE->tx_length = $3; if (($3<256) || ($3>65535)) cf_error("TX length must be in range 256-65535"); }
@@ -178,8 +186,8 @@ rip_iface:
   rip_iface_start iface_patt_list_nopx rip_iface_opt_list rip_iface_finish;
 
 
-CF_ADDTO(dynamic_attr, RIP_METRIC { $$ = f_new_dynamic_attr(EAF_TYPE_INT | EAF_TEMP, T_INT, EA_RIP_METRIC); })
-CF_ADDTO(dynamic_attr, RIP_TAG { $$ = f_new_dynamic_attr(EAF_TYPE_INT | EAF_TEMP, T_INT, EA_RIP_TAG); })
+dynamic_attr: RIP_METRIC { $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_RIP_METRIC); } ;
+dynamic_attr: RIP_TAG { $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_RIP_TAG); } ;
 
 CF_CLI_HELP(SHOW RIP, ..., [[Show information about RIP protocol]]);
 

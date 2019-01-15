@@ -1,5 +1,6 @@
-source=mrt.c
-root-rel=../../
-dir-name=proto/mrt
+src := mrt.c
+obj := $(src-o-files)
+$(all-daemon)
+$(cf-local)
 
-include ../../Rules
+tests_objs := $(tests_objs) $(src-o-files)

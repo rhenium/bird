@@ -55,11 +55,16 @@ ifa_tx_length(struct ospf_iface *ifa)
 static inline uint
 ifa_tx_hdrlen(struct ospf_iface *ifa)
 {
-  uint hlen = SIZE_OF_IP_HEADER;
+  struct ospf_proto *p = ifa->oa->po;
+
+  uint hlen = ospf_is_v2(p) ? IP4_HEADER_LENGTH : IP6_HEADER_LENGTH;
 
   /* Relevant just for OSPFv2 */
   if (ifa->autype == OSPF_AUTH_CRYPT)
+  {
+    hlen += ospf_is_v2(p) ? 0 : sizeof(struct ospf_auth3);
     hlen += max_mac_length(ifa->passwords);
+  }
 
   return hlen;
 }
@@ -115,6 +120,7 @@ ospf_sk_open(struct ospf_iface *ifa)
 
   sock *sk = sk_new(ifa->pool);
   sk->type = SK_IP;
+  sk->subtype = ospf_is_v2(p) ? SK_IPV4 : SK_IPV6;
   sk->dport = OSPF_PROTO;
   sk->saddr = ifa->addr->ip;
   sk->iface = ifa->iface;
@@ -134,7 +140,7 @@ ospf_sk_open(struct ospf_iface *ifa)
     goto err;
 
   /* 12 is an offset of the checksum in an OSPFv3 packet */
-  if (ospf_is_v3(p))
+  if (ospf_is_v3(p) && !ifa->autype)
     if (sk_set_ipv6_checksum(sk, 12) < 0)
       goto err;
 
@@ -200,6 +206,7 @@ ospf_open_vlink_sk(struct ospf_proto *p)
 {
   sock *sk = sk_new(p->p.pool);
   sk->type = SK_IP;
+  sk->subtype = ospf_is_v2(p) ? SK_IPV4 : SK_IPV6;
   sk->dport = OSPF_PROTO;
   sk->vrf = p->p.vrf;
 
@@ -246,8 +253,8 @@ ospf_iface_down(struct ospf_iface *ifa)
       OSPF_TRACE(D_EVENTS, "Removing interface %s (peer %I) from area %R",
 		 ifa->ifname, ifa->addr->opposite, ifa->oa->areaid);
     else
-      OSPF_TRACE(D_EVENTS, "Removing interface %s (%I/%d) from area %R",
-		 ifa->ifname, ifa->addr->prefix, ifa->addr->pxlen, ifa->oa->areaid);
+      OSPF_TRACE(D_EVENTS, "Removing interface %s (%N) from area %R",
+		 ifa->ifname, &ifa->addr->prefix, ifa->oa->areaid);
 
     /* First of all kill all the related vlinks */
     WALK_LIST(iff, p->iface_list)
@@ -394,15 +401,15 @@ ospf_iface_sm(struct ospf_iface *ifa, int event)
 	{
 	  ospf_iface_chstate(ifa, OSPF_IS_WAITING);
 	  if (ifa->wait_timer)
-	    tm_start(ifa->wait_timer, ifa->waitint);
+	    tm_start(ifa->wait_timer, ifa->waitint S);
 	}
       }
 
       if (ifa->hello_timer)
-	tm_start(ifa->hello_timer, ifa->helloint);
+	tm_start(ifa->hello_timer, ifa->helloint S);
 
       if (ifa->poll_timer)
-	tm_start(ifa->poll_timer, ifa->pollint);
+	tm_start(ifa->poll_timer, ifa->pollint S);
 
       ospf_send_hello(ifa, OHS_HELLO, NULL);
     }
@@ -492,13 +499,13 @@ ospf_iface_add(struct object_lock *lock)
 
   if (! ifa->stub)
   {
-    ifa->hello_timer = tm_new_set(ifa->pool, hello_timer_hook, ifa, 0, ifa->helloint);
+    ifa->hello_timer = tm_new_init(ifa->pool, hello_timer_hook, ifa, ifa->helloint S, 0);
 
     if (ifa->type == OSPF_IT_NBMA)
-      ifa->poll_timer = tm_new_set(ifa->pool, poll_timer_hook, ifa, 0, ifa->pollint);
+      ifa->poll_timer = tm_new_init(ifa->pool, poll_timer_hook, ifa, ifa->pollint S, 0);
 
     if ((ifa->type == OSPF_IT_BCAST) || (ifa->type == OSPF_IT_NBMA))
-      ifa->wait_timer = tm_new_set(ifa->pool, wait_timer_hook, ifa, 0, 0);
+      ifa->wait_timer = tm_new_init(ifa->pool, wait_timer_hook, ifa, 0, 0);
 
     ifa->flood_queue_size = ifa_flood_queue_size(ifa);
     ifa->flood_queue = mb_allocz(ifa->pool, ifa->flood_queue_size * sizeof(void *));
@@ -536,15 +543,6 @@ ospf_iface_stubby(struct ospf_iface_patt *ip, struct ifa *addr)
   if (addr->iface->flags & IF_LOOPBACK)
     return 1;
 
-  /*
-   * For compatibility reasons on BSD systems, we force OSPF
-   * interfaces with non-primary IP prefixes to be stub.
-   */
-#if defined(OSPFv2) && !defined(CONFIG_MC_PROPER_SRC)
-  if (!ip->bsd_secondary && !(addr->flags & IA_PRIMARY))
-    return 1;
-#endif
-
   return ip->stub;
 }
 
@@ -563,8 +561,8 @@ ospf_iface_new(struct ospf_area *oa, struct ifa *addr, struct ospf_iface_patt *i
     OSPF_TRACE(D_EVENTS, "Adding interface %s (peer %I) to area %R",
 	       iface->name, addr->opposite, oa->areaid);
   else
-    OSPF_TRACE(D_EVENTS, "Adding interface %s (%I/%d) to area %R",
-	       iface->name, addr->prefix, addr->pxlen, oa->areaid);
+    OSPF_TRACE(D_EVENTS, "Adding interface %s (%N) to area %R",
+	       iface->name, &addr->prefix, oa->areaid);
 
   pool = rp_new(p->p.pool, "OSPF Interface");
   ifa = mb_allocz(pool, sizeof(struct ospf_iface));
@@ -602,6 +600,7 @@ ospf_iface_new(struct ospf_area *oa, struct ifa *addr, struct ospf_iface_patt *i
   if (ip->ptp_netmask < 2)
     ifa->ptp_netmask = ip->ptp_netmask;
 
+  ifa->drip = ifa->bdrip = ospf_is_v2(p) ? IPA_NONE4 : IPA_NONE6;
 
   ifa->type = ospf_iface_classify(ip->type, addr);
 
@@ -641,7 +640,7 @@ ospf_iface_new(struct ospf_area *oa, struct ifa *addr, struct ospf_iface_patt *i
        should be used). Because OSPFv3 iface is not subnet-specific,
        there is no need for ipa_in_net() check */
 
-    if (ospf_is_v2(p) && !ipa_in_net(nb->ip, addr->prefix, addr->pxlen))
+    if (ospf_is_v2(p) && !ipa_in_netX(nb->ip, &addr->prefix))
       continue;
 
     if (ospf_is_v3(p) && !ipa_is_link_local(nb->ip))
@@ -654,7 +653,7 @@ ospf_iface_new(struct ospf_area *oa, struct ifa *addr, struct ospf_iface_patt *i
   add_tail(&oa->po->iface_list, NODE ifa);
 
   struct object_lock *lock = olock_new(pool);
-  lock->addr = ospf_is_v2(p) ? ifa->addr->prefix : IPA_NONE;
+  lock->addr = ospf_is_v2(p) ? ipa_from_ip4(net4_prefix(&ifa->addr->prefix)) : IPA_NONE;
   lock->type = OBJLOCK_IP;
   lock->port = OSPF_PROTO;
   lock->inst = ifa->instance_id;
@@ -713,7 +712,7 @@ ospf_iface_new_vlink(struct ospf_proto *p, struct ospf_iface_patt *ip)
 
   add_tail(&p->iface_list, NODE ifa);
 
-  ifa->hello_timer = tm_new_set(ifa->pool, hello_timer_hook, ifa, 0, ifa->helloint);
+  ifa->hello_timer = tm_new_init(ifa->pool, hello_timer_hook, ifa, ifa->helloint S, 0);
 
   ifa->flood_queue_size = ifa_flood_queue_size(ifa);
   ifa->flood_queue = mb_allocz(ifa->pool, ifa->flood_queue_size * sizeof(void *));
@@ -725,10 +724,10 @@ ospf_iface_change_timer(timer *tm, uint val)
   if (!tm)
     return;
 
-  tm->recurrent = val;
+  tm->recurrent = val S;
 
-  if (tm->expires)
-    tm_start(tm, val);
+  if (tm_active(tm))
+    tm_start(tm, val S);
 }
 
 static inline void
@@ -811,8 +810,8 @@ ospf_iface_reconfigure(struct ospf_iface *ifa, struct ospf_iface_patt *new)
 	       ifname, ifa->waitint, new->waitint);
 
     ifa->waitint = new->waitint;
-    if (ifa->wait_timer && ifa->wait_timer->expires)
-      tm_start(ifa->wait_timer, ifa->waitint);
+    if (ifa->wait_timer && tm_active(ifa->wait_timer))
+      tm_start(ifa->wait_timer, ifa->waitint S);
   }
 
   /* DEAD TIMER */
@@ -836,6 +835,14 @@ ospf_iface_reconfigure(struct ospf_iface *ifa, struct ospf_iface_patt *new)
   {
     OSPF_TRACE(D_EVENTS, "Changing authentication type of %s", ifname);
     ifa->autype = new->autype;
+
+    /* For OSPFv3, we need to update checksum calculation by OS */
+    if (ospf_is_v3(p) && ifa->sk)
+      if (sk_set_ipv6_checksum(ifa->sk, ifa->autype ? -1 : 12) < 0)
+      {
+	sk_log_error(ifa->sk, p->p.name);
+	return 0;
+      }
   }
 
   /* Update passwords */
@@ -904,7 +911,7 @@ ospf_iface_reconfigure(struct ospf_iface *ifa, struct ospf_iface_patt *new)
   WALK_LIST(nb, new->nbma_list)
   {
     /* See related note in ospf_iface_new() */
-    if (ospf_is_v2(p) && !ipa_in_net(nb->ip, ifa->addr->prefix, ifa->addr->pxlen))
+    if (ospf_is_v2(p) && !ipa_in_netX(nb->ip, &ifa->addr->prefix))
       continue;
 
     if (ospf_is_v3(p) && !ipa_is_link_local(nb->ip))
@@ -1091,6 +1098,9 @@ ospf_ifa_notify2(struct proto *P, uint flags, struct ifa *a)
 {
   struct ospf_proto *p = (struct ospf_proto *) P;
 
+  if (a->prefix.type != NET_IP4)
+    return;
+
   if (a->flags & IA_SECONDARY)
     return;
 
@@ -1130,6 +1140,9 @@ ospf_ifa_notify3(struct proto *P, uint flags, struct ifa *a)
      other addresses are used for link-LSA. */
   if (a->scope == SCOPE_LINK)
   {
+    if (a->prefix.type != NET_IP6)
+      return;
+
     if (flags & IF_CHANGE_UP)
     {
       struct ospf_mip_walk s = { .iface = a->iface };
@@ -1147,6 +1160,9 @@ ospf_ifa_notify3(struct proto *P, uint flags, struct ifa *a)
   }
   else
   {
+    if (a->prefix.type != ospf_get_af(p))
+      return;
+
     struct ospf_iface *ifa;
     WALK_LIST(ifa, p->iface_list)
       if (ifa->iface == a->iface)
@@ -1172,6 +1188,9 @@ ospf_reconfigure_ifaces2(struct ospf_proto *p)
 
     WALK_LIST(a, iface->addrs)
     {
+      if (a->prefix.type != NET_IP4)
+	continue;
+
       if (a->flags & IA_SECONDARY)
 	continue;
 
@@ -1190,8 +1209,8 @@ ospf_reconfigure_ifaces2(struct ospf_proto *p)
 	    continue;
 
 	  /* Hard restart */
-	  log(L_INFO "%s: Restarting interface %s (%I/%d) in area %R",
-	      p->p.name, ifa->ifname, a->prefix, a->pxlen, s.oa->areaid);
+	  log(L_INFO "%s: Restarting interface %s (%N) in area %R",
+	      p->p.name, ifa->ifname, &a->prefix, s.oa->areaid);
 	  ospf_iface_shutdown(ifa);
 	  ospf_iface_remove(ifa);
 	}
@@ -1215,6 +1234,9 @@ ospf_reconfigure_ifaces3(struct ospf_proto *p)
 
     WALK_LIST(a, iface->addrs)
     {
+      if (a->prefix.type != NET_IP6)
+	continue;
+
       if (a->flags & IA_SECONDARY)
 	continue;
 
@@ -1347,7 +1369,7 @@ ospf_iface_info(struct ospf_iface *ifa)
     else if (ifa->addr->flags & IA_PEER)
       cli_msg(-1015, "Interface %s (peer %I)", ifa->ifname, ifa->addr->opposite);
     else
-      cli_msg(-1015, "Interface %s (%I/%d)", ifa->ifname, ifa->addr->prefix, ifa->addr->pxlen);
+      cli_msg(-1015, "Interface %s (%N)", ifa->ifname, &ifa->addr->prefix);
 
     cli_msg(-1015, "\tType: %s%s", ospf_it[ifa->type], more);
     cli_msg(-1015, "\tArea: %R (%u)", ifa->oa->areaid, ifa->oa->areaid);

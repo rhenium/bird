@@ -18,9 +18,10 @@ CF_HDR
 CF_DEFINES
 
 static struct proto_config *this_proto;
+static struct channel_config *this_channel;
 static struct iface_patt *this_ipatt;
 static struct iface_patt_node *this_ipn;
-static struct roa_table_config *this_roa_table;
+/* static struct roa_table_config *this_roa_table; */
 static list *this_p_list;
 static struct password_item *this_p_item;
 static int password_id;
@@ -31,7 +32,7 @@ iface_patt_check(void)
   struct iface_patt_node *pn;
 
   WALK_LIST(pn, this_ipatt->ipn_list)
-    if (!pn->pattern || pn->pxlen)
+    if (!pn->pattern || pn->prefix.type)
       cf_error("Interface name/mask expected, not IP prefix");
 }
 
@@ -50,25 +51,38 @@ get_passwords(void)
   return rv;
 }
 
+static void
+proto_postconfig(void)
+{
+  CALL(this_proto->protocol->postconfig, this_proto);
+  this_channel = NULL;
+  this_proto = NULL;
+}
+
+
 #define DIRECT_CFG ((struct rt_dev_config *) this_proto)
 
 CF_DECLS
 
 CF_KEYWORDS(ROUTER, ID, PROTOCOL, TEMPLATE, PREFERENCE, DISABLED, DEBUG, ALL, OFF, DIRECT)
 CF_KEYWORDS(INTERFACE, IMPORT, EXPORT, FILTER, NONE, VRF, TABLE, STATES, ROUTES, FILTERS)
+CF_KEYWORDS(IPV4, IPV6, VPN4, VPN6, ROA4, ROA6, FLOW4, FLOW6, SADR, MPLS)
 CF_KEYWORDS(RECEIVE, LIMIT, ACTION, WARN, BLOCK, RESTART, DISABLE, KEEP, FILTERED)
 CF_KEYWORDS(PASSWORD, FROM, PASSIVE, TO, ID, EVENTS, PACKETS, PROTOCOLS, INTERFACES)
 CF_KEYWORDS(ALGORITHM, KEYED, HMAC, MD5, SHA1, SHA256, SHA384, SHA512)
-CF_KEYWORDS(PRIMARY, STATS, COUNT, FOR, COMMANDS, PREEXPORT, NOEXPORT, GENERATE, ROA)
-CF_KEYWORDS(LISTEN, BGP, V6ONLY, DUAL, ADDRESS, PORT, PASSWORDS, DESCRIPTION, SORTED)
+CF_KEYWORDS(PRIMARY, STATS, COUNT, BY, FOR, COMMANDS, PREEXPORT, NOEXPORT, GENERATE)
+CF_KEYWORDS(BGP, PASSWORDS, DESCRIPTION, SORTED)
 CF_KEYWORDS(RELOAD, IN, OUT, MRTDUMP, MESSAGES, RESTRICT, MEMORY, IGP_METRIC, CLASS, DSCP)
+CF_KEYWORDS(TIMEFORMAT, ISO, SHORT, LONG, ROUTE, PROTOCOL, BASE, LOG, S, MS, US)
 CF_KEYWORDS(GRACEFUL, RESTART, WAIT, MAX, FLUSH, AS)
+
+/* For r_args_channel */
+CF_KEYWORDS(IPV4, IPV4_MC, IPV4_MPLS, IPV6, IPV6_MC, IPV6_MPLS, IPV6_SADR, VPN4, VPN4_MC, VPN4_MPLS, VPN6, VPN6_MC, VPN6_MPLS, ROA4, ROA6, FLOW4, FLOW6, MPLS, PRI, SEC)
 
 CF_ENUM(T_ENUM_RTS, RTS_, DUMMY, STATIC, INHERIT, DEVICE, STATIC_DEVICE, REDIRECT,
 	RIP, OSPF, OSPF_IA, OSPF_EXT1, OSPF_EXT2, BGP, PIPE, BABEL)
 CF_ENUM(T_ENUM_SCOPE, SCOPE_, HOST, LINK, SITE, ORGANIZATION, UNIVERSE, UNDEFINED)
-CF_ENUM(T_ENUM_RTC, RTC_, UNICAST, BROADCAST, MULTICAST, ANYCAST)
-CF_ENUM(T_ENUM_RTD, RTD_, ROUTER, DEVICE, BLACKHOLE, UNREACHABLE, PROHIBIT, MULTIPATH)
+CF_ENUM(T_ENUM_RTD, RTD_, UNICAST, BLACKHOLE, UNREACHABLE, PROHIBIT)
 CF_ENUM(T_ENUM_ROA, ROA_, UNKNOWN, VALID, INVALID)
 
 %type <i32> idval
@@ -76,18 +90,20 @@ CF_ENUM(T_ENUM_ROA, ROA_, UNKNOWN, VALID, INVALID)
 %type <r> rtable
 %type <s> optsym
 %type <ra> r_args
-%type <ro> roa_args
-%type <rot> roa_table_arg
 %type <sd> sym_args
-%type <i> proto_start echo_mask echo_size debug_mask debug_list debug_flag mrtdump_mask mrtdump_list mrtdump_flag export_mode roa_mode limit_action tab_sorted tos password_algorithm
+%type <i> proto_start echo_mask echo_size debug_mask debug_list debug_flag mrtdump_mask mrtdump_list mrtdump_flag export_mode limit_action net_type table_sorted tos password_algorithm
 %type <ps> proto_patt proto_patt2
-%type <g> limit_spec
+%type <cc> channel_start proto_channel
+%type <cl> limit_spec
+%type <net> r_args_for_val
+%type <net_ptr> r_args_for
+%type <t> r_args_channel
 
 CF_GRAMMAR
 
 /* Setting of router ID */
 
-CF_ADDTO(conf, rtrid)
+conf: rtrid ;
 
 rtrid:
    ROUTER ID idval ';' { new_config->router_id = $3; }
@@ -97,86 +113,60 @@ rtrid:
 idval:
    NUM { $$ = $1; }
  | '(' term ')' { $$ = f_eval_int($2); }
- | RTRID
- | IPA {
-#ifndef IPV6
-     $$ = ipa_to_u32($1);
-#else
-     cf_error("Router IDs must be entered as hexadecimal numbers or IPv4 addresses in IPv6 version");
-#endif
-   }
+ | IP4 { $$ = ip4_to_u32($1); }
  | SYM {
      if ($1->class == (SYM_CONSTANT | T_INT) || $1->class == (SYM_CONSTANT | T_QUAD))
        $$ = SYM_VAL($1).i;
-#ifndef IPV6
-     else if ($1->class == (SYM_CONSTANT | T_IP))
-       $$ = ipa_to_u32(SYM_VAL($1).px.ip);
-#endif
+     else if (($1->class == (SYM_CONSTANT | T_IP)) && ipa_is_ip4(SYM_VAL($1).ip))
+       $$ = ipa_to_u32(SYM_VAL($1).ip);
      else
        cf_error("Number or IPv4 address constant expected");
    }
  ;
 
-
-CF_ADDTO(conf, listen)
-
-listen: LISTEN BGP listen_opts ';' ;
-
-listen_opts:
-   /* Nothing */
- | listen_opts listen_opt
- ;
-
-listen_opt:
-   ADDRESS ipa { new_config->listen_bgp_addr = $2; }
- | PORT expr { new_config->listen_bgp_port = $2; }
- | V6ONLY { new_config->listen_bgp_flags = 0; }
- | DUAL { new_config->listen_bgp_flags = 1; }
- ;
-
-
-CF_ADDTO(conf, gr_opts)
+conf: gr_opts ;
 
 gr_opts: GRACEFUL RESTART WAIT expr ';' { new_config->gr_wait = $4; } ;
 
 
+/* Network types (for tables, channels) */
+
+net_type:
+   IPV4 { $$ = NET_IP4; }
+ | IPV6 { $$ = NET_IP6; }
+ | IPV6 SADR { $$ = NET_IP6_SADR; }
+ | VPN4 { $$ = NET_VPN4; }
+ | VPN6 { $$ = NET_VPN6; }
+ | ROA4 { $$ = NET_ROA4; }
+ | ROA6 { $$ = NET_ROA6; }
+ | FLOW4{ $$ = NET_FLOW4; }
+ | FLOW6{ $$ = NET_FLOW6; }
+ | MPLS { $$ = NET_MPLS; }
+ ;
+
+CF_ENUM(T_ENUM_NETTYPE, NET_, IP4, IP6, VPN4, VPN6, ROA4, ROA6, FLOW4, FLOW6, IP6_SADR)
+
+
 /* Creation of routing tables */
 
-tab_sorted:
-          { $$ = 0; }
+conf: table ;
+
+table_sorted:
+	  { $$ = 0; }
  | SORTED { $$ = 1; }
  ;
 
-CF_ADDTO(conf, newtab)
-
-newtab: TABLE SYM tab_sorted {
+table: net_type TABLE SYM table_sorted {
    struct rtable_config *cf;
-   cf = rt_new_table($2);
-   cf->sorted = $3;
+   cf = rt_new_table($3, $1);
+   cf->sorted = $4;
    }
  ;
 
-CF_ADDTO(conf, roa_table)
-
-roa_table_start: ROA TABLE SYM {
-  this_roa_table = roa_new_table_config($3);
-};
-
-roa_table_opts:
-   /* empty */
- | roa_table_opts ROA prefix MAX NUM AS NUM ';' {
-     roa_add_item_config(this_roa_table, $3.addr, $3.len, $5, $7);
-   }
- ;
-
-roa_table:
-   roa_table_start
- | roa_table_start '{' roa_table_opts '}'
- ;
 
 /* Definition of protocols */
 
-CF_ADDTO(conf, proto)
+conf: proto { proto_postconfig(); } ;
 
 proto_start:
    PROTOCOL { $$ = SYM_PROTO; }
@@ -214,23 +204,61 @@ proto_name:
 
 proto_item:
    /* EMPTY */
- | PREFERENCE expr {
-     if ($2 < 0 || $2 > 0xFFFF) cf_error("Invalid preference");
-     this_proto->preference = $2;
-   }
  | DISABLED bool { this_proto->disabled = $2; }
  | DEBUG debug_mask { this_proto->debug = $2; }
  | MRTDUMP mrtdump_mask { this_proto->mrtdump = $2; }
- | IMPORT imexport { this_proto->in_filter = $2; }
- | EXPORT imexport { this_proto->out_filter = $2; }
- | RECEIVE LIMIT limit_spec { this_proto->rx_limit = $3; }
- | IMPORT LIMIT limit_spec { this_proto->in_limit = $3; }
- | EXPORT LIMIT limit_spec { this_proto->out_limit = $3; }
- | IMPORT KEEP FILTERED bool { this_proto->in_keep_filtered = $4; }
- | VRF text { this_proto->vrf = if_get_by_name($2); }
- | TABLE rtable { this_proto->table = $2; }
  | ROUTER ID idval { this_proto->router_id = $3; }
  | DESCRIPTION text { this_proto->dsc = $2; }
+ | VRF text { this_proto->vrf = if_get_by_name($2); }
+ ;
+
+
+channel_start: net_type
+{
+  $$ = this_channel = channel_config_get(NULL, net_label[$1], $1, this_proto);
+};
+
+channel_item:
+   TABLE rtable {
+     if (this_channel->net_type && ($2->addr_type != this_channel->net_type))
+       cf_error("Incompatible table type");
+     this_channel->table = $2;
+   }
+ | IMPORT imexport { this_channel->in_filter = $2; }
+ | EXPORT imexport { this_channel->out_filter = $2; }
+ | RECEIVE LIMIT limit_spec { this_channel->rx_limit = $3; }
+ | IMPORT LIMIT limit_spec { this_channel->in_limit = $3; }
+ | EXPORT LIMIT limit_spec { this_channel->out_limit = $3; }
+ | PREFERENCE expr { this_channel->preference = $2; check_u16($2); }
+ | IMPORT KEEP FILTERED bool { this_channel->in_keep_filtered = $4; }
+ ;
+
+channel_opts:
+   /* empty */
+ | channel_opts channel_item ';'
+ ;
+
+channel_opt_list:
+   /* empty */
+ | '{' channel_opts '}'
+ ;
+
+channel_end:
+{
+  if (!this_channel->table)
+    cf_error("Routing table not specified");
+
+  this_channel = NULL;
+};
+
+proto_channel: channel_start channel_opt_list channel_end;
+
+
+rtable:
+   SYM {
+     if ($1->class != SYM_TABLE) cf_error("Table expected");
+     $$ = $1->def;
+   }
  ;
 
 imexport:
@@ -249,23 +277,12 @@ limit_action:
  ;
 
 limit_spec:
-   expr limit_action {
-     struct proto_limit *l = cfg_allocz(sizeof(struct proto_limit));
-     l->limit = $1;
-     l->action = $2;
-     $$ = l;
-   }
- | OFF { $$ = NULL; }
+   expr limit_action { $$ = (struct channel_limit){ .limit = $1, $$.action = $2 }; }
+ | OFF { $$ = (struct channel_limit){}; }
  ;
 
-rtable:
-   SYM {
-     if ($1->class != SYM_TABLE) cf_error("Table name expected");
-     $$ = $1->def;
-   }
- ;
 
-CF_ADDTO(conf, debug_default)
+conf: debug_default ;
 
 debug_default:
    DEBUG PROTOCOLS debug_mask { new_config->proto_default_debug = $3; }
@@ -273,6 +290,31 @@ debug_default:
  ;
 
 /* MRTDUMP PROTOCOLS is in systep/unix/config.Y */
+
+conf: timeformat_base ;
+
+timeformat_which:
+   ROUTE { $$ = &new_config->tf_route; }
+ | PROTOCOL { $$ = &new_config->tf_proto; }
+ | BASE { $$ = &new_config->tf_base; }
+ | LOG { $$ = &new_config->tf_log; }
+ ;
+
+timeformat_spec:
+   timeformat_which TEXT { *$1 = (struct timeformat){$2, NULL, 0}; }
+ | timeformat_which TEXT expr TEXT { *$1 = (struct timeformat){$2, $4, (s64) $3 S_}; }
+ | timeformat_which ISO SHORT    { *$1 = TM_ISO_SHORT_S; }
+ | timeformat_which ISO SHORT MS { *$1 = TM_ISO_SHORT_MS; }
+ | timeformat_which ISO SHORT US { *$1 = TM_ISO_SHORT_US; }
+ | timeformat_which ISO LONG    { *$1 = TM_ISO_LONG_S; }
+ | timeformat_which ISO LONG MS { *$1 = TM_ISO_LONG_MS; }
+ | timeformat_which ISO LONG US { *$1 = TM_ISO_LONG_US; }
+ ;
+
+timeformat_base:
+   TIMEFORMAT timeformat_spec ';'
+ ;
+
 
 /* Interface patterns */
 
@@ -285,9 +327,8 @@ iface_patt_node_init:
  ;
 
 iface_patt_node_body:
-   TEXT { this_ipn->pattern = $1; this_ipn->prefix = IPA_NONE; this_ipn->pxlen = 0; }
- | prefix_or_ipa { this_ipn->pattern = NULL; this_ipn->prefix = $1.addr; this_ipn->pxlen = $1.len; }
- | TEXT prefix_or_ipa { this_ipn->pattern = $1; this_ipn->prefix = $2.addr; this_ipn->pxlen = $2.len; }
+   TEXT { this_ipn->pattern = $1; /* this_ipn->prefix stays zero */ }
+ | opttext net_or_ipa { this_ipn->pattern = $1; this_ipn->prefix = $2; }
  ;
 
 iface_negate:
@@ -320,13 +361,13 @@ iface_patt:
  ;
 
 tos:
-   CLASS expr { $$ = $2 & 0xfc;        if (($2 < 0) || ($2 > 255)) cf_error("TX class must be in range 0-255"); }
- | DSCP expr  { $$ = ($2 & 0x3f) << 2; if (($2 < 0) || ($2 > 63))  cf_error("TX DSCP must be in range 0-63"); }
+   CLASS expr { $$ = $2 & 0xfc;        if ($2 > 255) cf_error("TX class must be in range 0-255"); }
+ | DSCP expr  { $$ = ($2 & 0x3f) << 2; if ($2 > 63)  cf_error("TX DSCP must be in range 0-63"); }
  ;
 
 /* Direct device route protocol */
 
-CF_ADDTO(proto, dev_proto '}')
+proto: dev_proto '}' ;
 
 dev_proto_start: proto_start DIRECT {
      this_proto = proto_config_new(&proto_device, $1);
@@ -337,6 +378,7 @@ dev_proto_start: proto_start DIRECT {
 dev_proto:
    dev_proto_start proto_name '{'
  | dev_proto proto_item ';'
+ | dev_proto proto_channel ';'
  | dev_proto dev_iface_patt ';'
  | dev_proto CHECK LINK bool ';' { DIRECT_CFG->check_link = $4; }
  ;
@@ -413,9 +455,9 @@ password_item:
 password_item_begin:
    PASSWORD text {
      if (!this_p_list) {
-     	this_p_list = cfg_alloc(sizeof(list));
-     	init_list(this_p_list);
-        password_id = 1;
+	this_p_list = cfg_alloc(sizeof(list));
+	init_list(this_p_list);
+	password_id = 1;
      }
      this_p_item = cfg_alloc(sizeof (struct password_item));
      this_p_item->password = $2;
@@ -432,12 +474,12 @@ password_item_begin:
 
 password_item_params:
    /* empty */ { }
- | GENERATE FROM datetime ';' password_item_params { this_p_item->genfrom = $3; }
- | GENERATE TO datetime ';' password_item_params { this_p_item->gento = $3; }
- | ACCEPT FROM datetime ';' password_item_params { this_p_item->accfrom = $3; }
- | ACCEPT TO datetime ';' password_item_params { this_p_item->accto = $3; }
- | FROM datetime ';' password_item_params { this_p_item->genfrom = this_p_item->accfrom = $2; }
- | TO datetime ';' password_item_params { this_p_item->gento = this_p_item->accto = $2; }
+ | GENERATE FROM time ';' password_item_params { this_p_item->genfrom = $3; }
+ | GENERATE TO time ';' password_item_params { this_p_item->gento = $3; }
+ | ACCEPT FROM time ';' password_item_params { this_p_item->accfrom = $3; }
+ | ACCEPT TO time ';' password_item_params { this_p_item->accto = $3; }
+ | FROM time ';' password_item_params { this_p_item->genfrom = this_p_item->accfrom = $2; }
+ | TO time ';' password_item_params { this_p_item->gento = this_p_item->accto = $2; }
  | ID expr ';' password_item_params { this_p_item->id = $2; if ($2 <= 0) cf_error("Password ID has to be greated than zero."); }
  | ALGORITHM password_algorithm ';' password_item_params { this_p_item->alg = $2; }
  ;
@@ -488,26 +530,43 @@ CF_CLI(SHOW ROUTE, r_args, [[[<prefix>|for <prefix>|for <ip>] [table <t>] [filte
 r_args:
    /* empty */ {
      $$ = cfg_allocz(sizeof(struct rt_show_data));
-     $$->pxlen = 256;
+     init_list(&($$->tables));
      $$->filter = FILTER_ACCEPT;
+     $$->running_on_config = new_config->fallback;
    }
- | r_args prefix {
+ | r_args net_any {
      $$ = $1;
-     if ($$->pxlen != 256) cf_error("Only one prefix expected");
-     $$->prefix = $2.addr;
-     $$->pxlen = $2.len;
+     if ($$->addr) cf_error("Only one prefix expected");
+     $$->addr = $2;
    }
- | r_args FOR prefix_or_ipa {
+ | r_args FOR r_args_for {
      $$ = $1;
-     if ($$->pxlen != 256) cf_error("Only one prefix expected");
-     $$->prefix = $3.addr;
-     $$->pxlen = $3.len;
+     if ($$->addr) cf_error("Only one prefix expected");
      $$->show_for = 1;
+     $$->addr = $3;
    }
  | r_args TABLE SYM {
      $$ = $1;
      if ($3->class != SYM_TABLE) cf_error("%s is not a table", $3->name);
-     $$->table = ((struct rtable_config *)$3->def)->table;
+     rt_show_add_table($$, ((struct rtable_config *)$3->def)->table);
+     $$->tables_defined_by = RSD_TDB_DIRECT;
+   }
+ | r_args TABLE ALL {
+     struct rtable_config *t;
+     $$ = $1;
+     WALK_LIST(t, config->tables)
+       rt_show_add_table($$, t->table);
+     $$->tables_defined_by = RSD_TDB_ALL;
+   }
+ | r_args IMPORT TABLE SYM '.' r_args_channel {
+     $$ = $1;
+     struct proto_config *cf = (void *) $4->def;
+     if ($4->class != SYM_PROTO || !cf->proto) cf_error("%s is not a protocol", $4->name);
+     struct channel *c = proto_find_channel_by_name(cf->proto, $6);
+     if (!c) cf_error("Channel %s.%s not found", $4->name, $6);
+     if (!c->in_table) cf_error("No import table in channel %s.%s", $4->name, $6);
+     rt_show_add_table($$, c->in_table);
+     $$->tables_defined_by = RSD_TDB_DIRECT;
    }
  | r_args FILTER filter {
      $$ = $1;
@@ -534,11 +593,21 @@ r_args:
  | r_args export_mode SYM {
      struct proto_config *c = (struct proto_config *) $3->def;
      $$ = $1;
-     if ($$->export_mode) cf_error("Protocol specified twice");
+     if ($$->export_mode) cf_error("Export specified twice");
      if ($3->class != SYM_PROTO || !c->proto) cf_error("%s is not a protocol", $3->name);
      $$->export_mode = $2;
      $$->export_protocol = c->proto;
-     $$->running_on_config = c->proto->cf->global;
+     $$->tables_defined_by = RSD_TDB_INDIRECT;
+   }
+ | r_args export_mode SYM '.' r_args_channel {
+     struct proto_config *c = (struct proto_config *) $3->def;
+     $$ = $1;
+     if ($$->export_mode) cf_error("Export specified twice");
+     if ($3->class != SYM_PROTO || !c->proto) cf_error("%s is not a protocol", $3->name);
+     $$->export_mode = $2;
+     $$->export_channel = proto_find_channel_by_name(c->proto, $5);
+     if (!$$->export_channel) cf_error("Export channel not found");
+     $$->tables_defined_by = RSD_TDB_INDIRECT;
    }
  | r_args PROTOCOL SYM {
      struct proto_config *c = (struct proto_config *) $3->def;
@@ -546,7 +615,7 @@ r_args:
      if ($$->show_protocol) cf_error("Protocol specified twice");
      if ($3->class != SYM_PROTO || !c->proto) cf_error("%s is not a protocol", $3->name);
      $$->show_protocol = c->proto;
-     $$->running_on_config = c->proto->cf->global;
+     $$->tables_defined_by = RSD_TDB_INDIRECT;
    }
  | r_args STATS {
      $$ = $1;
@@ -558,52 +627,77 @@ r_args:
    }
  ;
 
+r_args_for:
+  r_args_for_val {
+    $$ = cfg_alloc($1.length);
+    net_copy($$, &$1);
+  }
+ | net_vpn4_
+ | net_vpn6_
+ | net_ip6_sadr_
+ | VPN_RD IP4 {
+    $$ = cfg_alloc(sizeof(net_addr_vpn4));
+    net_fill_vpn4($$, $2, IP4_MAX_PREFIX_LENGTH, $1);
+  }
+ | VPN_RD IP6 {
+    $$ = cfg_alloc(sizeof(net_addr_vpn6));
+    net_fill_vpn6($$, $2, IP6_MAX_PREFIX_LENGTH, $1);
+  }
+ | IP6 FROM IP6 {
+    $$ = cfg_alloc(sizeof(net_addr_ip6_sadr));
+    net_fill_ip6_sadr($$, $1, IP6_MAX_PREFIX_LENGTH, $3, IP6_MAX_PREFIX_LENGTH);
+  }
+ | SYM {
+     if ($1->class == (SYM_CONSTANT | T_IP))
+     {
+       $$ = cfg_alloc(ipa_is_ip4(SYM_VAL($1).ip) ? sizeof(net_addr_ip4) : sizeof(net_addr_ip6));
+       net_fill_ip_host($$, SYM_VAL($1).ip);
+     }
+     else if (($1->class == (SYM_CONSTANT | T_NET)) && net_type_match(SYM_VAL($1).net, NB_IP | NB_VPN))
+       $$ = (net_addr *) SYM_VAL($1).net; /* Avoid const warning */
+     else
+       cf_error("IP address or network expected");
+   }
+ ;
+
+r_args_for_val:
+   net_ip4_
+ | net_ip6_
+ | IP4 { net_fill_ip4(&($$), $1, IP4_MAX_PREFIX_LENGTH); }
+ | IP6 { net_fill_ip6(&($$), $1, IP6_MAX_PREFIX_LENGTH); }
+
 export_mode:
    PREEXPORT	{ $$ = RSEM_PREEXPORT; }
  | EXPORT	{ $$ = RSEM_EXPORT; }
  | NOEXPORT	{ $$ = RSEM_NOEXPORT; }
  ;
 
-
-CF_CLI_HELP(SHOW ROA, ..., [[Show ROA table]])
-CF_CLI(SHOW ROA, roa_args, [<prefix> | in <prefix> | for <prefix>] [as <num>] [table <t>], [[Show ROA table]])
-{ roa_show($3); } ;
-
-roa_args:
-   /* empty */ {
-     $$ = cfg_allocz(sizeof(struct roa_show_data));
-     $$->mode = ROA_SHOW_ALL;
-     $$->table = roa_table_default;
-     if (roa_table_default == NULL)
-       cf_error("No ROA table defined");
-   }
- | roa_args roa_mode prefix {
-     $$ = $1;
-     if ($$->mode != ROA_SHOW_ALL) cf_error("Only one prefix expected");
-     $$->prefix = $3.addr;
-     $$->pxlen = $3.len;
-     $$->mode = $2;
-   }
- | roa_args AS NUM {
-     $$ = $1;
-     $$->asn = $3;
-   }
- | roa_args TABLE SYM {
-     $$ = $1;
-     if ($3->class != SYM_ROA) cf_error("%s is not a ROA table", $3->name);
-     $$->table = ((struct roa_table_config *)$3->def)->table;
-   }
+/* This is ugly hack */
+r_args_channel:
+   IPV4		{ $$ = "ipv4"; }
+ | IPV4_MC	{ $$ = "ipv4-mc"; }
+ | IPV4_MPLS	{ $$ = "ipv4-mpls"; }
+ | IPV6		{ $$ = "ipv6"; }
+ | IPV6_MC	{ $$ = "ipv6-mc"; }
+ | IPV6_MPLS	{ $$ = "ipv6-mpls"; }
+ | IPV6_SADR	{ $$ = "ipv6-sadr"; }
+ | VPN4		{ $$ = "vpn4"; }
+ | VPN4_MC	{ $$ = "vpn4-mc"; }
+ | VPN4_MPLS	{ $$ = "vpn4-mpls"; }
+ | VPN6		{ $$ = "vpn6"; }
+ | VPN6_MC	{ $$ = "vpn6-mc"; }
+ | VPN6_MPLS	{ $$ = "vpn6-mpls"; }
+ | ROA4		{ $$ = "roa4"; }
+ | ROA6		{ $$ = "roa6"; }
+ | FLOW4	{ $$ = "flow4"; }
+ | FLOW6	{ $$ = "flow6"; }
+ | MPLS		{ $$ = "mpls"; }
+ | PRI		{ $$ = "pri"; }
+ | SEC		{ $$ = "sec"; }
  ;
-
-roa_mode:
-       { $$ = ROA_SHOW_PX; }
- | IN  { $$ = ROA_SHOW_IN; }
- | FOR { $$ = ROA_SHOW_FOR; }
- ;
-
 
 CF_CLI_HELP(SHOW SYMBOLS, ..., [[Show all known symbolic names]])
-CF_CLI(SHOW SYMBOLS, sym_args, [table|filter|function|protocol|template|roa|<symbol>], [[Show all known symbolic names]])
+CF_CLI(SHOW SYMBOLS, sym_args, [table|filter|function|protocol|template|<symbol>], [[Show all known symbolic names]])
 { cmd_show_symbols($3); } ;
 
 sym_args:
@@ -615,44 +709,8 @@ sym_args:
  | sym_args FILTER { $$ = $1; $$->type = SYM_FILTER; }
  | sym_args PROTOCOL { $$ = $1; $$->type = SYM_PROTO; }
  | sym_args TEMPLATE { $$ = $1; $$->type = SYM_TEMPLATE; }
- | sym_args ROA { $$ = $1; $$->type = SYM_ROA; }
  | sym_args SYM { $$ = $1; $$->sym = $2; }
  ;
-
-
-roa_table_arg:
-   /* empty */ {
-     if (roa_table_default == NULL)
-       cf_error("No ROA table defined");
-     $$ = roa_table_default;
-   }
- | TABLE SYM {
-     if ($2->class != SYM_ROA)
-       cf_error("%s is not a ROA table", $2->name);
-     $$ = ((struct roa_table_config *)$2->def)->table;
-   }
- ;
-
-CF_CLI_HELP(ADD, roa ..., [[Add ROA record]])
-CF_CLI(ADD ROA, prefix MAX NUM AS NUM roa_table_arg, <prefix> max <num> as <num> [table <name>], [[Add ROA record]])
-{
-  if (! cli_access_restricted())
-    { roa_add_item($8, $3.addr, $3.len, $5, $7, ROA_SRC_DYNAMIC); cli_msg(0, ""); }
-};
-
-CF_CLI_HELP(DELETE, roa ..., [[Delete ROA record]])
-CF_CLI(DELETE ROA, prefix MAX NUM AS NUM roa_table_arg, <prefix> max <num> as <num> [table <name>], [[Delete ROA record]])
-{
-  if (! cli_access_restricted())
-    { roa_delete_item($8, $3.addr, $3.len, $5, $7, ROA_SRC_DYNAMIC); cli_msg(0, ""); }
-};
-
-CF_CLI_HELP(FLUSH, roa [table <name>], [[Removes all dynamic ROA records]])
-CF_CLI(FLUSH ROA, roa_table_arg, [table <name>], [[Removes all dynamic ROA records]])
-{
-  if (! cli_access_restricted())
-    { roa_flush($3, ROA_SRC_DYNAMIC); cli_msg(0, ""); }
-};
 
 
 CF_CLI_HELP(DUMP, ..., [[Dump debugging information]])
@@ -696,11 +754,11 @@ echo_size:
    }
  ;
 
-CF_CLI(DISABLE, proto_patt text_or_none, (<protocol> | \"<pattern>\" | all) [message], [[Disable protocol]])
+CF_CLI(DISABLE, proto_patt opttext, (<protocol> | \"<pattern>\" | all) [message], [[Disable protocol]])
 { proto_apply_cmd($2, proto_cmd_disable, 1, (uintptr_t) $3); } ;
-CF_CLI(ENABLE, proto_patt text_or_none, (<protocol> | \"<pattern>\" | all) [message], [[Enable protocol]])
+CF_CLI(ENABLE, proto_patt opttext, (<protocol> | \"<pattern>\" | all) [message], [[Enable protocol]])
 { proto_apply_cmd($2, proto_cmd_enable, 1, (uintptr_t) $3); } ;
-CF_CLI(RESTART, proto_patt text_or_none, (<protocol> | \"<pattern>\" | all) [message], [[Restart protocol]])
+CF_CLI(RESTART, proto_patt opttext, (<protocol> | \"<pattern>\" | all) [message], [[Restart protocol]])
 { proto_apply_cmd($2, proto_cmd_restart, 1, (uintptr_t) $3); } ;
 CF_CLI(RELOAD, proto_patt, <protocol> | \"<pattern>\" | all, [[Reload protocol]])
 { proto_apply_cmd($2, proto_cmd_reload, 1, CMD_RELOAD); } ;
@@ -732,8 +790,7 @@ proto_patt2:
  | TEXT { $$.ptr = $1; $$.patt = 1; }
  ;
 
-CF_ADDTO(dynamic_attr, IGP_METRIC
-	{ $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_GEN_IGP_METRIC); })
+dynamic_attr: IGP_METRIC { $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_GEN_IGP_METRIC); } ;
 
 
 CF_CODE

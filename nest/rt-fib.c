@@ -61,16 +61,17 @@
 #define HASH_DEF_ORDER 10
 #define HASH_HI_MARK *4
 #define HASH_HI_STEP 2
-#define HASH_HI_MAX 16			/* Must be at most 16 */
+#define HASH_HI_MAX 24
 #define HASH_LO_MARK /5
 #define HASH_LO_STEP 2
 #define HASH_LO_MIN 10
+
 
 static void
 fib_ht_alloc(struct fib *f)
 {
   f->hash_size = 1 << f->hash_order;
-  f->hash_shift = 16 - f->hash_order;
+  f->hash_shift = 32 - f->hash_order;
   if (f->hash_order > HASH_HI_MAX - HASH_HI_STEP)
     f->entries_max = ~0;
   else
@@ -90,16 +91,8 @@ fib_ht_free(struct fib_node **h)
   mb_free(h);
 }
 
-static inline unsigned
-fib_hash(struct fib *f, ip_addr *a)
-{
-  return ipa_hash(*a) >> f->hash_shift;
-}
 
-static void
-fib_dummy_init(struct fib_node *dummy UNUSED)
-{
-}
+static inline u32 fib_hash(struct fib *f, const net_addr *a);
 
 /**
  * fib_init - initialize a new FIB
@@ -114,18 +107,23 @@ fib_dummy_init(struct fib_node *dummy UNUSED)
  * This function initializes a newly allocated FIB and prepares it for use.
  */
 void
-fib_init(struct fib *f, pool *p, unsigned node_size, unsigned hash_order, fib_init_func init)
+fib_init(struct fib *f, pool *p, uint addr_type, uint node_size, uint node_offset, uint hash_order, fib_init_fn init)
 {
+  uint addr_length = net_addr_length[addr_type];
+
   if (!hash_order)
     hash_order = HASH_DEF_ORDER;
   f->fib_pool = p;
-  f->fib_slab = sl_new(p, node_size);
+  f->fib_slab = addr_length ? sl_new(p, node_size + addr_length) : NULL;
+  f->addr_type = addr_type;
+  f->node_size = node_size;
+  f->node_offset = node_offset;
   f->hash_order = hash_order;
   fib_ht_alloc(f);
   bzero(f->hash_table, f->hash_size * sizeof(struct fib_node *));
   f->entries = 0;
   f->entries_min = 0;
-  f->init = init ? : fib_dummy_init;
+  f->init = init;
 }
 
 static void
@@ -151,7 +149,7 @@ fib_rehash(struct fib *f, int step)
       while (e = x)
 	{
 	  x = e->next;
-	  nh = fib_hash(f, &e->prefix);
+	  nh = fib_hash(f, e->addr);
 	  while (nh > ni)
 	    {
 	      *t = NULL;
@@ -171,126 +169,200 @@ fib_rehash(struct fib *f, int step)
   fib_ht_free(m);
 }
 
+#define CAST(t) (const net_addr_##t *)
+#define CAST2(t) (net_addr_##t *)
+
+#define FIB_HASH(f,a,t) (net_hash_##t(CAST(t) a) >> f->hash_shift)
+
+#define FIB_FIND(f,a,t)							\
+  ({									\
+    struct fib_node *e = f->hash_table[FIB_HASH(f, a, t)];		\
+    while (e && !net_equal_##t(CAST(t) e->addr, CAST(t) a))		\
+      e = e->next;							\
+    fib_node_to_user(f, e);						\
+  })
+
+#define FIB_INSERT(f,a,e,t)						\
+  ({									\
+  u32 h = net_hash_##t(CAST(t) a);					\
+  struct fib_node **ee = f->hash_table + (h >> f->hash_shift);		\
+  struct fib_node *g;							\
+									\
+  while ((g = *ee) && (net_hash_##t(CAST(t) g->addr) < h))		\
+    ee = &g->next;							\
+									\
+  net_copy_##t(CAST2(t) e->addr, CAST(t) a);				\
+  e->next = *ee;							\
+  *ee = e;								\
+  })
+
+
+static inline u32
+fib_hash(struct fib *f, const net_addr *a)
+{
+  /* Same as FIB_HASH() */
+  return net_hash(a) >> f->hash_shift;
+}
+
+void *
+fib_get_chain(struct fib *f, const net_addr *a)
+{
+  ASSERT(f->addr_type == a->type);
+
+  struct fib_node *e = f->hash_table[fib_hash(f, a)];
+  return e;
+}
+
 /**
  * fib_find - search for FIB node by prefix
  * @f: FIB to search in
- * @a: pointer to IP address of the prefix
- * @len: prefix length
+ * @n: network address
  *
  * Search for a FIB node corresponding to the given prefix, return
  * a pointer to it or %NULL if no such node exists.
  */
 void *
-fib_find(struct fib *f, ip_addr *a, int len)
+fib_find(struct fib *f, const net_addr *a)
 {
-  struct fib_node *e = f->hash_table[fib_hash(f, a)];
+  ASSERT(f->addr_type == a->type);
 
-  while (e && (e->pxlen != len || !ipa_equal(*a, e->prefix)))
-    e = e->next;
-  return e;
+  switch (f->addr_type)
+  {
+  case NET_IP4: return FIB_FIND(f, a, ip4);
+  case NET_IP6: return FIB_FIND(f, a, ip6);
+  case NET_VPN4: return FIB_FIND(f, a, vpn4);
+  case NET_VPN6: return FIB_FIND(f, a, vpn6);
+  case NET_ROA4: return FIB_FIND(f, a, roa4);
+  case NET_ROA6: return FIB_FIND(f, a, roa6);
+  case NET_FLOW4: return FIB_FIND(f, a, flow4);
+  case NET_FLOW6: return FIB_FIND(f, a, flow6);
+  case NET_IP6_SADR: return FIB_FIND(f, a, ip6_sadr);
+  case NET_MPLS: return FIB_FIND(f, a, mpls);
+  default: bug("invalid type");
+  }
 }
 
-/*
-int
-fib_histogram(struct fib *f)
+static void
+fib_insert(struct fib *f, const net_addr *a, struct fib_node *e)
 {
-  log(L_WARN "Histogram dump start %d %d", f->hash_size, f->entries);
+  ASSERT(f->addr_type == a->type);
 
-  int i, j;
-  struct fib_node *e;
-
-  for (i = 0; i < f->hash_size; i++)
-    {
-      j = 0;
-      for (e = f->hash_table[i]; e != NULL; e = e->next)
-	j++;
-      if (j > 0)
-        log(L_WARN "Histogram line %d: %d", i, j);
-    }
-
-  log(L_WARN "Histogram dump end");
+  switch (f->addr_type)
+  {
+  case NET_IP4: FIB_INSERT(f, a, e, ip4); return;
+  case NET_IP6: FIB_INSERT(f, a, e, ip6); return;
+  case NET_VPN4: FIB_INSERT(f, a, e, vpn4); return;
+  case NET_VPN6: FIB_INSERT(f, a, e, vpn6); return;
+  case NET_ROA4: FIB_INSERT(f, a, e, roa4); return;
+  case NET_ROA6: FIB_INSERT(f, a, e, roa6); return;
+  case NET_FLOW4: FIB_INSERT(f, a, e, flow4); return;
+  case NET_FLOW6: FIB_INSERT(f, a, e, flow6); return;
+  case NET_IP6_SADR: FIB_INSERT(f, a, e, ip6_sadr); return;
+  case NET_MPLS: FIB_INSERT(f, a, e, mpls); return;
+  default: bug("invalid type");
+  }
 }
-*/
+
 
 /**
  * fib_get - find or create a FIB node
  * @f: FIB to work with
- * @a: pointer to IP address of the prefix
- * @len: prefix length
+ * @n: network address
  *
  * Search for a FIB node corresponding to the given prefix and
  * return a pointer to it. If no such node exists, create it.
  */
 void *
-fib_get(struct fib *f, ip_addr *a, int len)
+fib_get(struct fib *f, const net_addr *a)
 {
-  uint h = ipa_hash(*a);
-  struct fib_node **ee = f->hash_table + (h >> f->hash_shift);
-  struct fib_node *g, *e = *ee;
-  u32 uid = h << 16;
+  void *b = fib_find(f, a);
+  if (b)
+    return b;
 
-  while (e && (e->pxlen != len || !ipa_equal(*a, e->prefix)))
-    e = e->next;
-  if (e)
-    return e;
-#ifdef DEBUGGING
-  if (len < 0 || len > BITS_PER_IP_ADDRESS || !ip_is_prefix(*a,len))
-    bug("fib_get() called for invalid address");
-#endif
+  if (f->fib_slab)
+    b = sl_alloc(f->fib_slab);
+  else
+    b = mb_alloc(f->fib_pool, f->node_size + a->length);
 
-  while ((g = *ee) && g->uid < uid)
-    ee = &g->next;
-  while ((g = *ee) && g->uid == uid)
-    {
-      ee = &g->next;
-      uid++;
-    }
-
-  if ((uid >> 16) != h)
-    log(L_ERR "FIB hash table chains are too long");
-
-  // log (L_WARN "FIB_GET %I %x %x", *a, h, uid);
-
-  e = sl_alloc(f->fib_slab);
-  e->prefix = *a;
-  e->pxlen = len;
-  e->next = *ee;
-  e->uid = uid;
-  *ee = e;
+  struct fib_node *e = fib_user_to_node(f, b);
   e->readers = NULL;
-  f->init(e);
+  e->flags = 0;
+  fib_insert(f, a, e);
+
+  memset(b, 0, f->node_offset);
+  if (f->init)
+    f->init(b);
+
   if (f->entries++ > f->entries_max)
     fib_rehash(f, HASH_HI_STEP);
 
-  return e;
+  return b;
+}
+
+static inline void *
+fib_route_ip4(struct fib *f, net_addr_ip4 *n)
+{
+  void *r;
+
+  while (!(r = fib_find(f, (net_addr *) n)) && (n->pxlen > 0))
+  {
+    n->pxlen--;
+    ip4_clrbit(&n->prefix, n->pxlen);
+  }
+
+  return r;
+}
+
+static inline void *
+fib_route_ip6(struct fib *f, net_addr_ip6 *n)
+{
+  void *r;
+
+  while (!(r = fib_find(f, (net_addr *) n)) && (n->pxlen > 0))
+  {
+    n->pxlen--;
+    ip6_clrbit(&n->prefix, n->pxlen);
+  }
+
+  return r;
 }
 
 /**
  * fib_route - CIDR routing lookup
  * @f: FIB to search in
- * @a: pointer to IP address of the prefix
- * @len: prefix length
+ * @n: network address
  *
  * Search for a FIB node with longest prefix matching the given
  * network, that is a node which a CIDR router would use for routing
  * that network.
  */
 void *
-fib_route(struct fib *f, ip_addr a, int len)
+fib_route(struct fib *f, const net_addr *n)
 {
-  ip_addr a0;
-  void *t;
+  ASSERT(f->addr_type == n->type);
 
-  while (len >= 0)
-    {
-      a0 = ipa_and(a, ipa_mkmask(len));
-      t = fib_find(f, &a0, len);
-      if (t)
-	return t;
-      len--;
-    }
-  return NULL;
+  net_addr *n0 = alloca(n->length);
+  net_copy(n0, n);
+
+  switch (n->type)
+  {
+  case NET_IP4:
+  case NET_VPN4:
+  case NET_ROA4:
+  case NET_FLOW4:
+    return fib_route_ip4(f, (net_addr_ip4 *) n0);
+
+  case NET_IP6:
+  case NET_VPN6:
+  case NET_ROA6:
+  case NET_FLOW6:
+    return fib_route_ip6(f, (net_addr_ip6 *) n0);
+
+  default:
+    return NULL;
+  }
 }
+
 
 static inline void
 fib_merge_readers(struct fib_iterator *i, struct fib_node *to)
@@ -338,8 +410,8 @@ fib_merge_readers(struct fib_iterator *i, struct fib_node *to)
 void
 fib_delete(struct fib *f, void *E)
 {
-  struct fib_node *e = E;
-  uint h = fib_hash(f, &e->prefix);
+  struct fib_node *e = fib_user_to_node(f, E);
+  uint h = fib_hash(f, e->addr);
   struct fib_node **ee = f->hash_table + h;
   struct fib_iterator *it;
 
@@ -361,7 +433,12 @@ fib_delete(struct fib *f, void *E)
 		}
 	      fib_merge_readers(it, l);
 	    }
-	  sl_free(f->fib_slab, e);
+
+	  if (f->fib_slab)
+	    sl_free(f->fib_slab, E);
+	  else
+	    mb_free(E);
+
 	  if (f->entries-- < f->entries_min)
 	    fib_rehash(f, -HASH_LO_STEP);
 	  return;
@@ -431,7 +508,7 @@ fit_get(struct fib *f, struct fib_iterator *i)
   if (k = i->next)
     k->prev = j;
   j->next = k;
-  i->hash = fib_hash(f, &n->prefix);
+  i->hash = fib_hash(f, n->addr);
   return n;
 }
 
@@ -479,21 +556,17 @@ found:
 void
 fib_check(struct fib *f)
 {
-  uint i, ec, lo, nulls;
+  uint i, ec, nulls;
 
   ec = 0;
   for(i=0; i<f->hash_size; i++)
     {
       struct fib_node *n;
-      lo = 0;
       for(n=f->hash_table[i]; n; n=n->next)
 	{
 	  struct fib_iterator *j, *j0;
-	  uint h0 = ipa_hash(n->prefix);
-	  if (h0 < lo)
-	    bug("fib_check: discord in hash chains");
-	  lo = h0;
-	  if ((h0 >> f->hash_shift) != i)
+	  uint h0 = fib_hash(f, n->addr);
+	  if (h0 != i)
 	    bug("fib_check: mishashed %x->%x (order %d)", h0, i, f->hash_order);
 	  j0 = (struct fib_iterator *) n;
 	  nulls = 0;
@@ -514,7 +587,30 @@ fib_check(struct fib *f)
     }
   if (ec != f->entries)
     bug("fib_check: invalid entry count (%d != %d)", ec, f->entries);
+  return;
 }
+
+/*
+int
+fib_histogram(struct fib *f)
+{
+  log(L_WARN "Histogram dump start %d %d", f->hash_size, f->entries);
+
+  int i, j;
+  struct fib_node *e;
+
+  for (i = 0; i < f->hash_size; i++)
+    {
+      j = 0;
+      for (e = f->hash_table[i]; e != NULL; e = e->next)
+	j++;
+      if (j > 0)
+	log(L_WARN "Histogram line %d: %d", i, j);
+    }
+
+  log(L_WARN "Histogram dump end");
+}
+*/
 
 #endif
 
@@ -535,7 +631,7 @@ void dump(char *m)
       struct fib_iterator *j;
       for(n=f.hash_table[i]; n; n=n->next)
 	{
-	  debug("%04x %04x %p %I/%2d", i, ipa_hash(n->prefix), n, n->prefix, n->pxlen);
+	  debug("%04x %08x %p %N", i, ipa_hash(n->prefix), n, n->addr);
 	  for(j=n->readers; j; j=j->next)
 	    debug(" %p[%p]", j, j->node);
 	  debug("\n");

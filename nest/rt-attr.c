@@ -52,18 +52,45 @@
 #include "nest/attrs.h"
 #include "lib/alloca.h"
 #include "lib/hash.h"
+#include "lib/idm.h"
 #include "lib/resource.h"
 #include "lib/string.h"
 
+#include <stddef.h>
+
+const char * const rta_src_names[RTS_MAX] = {
+  [RTS_DUMMY]		= "",
+  [RTS_STATIC]		= "static",
+  [RTS_INHERIT]		= "inherit",
+  [RTS_DEVICE]		= "device",
+  [RTS_STATIC_DEVICE]	= "static-device",
+  [RTS_REDIRECT]	= "redirect",
+  [RTS_RIP]		= "RIP",
+  [RTS_OSPF]		= "OSPF",
+  [RTS_OSPF_IA]		= "OSPF-IA",
+  [RTS_OSPF_EXT1]	= "OSPF-E1",
+  [RTS_OSPF_EXT2]	= "OSPF-E2",
+  [RTS_BGP]		= "BGP",
+  [RTS_PIPE]		= "pipe",
+  [RTS_BABEL]		= "Babel",
+  [RTS_RPKI]		= "RPKI",
+};
+
+const char * rta_dest_names[RTD_MAX] = {
+  [RTD_NONE]		= "",
+  [RTD_UNICAST]		= "unicast",
+  [RTD_BLACKHOLE]	= "blackhole",
+  [RTD_UNREACHABLE]	= "unreachable",
+  [RTD_PROHIBIT]	= "prohibited",
+};
+
 pool *rta_pool;
 
-static slab *rta_slab;
-static slab *mpnh_slab;
+static slab *rta_slab_[4];
+static slab *nexthop_slab_[4];
 static slab *rte_src_slab;
 
-/* rte source ID bitmap */
-static u32 *src_ids;
-static u32 src_id_size, src_id_used, src_id_pos;
+static struct idm src_ids;
 #define SRC_ID_INIT_SIZE 4
 
 /* rte source hash */
@@ -79,70 +106,14 @@ static u32 src_id_size, src_id_used, src_id_pos;
 
 static HASH(struct rte_src) src_hash;
 
-struct protocol *attr_class_to_protocol[EAP_MAX];
-
-
 static void
 rte_src_init(void)
 {
   rte_src_slab = sl_new(rta_pool, sizeof(struct rte_src));
 
-  src_id_pos = 0;
-  src_id_size = SRC_ID_INIT_SIZE;
-  src_ids = mb_allocz(rta_pool, src_id_size * sizeof(u32));
-
- /* ID 0 is reserved */
-  src_ids[0] = 1;
-  src_id_used = 1;
+  idm_init(&src_ids, rta_pool, SRC_ID_INIT_SIZE);
 
   HASH_INIT(src_hash, rta_pool, RSH_INIT_ORDER);
-}
-
-static inline int u32_cto(uint x) { return ffs(~x) - 1; }
-
-static inline u32
-rte_src_alloc_id(void)
-{
-  uint i, j;
-  for (i = src_id_pos; i < src_id_size; i++)
-    if (src_ids[i] != 0xffffffff)
-      goto found;
-
-  /* If we are at least 7/8 full, expand */
-  if (src_id_used > (src_id_size * 28))
-    {
-      src_id_size *= 2;
-      src_ids = mb_realloc(src_ids, src_id_size * sizeof(u32));
-      bzero(src_ids + i, (src_id_size - i) * sizeof(u32));
-      goto found;
-    }
-
-  for (i = 0; i < src_id_pos; i++)
-    if (src_ids[i] != 0xffffffff)
-      goto found;
-
-  ASSERT(0);
-
- found:
-  ASSERT(i < 0x8000000);
-
-  src_id_pos = i;
-  j = u32_cto(src_ids[i]);
-
-  src_ids[i] |= (1 << j);
-  src_id_used++;
-  return 32 * i + j;
-}
-
-static inline void
-rte_src_free_id(u32 id)
-{
-  int i = id / 32;
-  int j = id % 32;
-
-  ASSERT((i < src_id_size) && (src_ids[i] & (1 << j)));
-  src_ids[i] &= ~(1 << j);
-  src_id_used--;
 }
 
 
@@ -165,7 +136,7 @@ rt_get_source(struct proto *p, u32 id)
   src = sl_alloc(rte_src_slab);
   src->proto = p;
   src->private_id = id;
-  src->global_id = rte_src_alloc_id();
+  src->global_id = idm_alloc(&src_ids);
   src->uc = 0;
 
   HASH_INSERT2(src_hash, RSH, rta_pool, src);
@@ -181,7 +152,7 @@ rt_prune_sources(void)
     if (src->uc == 0)
     {
       HASH_DO_REMOVE(src_hash, RSH, sp);
-      rte_src_free_id(src->global_id);
+      idm_free(&src_ids, src->global_id);
       sl_free(rte_src_slab, src);
     }
   }
@@ -195,28 +166,41 @@ rt_prune_sources(void)
  *	Multipath Next Hop
  */
 
-static inline uint
-mpnh_hash(struct mpnh *x)
+static inline u32
+nexthop_hash(struct nexthop *x)
 {
-  uint h = 0;
+  u32 h = 0;
   for (; x; x = x->next)
-    h ^= ipa_hash(x->gw);
+  {
+    h ^= ipa_hash(x->gw) ^ (h << 5) ^ (h >> 9);
+
+    for (int i = 0; i < x->labels; i++)
+      h ^= x->label[i] ^ (h << 6) ^ (h >> 7);
+  }
 
   return h;
 }
 
 int
-mpnh__same(struct mpnh *x, struct mpnh *y)
+nexthop__same(struct nexthop *x, struct nexthop *y)
 {
   for (; x && y; x = x->next, y = y->next)
-    if (!ipa_equal(x->gw, y->gw) || (x->iface != y->iface) || (x->weight != y->weight))
+  {
+    if (!ipa_equal(x->gw, y->gw) || (x->iface != y->iface) ||
+	(x->flags != y->flags) || (x->weight != y->weight) ||
+	(x->labels_orig != y->labels_orig) || (x->labels != y->labels))
       return 0;
+
+    for (int i = 0; i < x->labels; i++)
+      if (x->label[i] != y->label[i])
+	return 0;
+  }
 
   return x == y;
 }
 
 static int
-mpnh_compare_node(struct mpnh *x, struct mpnh *y)
+nexthop_compare_node(struct nexthop *x, struct nexthop *y)
 {
   int r;
 
@@ -226,6 +210,8 @@ mpnh_compare_node(struct mpnh *x, struct mpnh *y)
   if (!y)
     return -1;
 
+  /* Should we also compare flags ? */
+
   r = ((int) y->weight) - ((int) x->weight);
   if (r)
     return r;
@@ -234,22 +220,33 @@ mpnh_compare_node(struct mpnh *x, struct mpnh *y)
   if (r)
     return r;
 
+  r = ((int) y->labels) - ((int) x->labels);
+  if (r)
+    return r;
+
+  for (int i = 0; i < y->labels; i++)
+  {
+    r = ((int) y->label[i]) - ((int) x->label[i]);
+    if (r)
+      return r;
+  }
+
   return ((int) x->iface->index) - ((int) y->iface->index);
 }
 
-static inline struct mpnh *
-mpnh_copy_node(const struct mpnh *src, linpool *lp)
+static inline struct nexthop *
+nexthop_copy_node(const struct nexthop *src, linpool *lp)
 {
-  struct mpnh *n = lp_alloc(lp, sizeof(struct mpnh));
-  n->gw = src->gw;
-  n->iface = src->iface;
+  struct nexthop *n = lp_alloc(lp, nexthop_size(src));
+
+  memcpy(n, src, nexthop_size(src));
   n->next = NULL;
-  n->weight = src->weight;
+
   return n;
 }
 
 /**
- * mpnh_merge - merge nexthop lists
+ * nexthop_merge - merge nexthop lists
  * @x: list 1
  * @y: list 2
  * @rx: reusability of list @x
@@ -257,7 +254,7 @@ mpnh_copy_node(const struct mpnh *src, linpool *lp)
  * @max: max number of nexthops
  * @lp: linpool for allocating nexthops
  *
- * The mpnh_merge() function takes two nexthop lists @x and @y and merges them,
+ * The nexthop_merge() function takes two nexthop lists @x and @y and merges them,
  * eliminating possible duplicates. The input lists must be sorted and the
  * result is sorted too. The number of nexthops in result is limited by @max.
  * New nodes are allocated from linpool @lp.
@@ -270,28 +267,28 @@ mpnh_copy_node(const struct mpnh *src, linpool *lp)
  * resulting list is no longer needed. When reusability is not set, the
  * corresponding lists are not modified nor linked from the resulting list.
  */
-struct mpnh *
-mpnh_merge(struct mpnh *x, struct mpnh *y, int rx, int ry, int max, linpool *lp)
+struct nexthop *
+nexthop_merge(struct nexthop *x, struct nexthop *y, int rx, int ry, int max, linpool *lp)
 {
-  struct mpnh *root = NULL;
-  struct mpnh **n = &root;
+  struct nexthop *root = NULL;
+  struct nexthop **n = &root;
 
   while ((x || y) && max--)
   {
-    int cmp = mpnh_compare_node(x, y);
+    int cmp = nexthop_compare_node(x, y);
     if (cmp < 0)
     {
-      *n = rx ? x : mpnh_copy_node(x, lp);
+      *n = rx ? x : nexthop_copy_node(x, lp);
       x = x->next;
     }
     else if (cmp > 0)
     {
-      *n = ry ? y : mpnh_copy_node(y, lp);
+      *n = ry ? y : nexthop_copy_node(y, lp);
       y = y->next;
     }
     else
     {
-      *n = rx ? x : (ry ? y : mpnh_copy_node(x, lp));
+      *n = rx ? x : (ry ? y : nexthop_copy_node(x, lp));
       x = x->next;
       y = y->next;
     }
@@ -303,11 +300,11 @@ mpnh_merge(struct mpnh *x, struct mpnh *y, int rx, int ry, int max, linpool *lp)
 }
 
 void
-mpnh_insert(struct mpnh **n, struct mpnh *x)
+nexthop_insert(struct nexthop **n, struct nexthop *x)
 {
   for (; *n; n = &((*n)->next))
   {
-    int cmp = mpnh_compare_node(*n, x);
+    int cmp = nexthop_compare_node(*n, x);
 
     if (cmp < 0)
       continue;
@@ -322,28 +319,39 @@ mpnh_insert(struct mpnh **n, struct mpnh *x)
 }
 
 int
-mpnh_is_sorted(struct mpnh *x)
+nexthop_is_sorted(struct nexthop *x)
 {
   for (; x && x->next; x = x->next)
-    if (mpnh_compare_node(x, x->next) >= 0)
+    if (nexthop_compare_node(x, x->next) >= 0)
       return 0;
 
   return 1;
 }
 
-static struct mpnh *
-mpnh_copy(struct mpnh *o)
+static inline slab *
+nexthop_slab(struct nexthop *nh)
 {
-  struct mpnh *first = NULL;
-  struct mpnh **last = &first;
+  return nexthop_slab_[MIN(nh->labels, 3)];
+}
+
+static struct nexthop *
+nexthop_copy(struct nexthop *o)
+{
+  struct nexthop *first = NULL;
+  struct nexthop **last = &first;
 
   for (; o; o = o->next)
     {
-      struct mpnh *n = sl_alloc(mpnh_slab);
+      struct nexthop *n = sl_alloc(nexthop_slab(o));
       n->gw = o->gw;
       n->iface = o->iface;
       n->next = NULL;
+      n->flags = o->flags;
       n->weight = o->weight;
+      n->labels_orig = o->labels_orig;
+      n->labels = o->labels;
+      for (int i=0; i<o->labels; i++)
+	n->label[i] = o->label[i];
 
       *last = n;
       last = &(n->next);
@@ -353,14 +361,14 @@ mpnh_copy(struct mpnh *o)
 }
 
 static void
-mpnh_free(struct mpnh *o)
+nexthop_free(struct nexthop *o)
 {
-  struct mpnh *n;
+  struct nexthop *n;
 
   while (o)
     {
       n = o->next;
-      sl_free(mpnh_slab, o);
+      sl_free(nexthop_slab(o), o);
       o = n;
     }
 }
@@ -562,29 +570,47 @@ ea_do_sort(ea_list *e)
   while (ss);
 }
 
+/**
+ * In place discard duplicates, undefs and temporary attributes in sorted
+ * ea_list. We use stable sort for this reason.
+ **/
 static inline void
 ea_do_prune(ea_list *e)
 {
   eattr *s, *d, *l, *s0;
   int i = 0;
 
-  /* Discard duplicates and undefs. Do you remember sorting was stable? */
-  s = d = e->attrs;
-  l = e->attrs + e->count;
+  s = d = e->attrs;	    /* Beginning of the list. @s is source, @d is destination. */
+  l = e->attrs + e->count;  /* End of the list */
+
+  /* Walk from begin to end. */
   while (s < l)
     {
       s0 = s++;
+      /* Find a consecutive block of the same attribute */
       while (s < l && s->id == s[-1].id)
 	s++;
-      /* s0 is the most recent version, s[-1] the oldest one */
-      if ((s0->type & EAF_TYPE_MASK) != EAF_TYPE_UNDEF)
-	{
-	  *d = *s0;
-	  d->type = (d->type & ~EAF_ORIGINATED) | (s[-1].type & EAF_ORIGINATED);
-	  d++;
-	  i++;
-	}
+
+      /* Now s0 is the most recent version, s[-1] the oldest one */
+      /* Drop undefs */
+      if ((s0->type & EAF_TYPE_MASK) == EAF_TYPE_UNDEF)
+	continue;
+
+      /* Drop temporary attributes */
+      if (s0->type & EAF_TEMP)
+	continue;
+
+      /* Copy the newest version to destination */
+      *d = *s0;
+
+      /* Preserve info whether it originated locally */
+      d->type = (d->type & ~(EAF_ORIGINATED|EAF_FRESH)) | (s[-1].type & EAF_ORIGINATED);
+
+      /* Next destination */
+      d++;
+      i++;
     }
+
   e->count = i;
 }
 
@@ -860,7 +886,18 @@ ea_show(struct cli *c, eattr *e)
   byte buf[CLI_MSG_SIZE];
   byte *pos = buf, *end = buf + sizeof(buf);
 
-  if (p = attr_class_to_protocol[EA_PROTO(e->id)])
+  if (EA_IS_CUSTOM(e->id))
+    {
+      const char *name = ea_custom_name(e->id);
+      if (name)
+        {
+	  pos += bsprintf(pos, "%s", name);
+	  status = GA_NAME;
+	}
+      else
+	pos += bsprintf(pos, "%02x.", EA_PROTO(e->id));
+    }
+  else if (p = class_to_protocol[EA_PROTO(e->id)])
     {
       pos += bsprintf(pos, "%s.", p->name);
       if (p->get_attr)
@@ -972,7 +1009,8 @@ ea_dump(ea_list *e)
 inline uint
 ea_hash(ea_list *e)
 {
-  u32 h = 0;
+  const u64 mul = 0x68576150f3d6847;
+  u64 h = 0xafcef24eda8b29;
   int i;
 
   if (e)			/* Assuming chain of length 1 */
@@ -980,29 +1018,18 @@ ea_hash(ea_list *e)
       for(i=0; i<e->count; i++)
 	{
 	  struct eattr *a = &e->attrs[i];
-	  h ^= a->id;
+	  h ^= a->id; h *= mul;
 	  if (a->type & EAF_EMBEDDED)
 	    h ^= a->u.data;
 	  else
 	    {
 	      struct adata *d = a->u.ptr;
-	      int size = d->length;
-	      byte *z = d->data;
-	      while (size >= 4)
-		{
-		  h ^= *(u32 *)z;
-		  z += 4;
-		  size -= 4;
-		}
-	      while (size--)
-		h = (h >> 24) ^ (h << 8) ^ *z++;
+	      h ^= mem_hash(d->data, d->length);
 	    }
+	  h *= mul;
 	}
-      h ^= h >> 16;
-      h ^= h >> 6;
-      h &= 0xffff;
     }
-  return h;
+  return (h >> 32) ^ (h & 0xffffffff);
 }
 
 /**
@@ -1051,8 +1078,19 @@ rta_alloc_hash(void)
 static inline uint
 rta_hash(rta *a)
 {
-  return (((uint) (uintptr_t) a->src) ^ ipa_hash(a->gw) ^
-	  mpnh_hash(a->nexthops) ^ ea_hash(a->eattrs)) & 0xffff;
+  u64 h;
+  mem_hash_init(&h);
+#define MIX(f) mem_hash_mix(&h, &(a->f), sizeof(a->f));
+  MIX(src);
+  MIX(hostentry);
+  MIX(from);
+  MIX(igp_metric);
+  MIX(source);
+  MIX(scope);
+  MIX(dest);
+#undef MIX
+
+  return mem_hash_value(&h) ^ nexthop_hash(&(a->nh)) ^ ea_hash(a->eattrs);
 }
 
 static inline int
@@ -1061,26 +1099,28 @@ rta_same(rta *x, rta *y)
   return (x->src == y->src &&
 	  x->source == y->source &&
 	  x->scope == y->scope &&
-	  x->cast == y->cast &&
 	  x->dest == y->dest &&
-	  x->flags == y->flags &&
 	  x->igp_metric == y->igp_metric &&
-	  ipa_equal(x->gw, y->gw) &&
 	  ipa_equal(x->from, y->from) &&
-	  x->iface == y->iface &&
 	  x->hostentry == y->hostentry &&
-	  mpnh_same(x->nexthops, y->nexthops) &&
+	  nexthop_same(&(x->nh), &(y->nh)) &&
 	  ea_same(x->eattrs, y->eattrs));
+}
+
+static inline slab *
+rta_slab(rta *a)
+{
+  return rta_slab_[a->nh.labels > 2 ? 3 : a->nh.labels];
 }
 
 static rta *
 rta_copy(rta *o)
 {
-  rta *r = sl_alloc(rta_slab);
+  rta *r = sl_alloc(rta_slab(o));
 
-  memcpy(r, o, sizeof(rta));
+  memcpy(r, o, rta_size(o));
   r->uc = 1;
-  r->nexthops = mpnh_copy(o->nexthops);
+  r->nh.next = nexthop_copy(o->nh.next);
   r->eattrs = ea_list_copy(o->eattrs);
   return r;
 }
@@ -1137,15 +1177,7 @@ rta_lookup(rta *o)
 
   ASSERT(!(o->aflags & RTAF_CACHED));
   if (o->eattrs)
-    {
-      if (o->eattrs->next)	/* Multiple ea_list's, need to merge them */
-	{
-	  ea_list *ml = alloca(ea_scan(o->eattrs));
-	  ea_merge(o->eattrs, ml);
-	  o->eattrs = ml;
-	}
-      ea_sort(o->eattrs);
-    }
+    ea_normalize(o->eattrs);
 
   h = rta_hash(o);
   for(r=rta_hash_table[h & rta_cache_mask]; r; r=r->next)
@@ -1173,19 +1205,26 @@ rta__free(rta *a)
   *a->pprev = a->next;
   if (a->next)
     a->next->pprev = a->pprev;
-  a->aflags = 0;		/* Poison the entry */
   rt_unlock_hostentry(a->hostentry);
   rt_unlock_source(a->src);
-  mpnh_free(a->nexthops);
+  if (a->nh.next)
+    nexthop_free(a->nh.next);
   ea_free(a->eattrs);
-  sl_free(rta_slab, a);
+  a->aflags = 0;		/* Poison the entry */
+  sl_free(rta_slab(a), a);
 }
 
 rta *
 rta_do_cow(rta *o, linpool *lp)
 {
-  rta *r = lp_alloc(lp, sizeof(rta));
-  memcpy(r, o, sizeof(rta));
+  rta *r = lp_alloc(lp, rta_size(o));
+  memcpy(r, o, rta_size(o));
+  for (struct nexthop **nhn = &(r->nh.next), *nho = o->nh.next; nho; nho = nho->next)
+    {
+      *nhn = lp_alloc(lp, nexthop_size(nho));
+      memcpy(*nhn, nho, nexthop_size(nho));
+      nhn = &((*nhn)->next);
+    }
   r->aflags = 0;
   r->uc = 0;
   return r;
@@ -1203,20 +1242,24 @@ rta_dump(rta *a)
   static char *rts[] = { "RTS_DUMMY", "RTS_STATIC", "RTS_INHERIT", "RTS_DEVICE",
 			 "RTS_STAT_DEV", "RTS_REDIR", "RTS_RIP",
 			 "RTS_OSPF", "RTS_OSPF_IA", "RTS_OSPF_EXT1",
-                         "RTS_OSPF_EXT2", "RTS_BGP", "RTS_PIPE", "RTS_BABEL" };
-  static char *rtc[] = { "", " BC", " MC", " AC" };
+			 "RTS_OSPF_EXT2", "RTS_BGP", "RTS_PIPE", "RTS_BABEL" };
   static char *rtd[] = { "", " DEV", " HOLE", " UNREACH", " PROHIBIT" };
 
-  debug("p=%s uc=%d %s %s%s%s h=%04x",
-	a->src->proto->name, a->uc, rts[a->source], ip_scope_text(a->scope), rtc[a->cast],
+  debug("p=%s uc=%d %s %s%s h=%04x",
+	a->src->proto->name, a->uc, rts[a->source], ip_scope_text(a->scope),
 	rtd[a->dest], a->hash_key);
   if (!(a->aflags & RTAF_CACHED))
     debug(" !CACHED");
   debug(" <-%I", a->from);
-  if (a->dest == RTD_ROUTER)
-    debug(" ->%I", a->gw);
-  if (a->dest == RTD_DEVICE || a->dest == RTD_ROUTER)
-    debug(" [%s]", a->iface ? a->iface->name : "???" );
+  if (a->dest == RTD_UNICAST)
+    for (struct nexthop *nh = &(a->nh); nh; nh = nh->next)
+      {
+	if (ipa_nonzero(nh->gw)) debug(" ->%I", nh->gw);
+	if (nh->labels) debug(" L %d", nh->label[0]);
+	for (int i=1; i<nh->labels; i++)
+	  debug("/%d", nh->label[i]);
+	debug(" [%s]", nh->iface ? nh->iface->name : "???");
+      }
   if (a->eattrs)
     {
       debug(" EA: ");
@@ -1248,18 +1291,12 @@ rta_dump_all(void)
 }
 
 void
-rta_show(struct cli *c, rta *a, ea_list *eal)
+rta_show(struct cli *c, rta *a)
 {
-  static char *src_names[] = { "dummy", "static", "inherit", "device", "static-device", "redirect",
-			       "RIP", "OSPF", "OSPF-IA", "OSPF-E1", "OSPF-E2", "BGP", "pipe", "babel" };
-  static char *cast_names[] = { "unicast", "broadcast", "multicast", "anycast" };
-  int i;
+  cli_printf(c, -1008, "\tType: %s %s", rta_src_names[a->source], ip_scope_text(a->scope));
 
-  cli_printf(c, -1008, "\tType: %s %s %s", src_names[a->source], cast_names[a->cast], ip_scope_text(a->scope));
-  if (!eal)
-    eal = a->eattrs;
-  for(; eal; eal=eal->next)
-    for(i=0; i<eal->count; i++)
+  for(ea_list *eal = a->eattrs; eal; eal=eal->next)
+    for(int i=0; i<eal->count; i++)
       ea_show(c, &eal->attrs[i]);
 }
 
@@ -1273,8 +1310,17 @@ void
 rta_init(void)
 {
   rta_pool = rp_new(&root_pool, "Attributes");
-  rta_slab = sl_new(rta_pool, sizeof(rta));
-  mpnh_slab = sl_new(rta_pool, sizeof(struct mpnh));
+
+  rta_slab_[0] = sl_new(rta_pool, sizeof(rta));
+  rta_slab_[1] = sl_new(rta_pool, sizeof(rta) + sizeof(u32));
+  rta_slab_[2] = sl_new(rta_pool, sizeof(rta) + sizeof(u32)*2);
+  rta_slab_[3] = sl_new(rta_pool, sizeof(rta) + sizeof(u32)*MPLS_MAX_LABEL_STACK);
+
+  nexthop_slab_[0] = sl_new(rta_pool, sizeof(struct nexthop));
+  nexthop_slab_[1] = sl_new(rta_pool, sizeof(struct nexthop) + sizeof(u32));
+  nexthop_slab_[2] = sl_new(rta_pool, sizeof(struct nexthop) + sizeof(u32)*2);
+  nexthop_slab_[3] = sl_new(rta_pool, sizeof(struct nexthop) + sizeof(u32)*MPLS_MAX_LABEL_STACK);
+
   rta_alloc_hash();
   rte_src_init();
 }

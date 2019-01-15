@@ -84,8 +84,6 @@ ospf_neighbor_new(struct ospf_iface *ifa)
   n->pool = pool;
   n->ifa = ifa;
   add_tail(&ifa->neigh_list, NODE n);
-  n->adj = 0;
-  n->csn = 0;
   n->state = NEIGHBOR_DOWN;
 
   init_lists(p, n);
@@ -94,11 +92,11 @@ ospf_neighbor_new(struct ospf_iface *ifa)
   init_list(&n->ackl[ACKL_DIRECT]);
   init_list(&n->ackl[ACKL_DELAY]);
 
-  n->inactim = tm_new_set(pool, inactivity_timer_hook, n, 0, 0);
-  n->dbdes_timer = tm_new_set(pool, dbdes_timer_hook, n, 0, ifa->rxmtint);
-  n->lsrq_timer = tm_new_set(pool, lsrq_timer_hook, n, 0, ifa->rxmtint);
-  n->lsrt_timer = tm_new_set(pool, lsrt_timer_hook, n, 0, ifa->rxmtint);
-  n->ackd_timer = tm_new_set(pool, ackd_timer_hook, n, 0, ifa->rxmtint / 2);
+  n->inactim = tm_new_init(pool, inactivity_timer_hook, n, 0, 0);
+  n->dbdes_timer = tm_new_init(pool, dbdes_timer_hook, n, ifa->rxmtint S, 0);
+  n->lsrq_timer = tm_new_init(pool, lsrq_timer_hook, n, ifa->rxmtint S, 0);
+  n->lsrt_timer = tm_new_init(pool, lsrt_timer_hook, n, ifa->rxmtint S, 0);
+  n->ackd_timer = tm_new_init(pool, ackd_timer_hook, n, ifa->rxmtint S / 2, 0);
 
   return (n);
 }
@@ -186,7 +184,7 @@ ospf_neigh_chstate(struct ospf_neighbor *n, u8 state)
     n->myimms = DBDES_IMMS;
 
     tm_start(n->dbdes_timer, 0);
-    tm_start(n->ackd_timer, ifa->rxmtint / 2);
+    tm_start(n->ackd_timer, ifa->rxmtint S / 2);
   }
 
   if (state > NEIGHBOR_EXSTART)
@@ -231,7 +229,7 @@ ospf_neigh_sm(struct ospf_neighbor *n, int event)
       ospf_neigh_chstate(n, NEIGHBOR_INIT);
 
     /* Restart inactivity timer */
-    tm_start(n->inactim, n->ifa->deadint);
+    tm_start(n->inactim, n->ifa->deadint S);
     break;
 
   case INM_2WAYREC:
@@ -359,7 +357,7 @@ can_do_adj(struct ospf_neighbor *n)
 }
 
 
-static inline u32 neigh_get_id(struct ospf_proto *p UNUSED4 UNUSED6, struct ospf_neighbor *n)
+static inline u32 neigh_get_id(struct ospf_proto *p, struct ospf_neighbor *n)
 { return ospf_is_v2(p) ? ipa_to_u32(n->ip) : n->rid; }
 
 static struct ospf_neighbor *
@@ -507,13 +505,14 @@ ospf_dr_election(struct ospf_iface *ifa)
 
   u32 old_drid = ifa->drid;
   u32 old_bdrid = ifa->bdrid;
+  ip_addr none = ospf_is_v2(p) ? IPA_NONE4 : IPA_NONE6;
 
   ifa->drid = ndr ? ndr->rid : 0;
-  ifa->drip = ndr ? ndr->ip  : IPA_NONE;
+  ifa->drip = ndr ? ndr->ip  : none;
   ifa->dr_iface_id = ndr ? ndr->iface_id : 0;
 
   ifa->bdrid = nbdr ? nbdr->rid : 0;
-  ifa->bdrip = nbdr ? nbdr->ip  : IPA_NONE;
+  ifa->bdrip = nbdr ? nbdr->ip  : none;
 
   DBG("DR=%R, BDR=%R\n", ifa->drid, ifa->bdrid);
 
@@ -650,20 +649,6 @@ ospf_sh_neigh_info(struct ospf_neighbor *n)
 {
   struct ospf_iface *ifa = n->ifa;
   char *pos = "PtP  ";
-  char etime[6];
-  int exp, sec, min;
-
-  exp = n->inactim->expires - now;
-  sec = exp % 60;
-  min = exp / 60;
-  if (min > 59)
-  {
-    bsprintf(etime, "-Inf-");
-  }
-  else
-  {
-    bsprintf(etime, "%02u:%02u", min, sec);
-  }
 
   if ((ifa->type == OSPF_IT_BCAST) || (ifa->type == OSPF_IT_NBMA))
   {
@@ -675,6 +660,7 @@ ospf_sh_neigh_info(struct ospf_neighbor *n)
       pos = "Other";
   }
 
-  cli_msg(-1013, "%-1R\t%3u\t%s/%s\t%-5s\t%-10s %-1I", n->rid, n->priority,
-	  ospf_ns_names[n->state], pos, etime, ifa->ifname, n->ip);
+  cli_msg(-1013, "%-1R\t%3u\t%s/%s\t%7t\t%-10s %-1I",
+	  n->rid, n->priority, ospf_ns_names[n->state], pos,
+	  tm_remains(n->inactim), ifa->ifname, n->ip);
 }
