@@ -1,0 +1,6 @@
+etc/bird2/bird.conf /usr/share/doc/bird2/examples/
+etc/bird2/envvars
+usr/lib/bird2/prepare-environment
+usr/sbin/bird
+usr/sbin/birdc
+usr/share/bird2/*.conf*

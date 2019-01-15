@@ -95,14 +95,6 @@ man(1), man(7), http://www.tldp.org/HOWTO/Man-Page/
     <refname>birdc</refname>
     <refpurpose>BIRD Internet Routing Daemon remote control</refpurpose>
   </refnamediv>
-  <refnamediv>
-    <refname>bird6</refname>
-    <refpurpose>BIRD Internet Routing Daemon, IPv6 version</refpurpose>
-  </refnamediv>
-  <refnamediv>
-    <refname>birdc6</refname>
-    <refpurpose>BIRD Internet Routing Daemon remote control, IPv6 version</refpurpose>
-  </refnamediv>
 
   <refsynopsisdiv>
     <cmdsynopsis>
@@ -115,20 +107,6 @@ man(1), man(7), http://www.tldp.org/HOWTO/Man-Page/
     </cmdsynopsis>
     <cmdsynopsis>
       <command>birdc</command>
-      <arg choice="opt"><option>-s <replaceable>control-socket</replaceable></option></arg>
-      <arg choice="opt"><option>-v</option></arg>
-      <arg choice="opt"><option>-r</option></arg>
-    </cmdsynopsis>
-    <cmdsynopsis>
-      <command>bird6</command>
-      <arg choice="opt"><option>-c <replaceable>config-file</replaceable></option></arg>
-      <arg choice="opt"><option>-d</option></arg>
-      <arg choice="opt"><option>-D <replaceable>debug-file</replaceable></option></arg>
-      <arg choice="opt"><option>-p</option></arg>
-      <arg choice="opt"><option>-s <replaceable>control-socket</replaceable></option></arg>
-    </cmdsynopsis>
-    <cmdsynopsis>
-      <command>birdc6</command>
       <arg choice="opt"><option>-s <replaceable>control-socket</replaceable></option></arg>
       <arg choice="opt"><option>-v</option></arg>
       <arg choice="opt"><option>-r</option></arg>
@@ -152,16 +130,12 @@ man(1), man(7), http://www.tldp.org/HOWTO/Man-Page/
       to an interactive shell: commands can be completed with TAB and help
       can be requested by pressing the key `?'. More documentation on
       the available commands can be foung on the website, see below.</para>
-    <para><command>bird6</command> and <command>birdc6</command> are the
-      exact equivalent for <command>bird</command> and <command>birdc</command>
-      for the IPv6 world. The accept the same command syntax with the same
-      meaning.</para>
   </refsect1>
 
   <refsect1 id="options">
     <title>OPTIONS</title>
-    <para>The <command>bird</command> and <command>bird6</command> are able to
-      receive there options:</para>
+    <para>The <command>bird</command> is able to receive there
+    options:</para>
     <variablelist>
       <varlistentry>
         <term><option>-c <replaceable>config-file</replaceable></option></term>
@@ -233,14 +207,6 @@ man(1), man(7), http://www.tldp.org/HOWTO/Man-Page/
         <listitem>
           <para>The system-wide configuration file to control the
             behaviour of <application>bird</application>. See
-            the website for more documentation.</para>
-        </listitem>
-      </varlistentry>
-      <varlistentry>
-        <term><filename>/etc/bird/bird6.conf</filename></term>
-        <listitem>
-          <para>The system-wide configuration file to control the
-            behaviour of <application>bird6</application>. See
             the website for more documentation.</para>
         </listitem>
       </varlistentry>

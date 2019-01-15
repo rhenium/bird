@@ -1,3 +1,10 @@
+bird2 (2.0.0-1) unstable; urgency=low
+
+  * New upstream version 2.0.0
+  * Dummy changelog entry, to be deleted
+
+ -- Ondřej Surý <ondrej@debian.org>  Tue, 15 Jan 2019 08:56:09 +0000
+
 bird (1.6.5-1) unstable; urgency=medium
 
   * New upstream version 1.6.5
