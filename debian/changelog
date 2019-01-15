@@ -1,3 +1,12 @@
+bird2 (2.0.3-1~1.gbp65c2e0) UNRELEASED; urgency=medium
+
+  ** SNAPSHOT build @65c2e0fd863d60797aa3da132c02f9031967f1e8 **
+
+  * New upstream version 2.0.3
+  * Add libssh-dev to Build-Depends for RPKI
+
+ -- Ondřej Surý <ondrej@debian.org>  Tue, 15 Jan 2019 09:18:56 +0000
+
 bird2 (2.0.0-1) unstable; urgency=low
 
   * New upstream version 2.0.0
