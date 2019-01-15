@@ -1,28 +1,19 @@
-bird2 (2.0.3-1~2.gbp0da12d) UNRELEASED; urgency=medium
-
-  ** SNAPSHOT build @0da12d048226b7c00d4beb766d941ba7c4715e5f **
+bird2 (2.0.3-1) unstable; urgency=medium
 
   [ Ondřej Surý ]
-  ** SNAPSHOT build @65c2e0fd863d60797aa3da132c02f9031967f1e8 **
-
   * New upstream version 2.0.3
   * Add libssh-dev to Build-Depends for RPKI
-  * Update changelog for 2.0.3-1~1.gbp65c2e0 release
-  * Remove all debian patches
-  * Cleanup the documentation build
-  * Use upstream example bird.conf
+  * Remove all Debian patches
+  * Remove the documentation package
+  * Add /usr/sbin/birdcl to the package
+  * Bump the debhelper compatibility level to 12
 
   [ Ondřej Nový ]
   * d/copyright: Use https protocol in Format field
   * d/control: Deprecating priority extra as per policy 4.0.1
   * d/changelog: Remove trailing whitespaces
 
-  [ Ondřej Surý ]
-  * Additional cleanups
-  * Add /usr/sbin/birdcl to the package
-  * Use wrap-and-sort -a
-
- -- Ondřej Surý <ondrej@debian.org>  Tue, 15 Jan 2019 09:48:30 +0000
+ -- Ondřej Surý <ondrej@debian.org>  Tue, 15 Jan 2019 10:16:00 +0000
 
 bird2 (2.0.0-1) unstable; urgency=low
 
