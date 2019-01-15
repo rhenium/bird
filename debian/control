@@ -32,7 +32,6 @@ Depends: adduser,
 Conflicts: bird,
            routed,
            zebra
-Suggests: bird2-doc
 Description: Internet Routing Daemon
  BIRD is an Internet routing daemon with full support for all the major
  routing protocols. It allows redistribution between protocols with a
@@ -40,15 +39,3 @@ Description: Internet Routing Daemon
  interface.
  .
  This package supports IPv4 and IPv6 versions of OSPF, RIP and BGP.
-
-Package: bird2-doc
-Architecture: all
-Section: doc
-Depends: ${misc:Depends}
-Description: Internet Routing Daemon - documentation
- BIRD is an Internet routing daemon with full support for all the major
- routing protocols. It allows redistribution between protocols with a
- powerful route filtering syntax and an easy-to-use configuration
- interface.
- .
- This package provides the user and developer documentation.
