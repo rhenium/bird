@@ -102,14 +102,21 @@ man(1), man(7), http://www.tldp.org/HOWTO/Man-Page/
       <arg choice="opt"><option>-c <replaceable>config-file</replaceable></option></arg>
       <arg choice="opt"><option>-d</option></arg>
       <arg choice="opt"><option>-D <replaceable>debug-file</replaceable></option></arg>
+      <arg choice="opt"><option>-f</option></arg>
+      <arg choice="opt"><option>-g <replaceable>group</replaceable></option></arg>
+      <arg choice="opt"><option>-l</option></arg>
       <arg choice="opt"><option>-p</option></arg>
+      <arg choice="opt"><option>-P <replaceable>pid-file</replaceable></option></arg>
+      <arg choice="opt"><option>-R</option></arg>
       <arg choice="opt"><option>-s <replaceable>control-socket</replaceable></option></arg>
+      <arg choice="opt"><option>-u <replaceable>user</replaceable></option></arg>
     </cmdsynopsis>
     <cmdsynopsis>
       <command>birdc</command>
+      <arg choice="opt"><option>-l</option></arg>
+      <arg choice="opt"><option>-r</option></arg>
       <arg choice="opt"><option>-s <replaceable>control-socket</replaceable></option></arg>
       <arg choice="opt"><option>-v</option></arg>
-      <arg choice="opt"><option>-r</option></arg>
     </cmdsynopsis>
   </refsynopsisdiv>
 
@@ -134,8 +141,7 @@ man(1), man(7), http://www.tldp.org/HOWTO/Man-Page/
 
   <refsect1 id="options">
     <title>OPTIONS</title>
-    <para>The <command>bird</command> is able to receive there
-    options:</para>
+    <para>The <command>bird</command> accepts these options:</para>
     <variablelist>
       <varlistentry>
         <term><option>-c <replaceable>config-file</replaceable></option></term>
@@ -146,13 +152,40 @@ man(1), man(7), http://www.tldp.org/HOWTO/Man-Page/
       <varlistentry>
         <term><option>-d</option></term>
         <listitem>
-          <para>Enable debug messages and run bird in foreground.</para>
+          <para>Enable debug messages to stderr, and run bird in foreground.</para>
         </listitem>
       </varlistentry>
       <varlistentry>
         <term><option>-D <replaceable>debug-file</replaceable></option></term>
         <listitem>
-          <para>Log debugging information to given file instead of standard error.</para>
+          <para>Enable debug messages to given file.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>-f</option></term>
+        <listitem>
+          <para>Run bird in foreground.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>-g <replaceable>group</replaceable></option></term>
+        <listitem>
+          <para>Run bird with given group ID.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--help</option></term>
+        <listitem>
+          <para>Display command-line options to bird.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>-l</option></term>
+        <listitem>
+          <para>Look for a configuration file and a communication socket in the
+            current working directory instead of in default system locations.
+            However, paths specified by options <option>-c</option>,
+            <option>-s</option> have higher priority.</para>
         </listitem>
       </varlistentry>
       <varlistentry>
@@ -163,22 +196,46 @@ man(1), man(7), http://www.tldp.org/HOWTO/Man-Page/
         </listitem>
       </varlistentry>
       <varlistentry>
-        <term><option>-s <replaceable>control-socket</replaceable></option></term>
+        <term><option>-P <replaceable>pid-file</replaceable></option></term>
         <listitem>
-          <para>Use given filename for a socket for communications with the
-            client (remote control), default is /var/run/bird.ctl.</para>
+          <para>Create a PID file with given filename.</para>
         </listitem>
       </varlistentry>
-    </variablelist>
-
-    <para>The <command>birdc</command> and <command>birdc6</command> are able to
-      receive there options:</para>
-    <variablelist>
+      <varlistentry>
+        <term><option>-R</option></term>
+        <listitem>
+          <para>Apply graceful restart recovery after start.</para>
+        </listitem>
+      </varlistentry>
       <varlistentry>
         <term><option>-s <replaceable>control-socket</replaceable></option></term>
         <listitem>
           <para>Use given filename for a socket for communications with the
-            server, default is /var/run/bird.ctl.</para>
+            client (remote control), default is /run/bird/bird.ctl.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>-u <replaceable>user</replaceable></option></term>
+        <listitem>
+          <para>Drop privileges and run as given user instead of root. The bird
+            would keep CAP_NET_ADMIN and other network-related capabilities
+            necessary for its function.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--version</option></term>
+        <listitem>
+          <para>Display bird version.</para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+
+    <para>The <command>birdc</command> accepts these options:</para>
+    <variablelist>
+      <varlistentry>
+        <term><option>-l</option></term>
+        <listitem>
+          <para>Look for a communication socket in the current working directory.</para>
         </listitem>
       </varlistentry>
       <varlistentry>
@@ -186,6 +243,13 @@ man(1), man(7), http://www.tldp.org/HOWTO/Man-Page/
         <listitem>
           <para>Run <command>birdc</command> in restricted mode: only the
             `show ...' commands are allowed.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>-s <replaceable>control-socket</replaceable></option></term>
+        <listitem>
+          <para>Use given filename for a socket for communications with the
+            server, default is /run/bird/bird.ctl.</para>
         </listitem>
       </varlistentry>
       <varlistentry>
