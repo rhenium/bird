@@ -280,7 +280,7 @@ man(1), man(7), http://www.tldp.org/HOWTO/Man-Page/
   <refsect1 id="see_also">
     <title>SEE ALSO</title>
     <para>More documentation con be found on the website:
-      http://bird.network.cz/.</para>
+      https://bird.network.cz/.</para>
   </refsect1>
 </refentry>
 
