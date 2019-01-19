@@ -30,9 +30,7 @@ Depends: adduser,
          ucf,
          ${misc:Depends},
          ${shlibs:Depends}
-Conflicts: bird,
-           routed,
-           zebra
+Conflicts: bird
 Description: Internet Routing Daemon
  BIRD is an Internet routing daemon with full support for all the major
  routing protocols. It allows redistribution between protocols with a
