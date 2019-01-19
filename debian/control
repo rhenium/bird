@@ -39,4 +39,6 @@ Description: Internet Routing Daemon
  powerful route filtering syntax and an easy-to-use configuration
  interface.
  .
- This package supports IPv4 and IPv6 versions of OSPF, RIP and BGP.
+ BIRD supports IPv4 and IPv6 versions of OSPF, RIP, BGP and Babel routing
+ protocols. It also supports supplementary protocols like BFD, RPKI-Router
+ and IPv6 router advertisements.
