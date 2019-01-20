@@ -29,10 +29,6 @@ override_dh_auto_build:
 
 override_dh_auto_install:
 	dh_auto_install --destdir=debian/tmp
-	install -d -m 755 debian/tmp/etc/bird2
-	install -m 644 debian/envvars debian/tmp/etc/bird2/
-	install -d -m 755 debian/tmp/usr/lib/bird2
-	install -m 755 debian/prepare-environment debian/tmp/usr/lib/bird2/
 
 override_dh_installinit:
 	dh_installinit --name=bird --restart-after-upgrade

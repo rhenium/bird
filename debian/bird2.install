@@ -1,6 +1,6 @@
 etc/bird2/bird.conf /usr/share/doc/bird2/examples/
-etc/bird2/envvars
-usr/lib/bird2/prepare-environment
+debian/envvars /etc/bird2/
+debian/prepare-environment /usr/lib/bird/
 usr/sbin/bird
 usr/sbin/birdc
 usr/sbin/birdcl

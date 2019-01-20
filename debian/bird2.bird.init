@@ -12,7 +12,7 @@
 
 # PATH should only include /usr/* if it runs after the mountnfs.sh script
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
-DESC="BIRD Internet Routing Daemon (IPv4)"
+DESC="BIRD Internet Routing Daemon"
 NAME=bird
 DAEMON=/usr/sbin/$NAME
 BIRD_ARGS=""
