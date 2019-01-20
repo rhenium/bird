@@ -9,8 +9,8 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 DPKG_EXPORT_BUILDFLAGS = 1
 include /usr/share/dpkg/default.mk
 
-COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc/bird2 --mandir=\$${prefix}/share/man \
-	--infodir=\$${prefix}/share/info --localstatedir=/var --runstatedir=/run/bird2 \
+COMMON_FLAGS= --prefix=/usr --sysconfdir=/etc/bird --mandir=\$${prefix}/share/man \
+	--infodir=\$${prefix}/share/info --localstatedir=/var --runstatedir=/run/bird \
 	--docdir=\$${prefix}/share/bird2 \
 	--enable-client
 

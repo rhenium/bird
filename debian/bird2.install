@@ -1,5 +1,5 @@
-etc/bird2/bird.conf /usr/share/doc/bird2/examples/
-debian/envvars /etc/bird2/
+etc/bird/bird.conf /usr/share/doc/bird2/examples/
+debian/envvars /etc/bird/
 debian/prepare-environment /usr/lib/bird/
 usr/sbin/bird
 usr/sbin/birdc
