@@ -2,7 +2,6 @@ Source: bird2
 Section: net
 Priority: optional
 Build-Depends: bison,
-               debhelper (>= 12~),
                debhelper-compat (= 12),
                docbook-xsl,
                flex,
