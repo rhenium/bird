@@ -1,3 +1,25 @@
+bird2 (2.0.4-1) unstable; urgency=medium
+
+  [ Ondrej Zajicek ]
+  * Update man page
+  * Update pkg description
+  * Change libssh flavor to libssh-gcrypt
+  * Remove obsolete packages from Conflicts
+  * Update links to bird.network.cz
+  * Add BIRD documentation package
+  * Minor cleanups
+  * Revert /etc and /run dirs and user/group back to bird
+  * Fix systemd
+  * Handle collisions between bird and bird2
+  * Fix dependency version
+  * Add NEWS and README
+  * Update copyright file
+
+  [ Ondřej Surý ]
+  * New upstream version 2.0.4
+
+ -- Ondřej Surý <ondrej@debian.org>  Sun, 03 Mar 2019 08:12:28 +0000
+
 bird2 (2.0.3-1) unstable; urgency=medium
 
   [ Ondřej Surý ]
