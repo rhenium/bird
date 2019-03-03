@@ -92,11 +92,14 @@
  * - RFC 2328 - main OSPFv2 standard
  * - RFC 5340 - main OSPFv3 standard
  * - RFC 3101 - OSPFv2 NSSA areas
+ * - RFC 4576 - OSPFv2 VPN loop prevention
+ * - RFC 5250 - OSPFv2 Opaque LSAs
  * - RFC 5709 - OSPFv2 HMAC-SHA Cryptographic Authentication
  * - RFC 5838 - OSPFv3 Support of Address Families
  * - RFC 6549 - OSPFv2 Multi-Instance Extensions
  * - RFC 6987 - OSPF Stub Router Advertisement
  * - RFC 7166 - OSPFv3 Authentication Trailer
+ * - RFC 7770 - OSPF Router Information LSA
  */
 
 #include <stdlib.h>
@@ -239,7 +242,9 @@ ospf_start(struct proto *P)
   p->rfc1583 = c->rfc1583;
   p->stub_router = c->stub_router;
   p->merge_external = c->merge_external;
+  p->instance_id = c->instance_id;
   p->asbr = c->asbr;
+  p->vpn_pe = c->vpn_pe;
   p->ecmp = c->ecmp;
   p->tick = c->tick;
   p->disp_timer = tm_new_init(P->pool, ospf_disp, p, p->tick S, 0);
@@ -594,17 +599,25 @@ ospf_area_reconfigure(struct ospf_area *oa, struct ospf_area_config *nac)
 {
   struct ospf_proto *p = oa->po;
   struct ospf_area_config *oac = oa->ac;
-  struct ospf_iface *ifa;
+  struct ospf_iface *ifa, *ifx;
 
   oa->ac = nac;
   oa->options = nac->type | ospf_opts(p);
 
   if (nac->type != oac->type)
   {
-    /* Force restart of area interfaces */
-    WALK_LIST(ifa, p->iface_list)
+    log(L_INFO "%s: Restarting area %R", p->p.name, oa->areaid);
+
+    /* Remove area interfaces, will be re-added later */
+    WALK_LIST_DELSAFE(ifa, ifx, p->iface_list)
       if (ifa->oa == oa)
-	ifa->marked = 2;
+      {
+	ospf_iface_shutdown(ifa);
+	ospf_iface_remove(ifa);
+      }
+
+    /* Flush area LSAs */
+    ospf_flush_area(p, oa->areaid);
   }
 
   /* Handle net_list */
@@ -634,7 +647,7 @@ ospf_reconfigure(struct proto *P, struct proto_config *CF)
   struct ospf_proto *p = (struct ospf_proto *) P;
   struct ospf_config *old = (struct ospf_config *) (P->cf);
   struct ospf_config *new = (struct ospf_config *) CF;
-  struct ospf_area_config *nac;
+  struct ospf_area_config *oac, *nac;
   struct ospf_area *oa, *oax;
   struct ospf_iface *ifa, *ifx;
   struct ospf_iface_patt *ip;
@@ -648,7 +661,22 @@ ospf_reconfigure(struct proto *P, struct proto_config *CF)
   if (p->rfc1583 != new->rfc1583)
     return 0;
 
+  if (p->instance_id != new->instance_id)
+    return 0;
+
   if (old->abr != new->abr)
+    return 0;
+
+  if (p->areano == 1)
+  {
+    oac = HEAD(old->area_list);
+    nac = HEAD(new->area_list);
+
+    if (oac->type != nac->type)
+      return 0;
+  }
+
+  if (old->vpn_pe != new->vpn_pe)
     return 0;
 
   if ((p->af_ext != new->af_ext) || (p->af_mc != new->af_mc))
@@ -663,7 +691,7 @@ ospf_reconfigure(struct proto *P, struct proto_config *CF)
   p->ecmp = new->ecmp;
   p->tick = new->tick;
   p->disp_timer->recurrent = p->tick S;
-  tm_start(p->disp_timer, 100 MS);
+  tm_start(p->disp_timer, 10 MS);
 
   /* Mark all areas and ifaces */
   WALK_LIST(oa, p->area_list)

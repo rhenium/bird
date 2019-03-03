@@ -28,12 +28,16 @@ use lib "/usr/perl5";
 use lib "/usr/lib/perl5";
 use lib "/usr/share/perl5";
 $progs = {
-  "NSGMLS" => "/usr/bin/onsgmls",
+  "NSGMLS" => "/usr/bin/nsgmls",
   "SGMLSASP" => "/usr/bin/sgmlsasp",
   "GROFF" => "/usr/bin/groff",
   "GROFFMACRO" => "-ms",
   "AWK" => "/usr/share/linuxdoc-tools/awkwhich"
 };
+
+if (! -x $progs->{"NSGMLS"})
+  { $progs->{"NSGMLS"} = "/usr/bin/onsgmls"; }
+
 $ENV{"SGML_CATALOG_FILES"} = "$DataDir/dtd/catalog" .
   (defined $ENV{SGML_CATALOG_FILES} ? ":$ENV{SGML_CATALOG_FILES}" : "");
 

@@ -1,3 +1,244 @@
+commit b9deced219cfda2afe8604b24351ae10ac56f98b
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Feb 26 18:19:35 2019 +0100
+
+    NEWS and version update
+
+commit 7c36eb3e8bd7d06f65dc7319d42b6abe782c5b89
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Feb 22 12:41:51 2019 +0100
+
+    Conf: Switch for faster (and slightly bigger) lexer
+
+commit 93af78d2d29ce11e20d46f60cfe1d3ef68052e5c
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Fri Feb 22 02:16:39 2019 +0100
+
+    Nest: Do not compare rte.flags during rte_update()
+    
+    Route flags are mosty internal state of rtable, they are not significant
+    to whether a route has changed. With the old code, all routes received as
+    a part of enhanced route refresh are always re-announced to other peers
+    due to change in REF_STALE.
+
+commit ae294cc2d02ec02cbea11c275b64e7637ba0ea68
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Feb 19 18:30:28 2019 +0100
+
+    HTML are no longer generated in srcdir
+
+commit 900fda4411a5346f808a575101b1260b5f73fa93
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Feb 19 18:20:07 2019 +0100
+
+    Doc: Detect SP/OpenSP automatically
+
+commit 3a8ca7abbcf6452fa56d0c1c6ddcf7d5bd6876ed
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Feb 19 16:26:09 2019 +0100
+
+    Nest: Prevent withdraws from propagation back to source protocol (for accepted mode)
+    
+    Update for one of previous patches, handles the the issue for
+    first-accepted mode of route propagation.
+
+commit bf8d7bba9ef3c6d95661f97dc71fa7a6b2cf0b87
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Feb 17 01:54:01 2019 +0100
+
+    OSPF: Reset LSAs during area type change
+    
+    When area is reconfigured to a different type, we need to flush LSAs as
+    they may not be valid (e.g. NSSA-LSA for non-NSSA area). Also, when we
+    have have just one OSPF area and that changes type, we could restart OSPF
+    as there is no state to keep anyway. That solves issue with different
+    handling of external routes exported to OSPF based of main area type.
+
+commit 4a3f5b36173299d44e26dc18db4e5d103875f8c4
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Feb 13 15:40:22 2019 +0100
+
+    OSPF: Basic support for DN-bit handling (RFC 4576)
+    
+    External LSAs originated by OSPF routers with VPN-PE behavior enabled are
+    marked by DN flag and they are ignored by other OSPF routers with VPN-PE
+    enabled.
+
+commit 1e958e52d3ef0c38e5fb5e673bcce95d1c28ac0e
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sat Feb 9 16:15:01 2019 +0100
+
+    OSPF: Do not originate Router-Information LSA
+    
+    As we do not have much usage for it yet.
+
+commit cd16538fc91778e31f8241f62ee47056f099c051
+Merge: 6e8fb668 f9b97f1c
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sat Feb 9 15:53:16 2019 +0100
+
+    Merge remote-tracking branch 'origin/mq-opt'
+
+commit 6e8fb66859a17b295cd9246264221a75cdbe6c55
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Feb 5 19:00:43 2019 +0100
+
+    Nest: Improve export counter handling
+    
+    One of previous workarounds for phantom route avoidance breaks export
+    counters by expanding sending of spurious withdraws, which are send when
+    we are not sure whether we have advertised that routes in the past.
+    If not, then export counter is decreased, but it was not increased
+    before, so it overflows under zero.
+    
+    The patch fixes that by sendung spurious withdraws, but not counting them
+    on export counter. That may lead to error in the other direction, but that
+    happens only as a race condition (i.e., in normal operation filters
+    return proper values about old route export state).
+
+commit 52fdd1cb76be1e278799001fa57f56888062dd86
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Feb 5 15:59:26 2019 +0100
+
+    Nest: Report preferred counters also when 'import keep filtered' is enabled
+    
+    Thanks to Michal Nowak for reporting the issue.
+
+commit a9b97cbcb74d918f3f606eb87a506712dccd2832
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Feb 3 20:22:40 2019 +0100
+
+    OSPF: Send direct acknowledgements as unicast
+    
+    Direct acknowledgements should be send as unicast to a corresponding
+    neighbor. Only delayed acks should be send as multicast to all/designated
+    routers.
+
+commit 16605f2fdad730b8bb570e17192dc5f45cf15d3f
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Feb 3 17:31:27 2019 +0100
+
+    OSPF: Reject duplicate DBDES packets after dead interval
+    
+    Master may free last DBDES packet immediately. Slave must wait dead
+    interval before freeing last DBDES packet and then reject duplicate
+    DBDES packets with SeqNumberMismatch.
+
+commit 9c94583a3ded3b2792bd08d88beb10100a82d7b4
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Feb 3 16:20:37 2019 +0100
+
+    OSPF: DD seqnum should be initialized only for first attempts
+    
+    After SeqNumberMismatch/BadLSReq, we should continue with the old
+    seqnum++. The old code tries to do that by n->adj, but it was set
+    nowhere.
+
+commit 267da8138d7f429941f2d829b44cf9bdd94a14d6
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Feb 3 15:45:43 2019 +0100
+
+    OSPF: Reject DBDES packets with non-matching MTU
+    
+    As it is specified in RFC 2328. The old code just provided warning.
+
+commit e1c275d87b26f35c29ec8bfab0a3265810463574
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sat Feb 2 13:28:16 2019 +0100
+
+    Nest: Reestablish preferred counters
+
+commit f9b97f1c6282be398d2c2bb896dbb453f638f720
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Feb 1 14:09:01 2019 +0100
+
+    Perf: Added forgotten all-protocol options
+
+commit a8d0f2516c1ee0372edfc607832ae78632e404ca
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Jan 29 15:19:06 2019 +0100
+
+    Nest: FIB rehash values tweaked for better performance
+
+commit e85e37d91d0c5fca6cb7a3ea80fac582074c389d
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Jan 29 14:22:55 2019 +0100
+
+    Perf: Prune the table after every loop to have clean state.
+
+commit 7411b694c3ca9db4947f577f826b622ff23e570d
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Jan 31 15:03:43 2019 +0100
+
+    Perf: Write also BIRD version to have all the needed data in the logfile
+
+commit c65a9a05f9005d8b7369d07a3f0e99b2f205955b
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Jan 31 15:02:15 2019 +0100
+
+    Nest: Don't lookup net in table before filters are run.
+    
+    Using dummy net instead. This should help with performance on rejected
+    routes.
+
+commit e84c81b76ff6af88041b55c4ed25c208f78d4826
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Jan 30 17:25:21 2019 +0100
+
+    Nest: Prevent withdraws from propagation back to source protocol
+    
+    The earlier fix loosen conditions for not running filters on old
+    route when deciding about route propagation to a protocol to avoid
+    issues with ghost routes in some race conditions.
+    
+    Unfortunately, the fix also caused back-propagation of withdraws. For
+    regular updates, back-propagation is prevented in import_control hooks,
+    but these are not called on withdraws. For them, import_control hooks
+    are called on old routes instead, changing (old, NULL) notification
+    to (NULL, NULL), which is ignored. By not calling export processing
+    in some cases, the withdraw is not ignored and is back-propagated.
+    
+    This patch fixes that by contract conditions so the earlier fix is not
+    applied to back-propagated updates.
+
+commit ee95f281f038684a4a2613a0c54af7389afe64da
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sat Jan 26 21:02:35 2019 +0100
+
+    Doc: Add documentation for OSPF retransmit delay option
+    
+    Thanks to Igor Podlesny for notification.
+
+commit 1c730ee761b3c9b7ff12a0ad11c5b1768d1e4ada
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sat Jan 26 20:44:37 2019 +0100
+
+    Doc: Remove doc for already removed option
+
+commit b8a3608aa59a67364f05dbd0d0332371a200f226
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sat Jan 26 19:48:16 2019 +0100
+
+    BGP: Cleanup channels when going down
+    
+    When going up, uncleaned old channel state may trigger unexpected
+    conditions crashing bird.
+
+commit 5a50a98980a3554b66cedda6992ece4063a0e85a
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Jan 24 22:34:33 2019 +0100
+
+    OSPF: Opaque LSAs and Router Information LSA
+    
+    Add support for OSPFv2 Opaque LSAs (RFC 5250) and for Router Information
+    LSA (RFC 7770). The second part is here mainly for testing opaque LSAs.
+
+commit 954888859969587a288501b6801ab0ddb1f94133
+Author: Jan Maria Matejka <mq@ucw.cz>
+Date:   Fri Dec 14 16:10:19 2018 +0100
+
+    Nest: Don't make tmp_attr before preexport is called
+
 commit 3e60932a289e55e212dec1cbaf3bca44b2bbaeb8
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Sat Jan 5 00:38:37 2019 +0100
