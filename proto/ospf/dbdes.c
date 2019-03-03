@@ -127,7 +127,7 @@ ospf_prepare_dbdes(struct ospf_proto *p, struct ospf_neighbor *n)
   {
     struct ospf_dbdes2_packet *ps = (void *) pkt;
     ps->iface_mtu = htons(iface_mtu);
-    ps->options = ifa->oa->options;
+    ps->options = ifa->oa->options | OPT_O;
     ps->imms = 0;	/* Will be set later */
     ps->ddseq = htonl(n->dds);
     length = sizeof(struct ospf_dbdes2_packet);
@@ -162,7 +162,8 @@ ospf_prepare_dbdes(struct ospf_proto *p, struct ospf_neighbor *n)
       }
 
       if ((en->lsa.age < LSA_MAXAGE) &&
-	  lsa_flooding_allowed(en->lsa_type, en->domain, ifa))
+	  lsa_flooding_allowed(en->lsa_type, en->domain, ifa) &&
+	  lsa_is_acceptable(en->lsa_type, n, p))
       {
 	lsa_hton_hdr(&(en->lsa), lsas + i);
 	i++;
@@ -235,6 +236,14 @@ ospf_rxmt_dbdes(struct ospf_proto *p, struct ospf_neighbor *n)
 
   /* Send last packet */
   ospf_do_send_dbdes(p, n);
+}
+
+void
+ospf_reset_ldd(struct ospf_proto *p UNUSED, struct ospf_neighbor *n)
+{
+  mb_free(n->ldd_buffer);
+  n->ldd_buffer = NULL;
+  n->ldd_bsize = 0;
 }
 
 static int
@@ -341,6 +350,16 @@ ospf_receive_dbdes(struct ospf_packet *pkt, struct ospf_iface *ifa,
     rcv_ddseq = ntohl(ps->ddseq);
   }
 
+  /* Reject packets with non-matching MTU */
+  if ((ifa->type != OSPF_IT_VLINK) &&
+      (rcv_iface_mtu != ifa->iface->mtu) &&
+      (rcv_iface_mtu != 0) && (ifa->iface->mtu != 0))
+  {
+    LOG_PKT("MTU mismatch with nbr %R on %s (remote %d, local %d)",
+	    n->rid, ifa->ifname, rcv_iface_mtu, ifa->iface->mtu);
+    return;
+  }
+
   switch (n->state)
   {
   case NEIGHBOR_DOWN:
@@ -356,13 +375,6 @@ ospf_receive_dbdes(struct ospf_packet *pkt, struct ospf_iface *ifa,
     /* fallthrough */
 
   case NEIGHBOR_EXSTART:
-    if ((ifa->type != OSPF_IT_VLINK) &&
-	(rcv_iface_mtu != ifa->iface->mtu) &&
-	(rcv_iface_mtu != 0) &&
-	(ifa->iface->mtu != 0))
-      LOG_PKT_WARN("MTU mismatch with nbr %R on %s (remote %d, local %d)",
-		   n->rid, ifa->ifname, rcv_iface_mtu, ifa->iface->mtu);
-
     if (((rcv_imms & DBDES_IMMS) == DBDES_IMMS) &&
 	(n->rid > p->router_id) &&
 	(plen == ospf_dbdes_hdrlen(p)))
@@ -430,6 +442,7 @@ ospf_receive_dbdes(struct ospf_packet *pkt, struct ospf_iface *ifa,
       if (!(n->myimms & DBDES_M) && !(n->imms & DBDES_M))
       {
 	tm_stop(n->dbdes_timer);
+	ospf_reset_ldd(p, n);
 	ospf_neigh_sm(n, INM_EXDONE);
 	break;
       }
@@ -453,7 +466,11 @@ ospf_receive_dbdes(struct ospf_packet *pkt, struct ospf_iface *ifa,
       ospf_send_dbdes(p, n);
 
       if (!(n->myimms & DBDES_M) && !(n->imms & DBDES_M))
+      {
+	/* Use dbdes timer to postpone freeing of Last DBDES packet buffer */
+	tm_start(n->dbdes_timer, n->ifa->deadint S);
 	ospf_neigh_sm(n, INM_EXDONE);
+      }
     }
     break;
 
