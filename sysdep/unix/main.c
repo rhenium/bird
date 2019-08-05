@@ -36,6 +36,7 @@
 #include "nest/locks.h"
 #include "conf/conf.h"
 #include "filter/filter.h"
+#include "filter/data.h"
 
 #include "unix.h"
 #include "krt.h"
@@ -93,11 +94,9 @@ drop_gid(gid_t gid)
 static inline void
 add_num_const(char *name, int val)
 {
-  struct symbol *s = cf_get_symbol(name);
-  s->class = SYM_CONSTANT | T_INT;
-  s->def = cfg_allocz(sizeof(struct f_val));
-  SYM_TYPE(s) = T_INT;
-  SYM_VAL(s).i = val;
+  struct f_val *v = cfg_alloc(sizeof(struct f_val));
+  *v = (struct f_val) { .type = T_INT, .val.i = val };
+  cf_define_symbol(cf_get_symbol(name), SYM_CONSTANT | T_INT, val, v);
 }
 
 /* the code of read_iproute_table() is based on
@@ -339,6 +338,28 @@ cmd_reconfig_undo(void)
   cmd_reconfig_msg(r);
 }
 
+void
+cmd_reconfig_status(void)
+{
+  int s = config_status();
+  btime t = config_timer_status();
+
+  switch (s)
+  {
+  case CONF_DONE:	cli_msg(-3, "Daemon is up and running"); break;
+  case CONF_PROGRESS:	cli_msg(-4, "Reconfiguration in progress"); break;
+  case CONF_QUEUED:	cli_msg(-5, "Reconfiguration in progress, next one enqueued"); break;
+  case CONF_SHUTDOWN:	cli_msg(-6, "Shutdown in progress"); break;
+  default:		break;
+  }
+
+  if (t >= 0)
+    cli_msg(-22, "Configuration unconfirmed, undo in %t s", t);
+
+  cli_msg(0, "");
+}
+
+
 /*
  *	Command-Line Interface
  */
@@ -543,14 +564,14 @@ cmd_shutdown(void)
     return;
 
   cli_msg(7, "Shutdown requested");
-  order_shutdown();
+  order_shutdown(0);
 }
 
 void
 async_shutdown(void)
 {
   DBG("Shutting down...\n");
-  order_shutdown();
+  order_shutdown(0);
 }
 
 void
@@ -561,6 +582,17 @@ sysdep_shutdown_done(void)
   log_msg(L_FATAL "Shutdown completed");
   exit(0);
 }
+
+void
+cmd_graceful_restart(void)
+{
+  if (cli_access_restricted())
+    return;
+
+  cli_msg(25, "Graceful restart requested");
+  order_shutdown(1);
+}
+
 
 /*
  *	Signals

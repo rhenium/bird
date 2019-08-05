@@ -2,8 +2,7 @@ src := commands.c util.c client.c
 obj := $(src-o-files)
 
 $(all-client)
-
-$(o)commands.o: $(objdir)/conf/commands.h
+$(conf-y-targets): $(s)cmds.Y
 
 $(exedir)/birdc: $(o)birdc.o
 $(exedir)/birdc: LIBS += $(CLIENT_LIBS)

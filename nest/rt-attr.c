@@ -58,6 +58,8 @@
 
 #include <stddef.h>
 
+const adata null_adata;		/* adata of length 0 */
+
 const char * const rta_src_names[RTS_MAX] = {
   [RTS_DUMMY]		= "",
   [RTS_STATIC]		= "static",
@@ -200,7 +202,7 @@ nexthop__same(struct nexthop *x, struct nexthop *y)
 }
 
 static int
-nexthop_compare_node(struct nexthop *x, struct nexthop *y)
+nexthop_compare_node(const struct nexthop *x, const  struct nexthop *y)
 {
   int r;
 
@@ -316,6 +318,24 @@ nexthop_insert(struct nexthop **n, struct nexthop *x)
 
   x->next = *n;
   *n = x;
+}
+
+struct nexthop *
+nexthop_sort(struct nexthop *x)
+{
+  struct nexthop *s = NULL;
+
+  /* Simple insert-sort */
+  while (x)
+  {
+    struct nexthop *n = x;
+    x = n->next;
+    n->next = NULL;
+
+    nexthop_insert(&s, n);
+  }
+
+  return s;
 }
 
 int
@@ -571,8 +591,8 @@ ea_do_sort(ea_list *e)
 }
 
 /**
- * In place discard duplicates, undefs and temporary attributes in sorted
- * ea_list. We use stable sort for this reason.
+ * In place discard duplicates and undefs in sorted ea_list. We use stable sort
+ * for this reason.
  **/
 static inline void
 ea_do_prune(ea_list *e)
@@ -594,10 +614,6 @@ ea_do_prune(ea_list *e)
       /* Now s0 is the most recent version, s[-1] the oldest one */
       /* Drop undefs */
       if ((s0->type & EAF_TYPE_MASK) == EAF_TYPE_UNDEF)
-	continue;
-
-      /* Drop temporary attributes */
-      if (s0->type & EAF_TEMP)
 	continue;
 
       /* Copy the newest version to destination */
@@ -763,7 +779,7 @@ ea_free(ea_list *o)
 	{
 	  eattr *a = &o->attrs[i];
 	  if (!(a->type & EAF_EMBEDDED))
-	    mb_free(a->u.ptr);
+	    mb_free((void *) a->u.ptr);
 	}
       mb_free(o);
     }
@@ -808,7 +824,7 @@ ea_format_bitfield(struct eattr *a, byte *buf, int bufsize, const char **names, 
 }
 
 static inline void
-opaque_format(struct adata *ad, byte *buf, uint size)
+opaque_format(const struct adata *ad, byte *buf, uint size)
 {
   byte *bound = buf + size - 10;
   uint i;
@@ -831,7 +847,7 @@ opaque_format(struct adata *ad, byte *buf, uint size)
 }
 
 static inline void
-ea_show_int_set(struct cli *c, struct adata *ad, int way, byte *pos, byte *buf, byte *end)
+ea_show_int_set(struct cli *c, const struct adata *ad, int way, byte *pos, byte *buf, byte *end)
 {
   int i = int_set_format(ad, way, 0, pos, end - pos);
   cli_printf(c, -1012, "\t%s", buf);
@@ -843,7 +859,7 @@ ea_show_int_set(struct cli *c, struct adata *ad, int way, byte *pos, byte *buf, 
 }
 
 static inline void
-ea_show_ec_set(struct cli *c, struct adata *ad, byte *pos, byte *buf, byte *end)
+ea_show_ec_set(struct cli *c, const struct adata *ad, byte *pos, byte *buf, byte *end)
 {
   int i = ec_set_format(ad, 0, pos, end - pos);
   cli_printf(c, -1012, "\t%s", buf);
@@ -855,7 +871,7 @@ ea_show_ec_set(struct cli *c, struct adata *ad, byte *pos, byte *buf, byte *end)
 }
 
 static inline void
-ea_show_lc_set(struct cli *c, struct adata *ad, byte *pos, byte *buf, byte *end)
+ea_show_lc_set(struct cli *c, const struct adata *ad, byte *pos, byte *buf, byte *end)
 {
   int i = lc_set_format(ad, 0, pos, end - pos);
   cli_printf(c, -1012, "\t%s", buf);
@@ -882,7 +898,7 @@ ea_show(struct cli *c, eattr *e)
 {
   struct protocol *p;
   int status = GA_UNKNOWN;
-  struct adata *ad = (e->type & EAF_EMBEDDED) ? NULL : e->u.ptr;
+  const struct adata *ad = (e->type & EAF_EMBEDDED) ? NULL : e->u.ptr;
   byte buf[CLI_MSG_SIZE];
   byte *pos = buf, *end = buf + sizeof(buf);
 
@@ -979,8 +995,6 @@ ea_dump(ea_list *e)
 	{
 	  eattr *a = &e->attrs[i];
 	  debug(" %02x:%02x.%02x", EA_PROTO(a->id), EA_ID(a->id), a->flags);
-	  if (a->type & EAF_TEMP)
-	    debug("T");
 	  debug("=%c", "?iO?I?P???S?????" [a->type & EAF_TYPE_MASK]);
 	  if (a->type & EAF_ORIGINATED)
 	    debug("o");
@@ -1023,7 +1037,7 @@ ea_hash(ea_list *e)
 	    h ^= a->u.data;
 	  else
 	    {
-	      struct adata *d = a->u.ptr;
+	      const struct adata *d = a->u.ptr;
 	      h ^= mem_hash(d->data, d->length);
 	    }
 	  h *= mul;

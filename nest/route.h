@@ -297,7 +297,7 @@ rte *rte_find(net *net, struct rte_src *src);
 rte *rte_get_temp(struct rta *);
 void rte_update2(struct channel *c, const net_addr *n, rte *new, struct rte_src *src);
 /* rte_update() moved to protocol.h to avoid dependency conflicts */
-int rt_examine(rtable *t, net_addr *a, struct proto *p, struct filter *filter);
+int rt_examine(rtable *t, net_addr *a, struct proto *p, const struct filter *filter);
 rte *rt_export_merged(struct channel *c, net *net, rte **rt_free, linpool *pool, int silent);
 void rt_refresh_begin(rtable *t, struct channel *c);
 void rt_refresh_end(rtable *t, struct channel *c);
@@ -308,6 +308,10 @@ void rte_free(rte *);
 rte *rte_do_cow(rte *);
 static inline rte * rte_cow(rte *r) { return (r->flags & REF_COW) ? rte_do_cow(r) : r; }
 rte *rte_cow_rta(rte *r, linpool *lp);
+void rte_init_tmp_attrs(struct rte *r, linpool *lp, uint max);
+void rte_make_tmp_attr(struct rte *r, uint id, uint type, uintptr_t val);
+void rte_make_tmp_attrs(struct rte **r, struct linpool *pool, struct rta **old_attrs);
+uintptr_t rte_store_tmp_attr(struct rte *r, uint id);
 void rt_dump(rtable *);
 void rt_dump_all(void);
 int rt_feed_channel(struct channel *c);
@@ -335,7 +339,7 @@ struct rt_show_data {
   struct rt_show_data_rtable *last_table; /* Last table in output */
   struct fib_iterator fit;		/* Iterator over networks in table */
   int verbose, tables_defined_by;
-  struct filter *filter;
+  const struct filter *filter;
   struct proto *show_protocol;
   struct proto *export_protocol;
   struct channel *export_channel;
@@ -473,7 +477,7 @@ typedef struct eattr {
   byte type;				/* Attribute type and several flags (EAF_...) */
   union {
     u32 data;
-    struct adata *ptr;			/* Attribute data elsewhere */
+    const struct adata *ptr;			/* Attribute data elsewhere */
   } u;
 } eattr;
 
@@ -481,6 +485,7 @@ typedef struct eattr {
 #define EA_CODE(proto,id) (((proto) << 8) | (id))
 #define EA_ID(ea) ((ea) & 0xff)
 #define EA_PROTO(ea) ((ea) >> 8)
+#define EA_ID_FLAG(ea) (1 << EA_ID(ea))
 #define EA_CUSTOM(id) ((id) | EA_CUSTOM_BIT)
 #define EA_IS_CUSTOM(ea) ((ea) & EA_CUSTOM_BIT)
 #define EA_CUSTOM_ID(ea) ((ea) & ~EA_CUSTOM_BIT)
@@ -493,6 +498,7 @@ const char *ea_custom_name(uint ea);
 #define EA_CUSTOM_BIT 0x8000
 #define EA_ALLOW_UNDEF 0x10000		/* ea_find: allow EAF_TYPE_UNDEF */
 #define EA_BIT(n) ((n) << 24)		/* Used in bitfield accessors */
+#define EA_BIT_GET(ea) ((ea) >> 24)
 
 #define EAF_TYPE_MASK 0x1f		/* Mask with this to get type */
 #define EAF_TYPE_INT 0x01		/* 32-bit unsigned integer number */
@@ -509,12 +515,13 @@ const char *ea_custom_name(uint ea);
 #define EAF_VAR_LENGTH 0x02		/* Attribute length is variable (part of type spec) */
 #define EAF_ORIGINATED 0x20		/* The attribute has originated locally */
 #define EAF_FRESH 0x40			/* An uncached attribute (e.g. modified in export filter) */
-#define EAF_TEMP 0x80			/* A temporary attribute (the one stored in the tmp attr list) */
 
 typedef struct adata {
   uint length;				/* Length of data */
   byte data[0];
 } adata;
+
+extern const adata null_adata;		/* adata of length 0 */
 
 static inline struct adata *
 lp_alloc_adata(struct linpool *pool, uint len)
@@ -524,7 +531,7 @@ lp_alloc_adata(struct linpool *pool, uint len)
   return ad;
 }
 
-static inline int adata_same(struct adata *a, struct adata *b)
+static inline int adata_same(const struct adata *a, const struct adata *b)
 { return (a->length == b->length && !memcmp(a->data, b->data, a->length)); }
 
 
@@ -539,6 +546,7 @@ typedef struct ea_list {
 #define EALF_SORTED 1			/* Attributes are sorted by code */
 #define EALF_BISECT 2			/* Use interval bisection for searching */
 #define EALF_CACHED 4			/* Attributes belonging to cached rta */
+#define EALF_TEMP 8			/* Temporary ea_list added by make_tmp_attrs hooks */
 
 struct rte_src *rt_find_source(struct proto *p, u32 id);
 struct rte_src *rt_get_source(struct proto *p, u32 id);
@@ -571,6 +579,8 @@ void ea_format_bitfield(struct eattr *a, byte *buf, int bufsize, const char **na
     ea = t; \
   } \
   ea_sort(ea); \
+  if (ea->count == 0) \
+    ea = NULL; \
 } while(0) \
 
 static inline eattr *
@@ -621,6 +631,7 @@ int nexthop__same(struct nexthop *x, struct nexthop *y); /* Compare multipath ne
 static inline int nexthop_same(struct nexthop *x, struct nexthop *y)
 { return (x == y) || nexthop__same(x, y); }
 struct nexthop *nexthop_merge(struct nexthop *x, struct nexthop *y, int rx, int ry, int max, linpool *lp);
+struct nexthop *nexthop_sort(struct nexthop *x);
 static inline void nexthop_link(struct rta *a, struct nexthop *from)
 { memcpy(&a->nh, from, nexthop_size(from)); }
 void nexthop_insert(struct nexthop **n, struct nexthop *y);

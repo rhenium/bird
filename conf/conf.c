@@ -98,6 +98,7 @@ config_alloc(const char *name)
   memcpy(ndup, name, nlen);
 
   init_list(&c->tests);
+  init_list(&c->symbols);
   c->mrtdump_file = -1; /* Hack, this should be sysdep-specific */
   c->pool = p;
   c->mem = l;
@@ -258,6 +259,8 @@ config_do_commit(struct config *c, int type)
   if (old_config)
     old_config->obstacle_count++;
 
+  DBG("filter_commit\n");
+  filter_commit(c, old_config);
   DBG("sysdep_commit\n");
   int force_restart = sysdep_commit(c, old_config);
   DBG("global_commit\n");
@@ -444,6 +447,24 @@ config_undo(void)
   return CONF_PROGRESS;
 }
 
+int
+config_status(void)
+{
+  if (shutting_down)
+    return CONF_SHUTDOWN;
+
+  if (configuring)
+    return future_cftype ? CONF_QUEUED : CONF_PROGRESS;
+
+  return CONF_DONE;
+}
+
+btime
+config_timer_status(void)
+{
+  return tm_active(config_timer) ? tm_remains(config_timer) : -1;
+}
+
 extern void cmd_reconfig_undo_notify(void);
 
 static void
@@ -474,19 +495,24 @@ config_init(void)
  * for switching to an empty configuration.
  */
 void
-order_shutdown(void)
+order_shutdown(int gr)
 {
   struct config *c;
 
   if (shutting_down)
     return;
 
-  log(L_INFO "Shutting down");
+  if (!gr)
+    log(L_INFO "Shutting down");
+  else
+    log(L_INFO "Shutting down for graceful restart");
+
   c = lp_alloc(config->mem, sizeof(struct config));
   memcpy(c, config, sizeof(struct config));
   init_list(&c->protos);
   init_list(&c->tables);
   c->shutdown = 1;
+  c->gr_down = gr;
 
   config_commit(c, RECONFIG_HARD, 0);
   shutting_down = 1;

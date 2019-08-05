@@ -403,6 +403,14 @@ configured for all relevant protocols and requires protocol-specific support
 (currently implemented for Kernel and BGP protocols), it is activated for
 particular boot by option <cf/-R/.
 
+<p>Some protocols (e.g. BGP) could be restarted gracefully after both
+intentional outage and crash, while others (e.g. OSPF) after intentional outage
+only. For planned graceful restart, BIRD must be shut down by
+<ref id="cli-graceful-restart" name="graceful restart"> command instead of
+regular <ref id="cli-down" name="down"> command. In this way routing neighbors
+are notified about planned graceful restart and routes are kept in kernel table
+after shutdown.
+
 
 <chapt>Configuration
 <label id="config">
@@ -561,7 +569,7 @@ include "tablename.conf";;
 	can be seen (together with other symbols) using 'show symbols' command.
 
 	<tag><label id="opt-attribute">attribute <m/type/ <m/name/</tag>
-	Define a custom route attribute. You can set and get it in filters like
+	Declare a custom route attribute. You can set and get it in filters like
 	any other route atribute. This feature is intended for marking routes
 	in import filters for export filtering purposes instead of locally
 	assigned BGP communities which have to be deleted in export filters.
@@ -671,14 +679,24 @@ agreement").
 	This is an optional description of the protocol. It is displayed as a
 	part of the output of 'show protocols all' command.
 
-	<tag><label id="proto-vrf">vrf "<m/text/"</tag>
+	<tag><label id="proto-vrf">vrf "<m/text/"|default</tag>
 	Associate the protocol with specific VRF. The protocol will be
 	restricted to interfaces assigned to the VRF and will use sockets bound
-	to the VRF. Appropriate VRF interface must exist on OS level. For kernel
-	protocol, an appropriate table still must be explicitly selected by
-	<cf/table/ option. Note that for proper VRF support it is necessary to
-	use Linux kernel version at least 4.14, older versions have limited VRF
-	implementation.
+	to the VRF. A corresponding VRF interface must exist on OS level. For
+	kernel protocol, an appropriate table still must be explicitly selected
+	by <cf/table/ option.
+
+	By selecting <cf/default/, the protocol is associated with the default
+	VRF; i.e., it will be restricted to interfaces not assigned to any
+	regular VRF. That is different from not specifying <cf/vrf/ at all, in
+	which case the protocol may use any interface regardless of its VRF
+	status.
+
+	Note that for proper VRF support it is necessary to use Linux kernel
+	version at least 4.14, older versions have limited VRF implementation.
+	Before Linux kernel 5.0, a socket bound to a port in default VRF collide
+	with others in regular VRFs. In BGP, this can be avoided by using
+	<ref id="bgp-strict-bind" name="strict bind"> option.
 
 	<tag><label id="proto-channel"><m/channel name/ [{<m/channel config/}]</tag>
 	Every channel must be explicitly stated. See the protocol-specific
@@ -1106,6 +1124,10 @@ This argument can be omitted if there exists only a single instance.
 	<tag><label id="cli-down">down</tag>
 	Shut BIRD down.
 
+	<tag><label id="cli-graceful-restart">graceful restart</tag>
+	Shut BIRD down for graceful restart. See <ref id="graceful-restart"
+	name="graceful restart"> section for details.
+
 	<tag><label id="cli-debug">debug <m/protocol/|<m/pattern/|all all|off|{ states|routes|filters|events|packets [, <m/.../] }</tag>
 	Control protocol debugging.
 
@@ -1159,7 +1181,7 @@ int var;
 <p>As you can see, a filter has a header, a list of local variables, and a body.
 The header consists of the <cf/filter/ keyword followed by a (unique) name of
 filter. The list of local variables consists of <cf><M>type name</M>;</cf>
-pairs where each pair defines one local variable. The body consists of <cf>
+pairs where each pair declares one local variable. The body consists of <cf>
 { <M>statements</M> }</cf>. Each <m/statement/ is terminated by a <cf/;/. You
 can group several statements to a single compound statement by using braces
 (<cf>{ <M>statements</M> }</cf>) which is useful if you want to make a bigger
@@ -1188,7 +1210,7 @@ called like in C: <cf>name(); with_parameters(5);</cf>. Function may return
 values using the <cf>return <m/[expr]/</cf> command. Returning a value exits
 from current function (this is similar to C).
 
-<p>Filters are declared in a way similar to functions except they can't have
+<p>Filters are defined in a way similar to functions except they can't have
 explicit parameters. They get a route table entry as an implicit parameter, it
 is also passed automatically to any functions called. The filter must terminate
 with either <cf/accept/ or <cf/reject/ statement. If there's a runtime error in
@@ -1571,11 +1593,20 @@ if 1234 = i then printn "."; else {
 <label id="route-attributes">
 
 <p>A filter is implicitly passed a route, and it can access its attributes just
-like it accesses variables. Attempts to access undefined attribute result in a
-runtime error; you can check if an attribute is defined by using the
-<cf>defined( <m>attribute</m> )</cf> operator. One notable exception to this
-rule are attributes of bgppath and *clist types, where undefined value is
-regarded as empty bgppath/*clist for most purposes.
+like it accesses variables. There are common route attributes, protocol-specific
+route attributes and custom route attributes. Most common attributes are
+mandatory (always defined), while remaining are optional.  Attempts to access
+undefined attribute result in a runtime error; you can check if an attribute is
+defined by using the <cf>defined( <m>attribute</m> )</cf> operator. One notable
+exception to this rule are attributes of bgppath and *clist types, where
+undefined value is regarded as empty bgppath/*clist for most purposes.
+
+Attributes can be defined by just setting them in filters. Custom attributes
+have to be first declared by <ref id="opt-attribute" name="attribute"> global
+option. You can also undefine optional attribute back to non-existence by using
+the <cf>unset( <m/attribute/ )</cf> operator.
+
+Common route attributes are:
 
 <descrip>
 	<tag><label id="rta-net"><m/prefix/ net</tag>
@@ -1642,8 +1673,8 @@ regarded as empty bgppath/*clist for most purposes.
 	compare internal distances to boundary routers (see below).
 </descrip>
 
-<p>There also exist protocol-specific attributes which are described in the
-corresponding protocol sections.
+<p>Protocol-specific route attributes are described in the corresponding
+protocol sections.
 
 
 <sect>Other statements
@@ -1653,7 +1684,7 @@ corresponding protocol sections.
 
 <descrip>
 	<tag><label id="assignment"><m/variable/ = <m/expr/</tag>
-	Set variable to a given value.
+	Set variable (or route attribute) to a given value.
 
 	<tag><label id="filter-accept-reject">accept|reject [ <m/expr/ ]</tag>
 	Accept or reject the route, possibly printing <cf><m>expr</m></cf>.
@@ -1887,12 +1918,11 @@ the BFD session went down).
 advanced features like the echo mode or authentication are not implemented), IP
 transport for BFD as defined in <rfc id="5881"> and <rfc id="5883"> and
 interaction with client protocols as defined in <rfc id="5882">.
-We currently support at most one protocol instance.
 
 <p>BFD packets are sent with a dynamic source port number. Linux systems use by
 default a bit different dynamic port range than the IANA approved one
 (49152-65535). If you experience problems with compatibility, please adjust
-<cf>/proc/sys/net/ipv4/ip_local_port_range</cf>
+<cf>/proc/sys/net/ipv4/ip_local_port_range</cf>.
 
 <sect1>Configuration
 <label id="bfd-config">
@@ -1908,6 +1938,14 @@ configuration is often sufficient.
 
 <p>Note that to use BFD for other protocols like OSPF or BGP, these protocols
 also have to be configured to request BFD sessions, usually by <cf/bfd/ option.
+
+<p>A BFD instance not associated with any VRF handles session requests from all
+other protocols, even ones associated with a VRF. Such setup would work for
+single-hop BFD sessions if <cf/net.ipv4.udp_l3mdev_accept/ sysctl is enabled,
+but does not currently work for multihop sessions. Another approach is to
+configure multiple BFD instances, one for each VRF (including the default VRF).
+Each BFD instance associated with a VRF (regular or default) only handles
+session requests from protocols in the same VRF.
 
 <p>Some of BFD session options require <m/time/ value, which has to be specified
 with the appropriate unit: <m/num/ <cf/s/|<cf/ms/|<cf/us/. Although microseconds
@@ -2186,12 +2224,23 @@ using the following configuration parameters:
 	<cf/local 10.0.0.1; local as 65000;/ are valid). This parameter is
 	mandatory.
 
-	<tag><label id="bgp-neighbor">neighbor [<m/ip/] [port <m/number/] [as <m/number/]</tag>
+	<tag><label id="bgp-neighbor">neighbor [<m/ip/ | range <m/prefix/] [port <m/number/] [as <m/number/] [internal|external]</tag>
 	Define neighboring router this instance will be talking to and what AS
 	it is located in. In case the neighbor is in the same AS as we are, we
-	automatically switch to iBGP. Optionally, the remote port may also be
-	specified. Like <cf/local/ parameter, this parameter may also be used
-	multiple times with different sub-options. This parameter is mandatory.
+	automatically switch to IBGP. Alternatively, it is possible to specify
+	just <cf/internal/ or <cf/external/ instead of AS number, in that case
+	either local AS number, or any external AS number is accepted.
+	Optionally, the remote port may also be specified. Like <cf/local/
+	parameter, this parameter may also be used multiple times with different
+	sub-options. This parameter is mandatory.
+
+	It is possible to specify network prefix (with <cf/range/ keyword)
+	instead of explicit neighbor IP address. This enables dynamic BGP
+	behavior, where the BGP instance listens on BGP port, but new BGP
+	instances are spawned for incoming BGP connections (if source address
+	matches the network prefix). It is possible to mix regular BGP instances
+	with dynamic BGP instances and have multiple dynamic BGP instances with
+	different ranges.
 
 	<tag><label id="bgp-iface">interface <m/string/</tag>
 	Define interface we should use for link-local BGP IPv6 sessions.
@@ -2223,6 +2272,16 @@ using the following configuration parameters:
 	Define local address we should use as a source address for the BGP
 	session. Default: the address of the local end of the interface our
 	neighbor is connected to.
+
+	<tag><label id="bgp-dynamic-name">dynamic name "<m/text/"</tag>
+	Define common prefix of names used for new BGP instances spawned when
+	dynamic BGP behavior is active. Actual names also contain numeric
+	index to distinguish individual instances.  Default: "dynbgp".
+
+	<tag><label id="bgp-dynamic-name-digits">dynamic name digits <m/number/</tag>
+	Define minimum number of digits for index in names of spawned dynamic
+	BGP instances. E.g., if set to 2, then the first name would be
+	"dynbgp01". Default: 0.
 
 	<tag><label id="bgp-strict-bind">strict bind <m/switch/</tag>
 	Specify whether BGP listening socket should be bound to a specific local
@@ -2565,6 +2624,15 @@ be used in explicit configuration.
 <p>BGP channels have additional config options (together with the common ones):
 
 <descrip>
+	<tag><label id="bgp-mandatory">mandatory <m/switch/</tag>
+	When local and neighbor sets of configured AFI/SAFI pairs differ,
+	capability negotiation ensures that a common subset is used. For
+	mandatory channels their associated AFI/SAFI must be negotiated
+	(i.e., also announced by the neighbor), otherwise BGP session
+	negotiation fails with <it/'Required capability missing'/ error.
+	Regardless, at least one AFI/SAFI must be negotiated in order to BGP
+	session be successfully established. Default: off.
+
 	<tag><label id="bgp-next-hop-keep">next hop keep <m/switch/|ibgp|ebgp</tag>
 	Do not modify the Next Hop attribute and advertise the current one
 	unchanged even in cases where our own local address should be used
@@ -3230,6 +3298,8 @@ protocol ospf [v2|v3] &lt;name&gt; {
 	tick &lt;num&gt;;
 	ecmp &lt;switch&gt; [limit &lt;num&gt;];
 	merge external &lt;switch&gt;;
+	graceful restart &lt;switch&gt;|aware;
+	graceful restart time &lt;num&gt;;
 	area &lt;id&gt; {
 		stub;
 		nssa;
@@ -3372,6 +3442,31 @@ protocol ospf [v2|v3] &lt;name&gt; {
 	routes in the same way as regular routes. When disabled, external routes
 	from different LSAs are treated as separate even if they represents the
 	same destination. Default value is no.
+
+	<tag><label id="ospf-graceful-restart">graceful restart <m/switch/|aware</tag>
+	When an OSPF instance is restarted, neighbors break adjacencies and
+	recalculate their routing tables, which disrupts packet forwarding even
+	when the forwarding plane of the restarting router remains intact.
+	<rfc id="3623"> specifies a graceful restart mechanism to alleviate this
+	issue. For OSPF graceful restart, restarting router originates
+	Grace-LSAs, announcing intent to do graceful restart. Neighbors
+	receiving these LSAs enter helper mode, in which they ignore breakdown
+	of adjacencies, behave as if nothing is happening and keep old routes.
+	When adjacencies are reestablished, the restarting router flushes
+	Grace-LSAs and graceful restart is ended.
+
+	This option controls the graceful restart mechanism. It has three
+	states: Disabled, when no support is provided. Aware, when graceful
+	restart helper mode is supported, but no local graceful restart is
+	allowed (i.e. helper-only role). Enabled, when the full graceful restart
+	support is provided (i.e. both restarting and helper role). Note that
+	proper support for local graceful restart requires also configuration of
+	other protocols. Default: aware.
+
+	<tag><label id="ospf-graceful-restart-time">graceful restart time <m/num/</tag>
+	The restart time is announced in the Grace-LSA and specifies how long
+	neighbors should wait for proper end of the graceful restart before
+	exiting helper mode prematurely. Default: 120 seconds.
 
 	<tag><label id="ospf-area">area <M>id</M></tag>
 	This defines an OSPF area with given area ID (an integer or an IPv4
@@ -3982,7 +4077,7 @@ definitions, prefix definitions and DNS definitions:
 	RAdv protocol could be configured to change its behavior based on
 	availability of routes. When this option is used, the protocol waits in
 	suppressed state until a <it/trigger route/ (for the specified network)
-	is exported to the protocol, the protocol also returnsd to suppressed
+	is exported to the protocol, the protocol also returns to suppressed
 	state if the <it/trigger route/ disappears. Note that route export
 	depends on specified export filter, as usual. This option could be used,
 	e.g., for handling failover in multihoming scenarios.

@@ -31,6 +31,7 @@
 static const char *request;
 static int list_tests;
 static int do_core;
+static int do_die;
 static int no_fork;
 static int no_timeout;
 static int is_terminal;		/* Whether stdout is a live terminal or pipe redirect */
@@ -43,23 +44,17 @@ int bt_result;			/* Overall program run result */
 int bt_suite_result;		/* One suit result */
 char bt_out_fmt_buf[1024];	/* Temporary memory buffer for output of testing function */
 
-long int
-bt_random(void)
-{
-  /* Seeded in bt_init() */
-  long int rand_low, rand_high;
-
-  rand_low = random();
-  rand_high = random();
-  return (rand_low & 0xffff) | ((rand_high & 0xffff) << 16);
-}
+u64 bt_random_state[] = {
+  0x80241f302bd4d95d, 0xd10ba2e910f772b, 0xea188c9046f507c5, 0x4c4c581f04e6da05,
+  0x53d9772877c1b647, 0xab8ce3eb466de6c5, 0xad02844c8a8e865f, 0xe8cc78080295065d
+};
 
 void
 bt_init(int argc, char *argv[])
 {
   int c;
 
-  srandom(BT_RANDOM_SEED);
+  initstate(BT_RANDOM_SEED, (char *) bt_random_state, sizeof(bt_random_state));
 
   bt_verbose = 0;
   bt_filename = argv[0];
@@ -67,7 +62,7 @@ bt_init(int argc, char *argv[])
   bt_test_id = NULL;
   is_terminal = isatty(fileno(stdout));
 
-  while ((c = getopt(argc, argv, "lcftv")) >= 0)
+  while ((c = getopt(argc, argv, "lcdftv")) >= 0)
     switch (c)
     {
       case 'l':
@@ -76,6 +71,10 @@ bt_init(int argc, char *argv[])
 
       case 'c':
 	do_core = 1;
+	break;
+
+      case 'd':
+	do_die = 1;
 	break;
 
       case 'f':
@@ -111,10 +110,11 @@ bt_init(int argc, char *argv[])
   return;
 
  usage:
-  printf("Usage: %s [-l] [-c] [-f] [-t] [-vvv] [<test_suit_name>]\n", argv[0]);
+  printf("Usage: %s [-l] [-c] [-d] [-f] [-t] [-vvv] [<test_suit_name>]\n", argv[0]);
   printf("Options: \n");
   printf("  -l   List all test suite names and descriptions \n");
   printf("  -c   Force unlimit core dumps (needs root privileges) \n");
+  printf("  -d	 Die on first failed test case \n");
   printf("  -f   No forking \n");
   printf("  -t   No timeout limit \n");
   printf("  -v   More verbosity, maximum is 3 -vvv \n");
@@ -155,10 +155,7 @@ int bt_run_test_fn(int (*fn)(const void *), const void *fn_arg, int timeout)
   int result;
   alarm(timeout);
 
-  if (fn_arg)
-    result = fn(fn_arg);
-  else
-    result = ((int (*)(void))fn)();
+  result = fn(fn_arg);
 
   if (!bt_suite_result)
     result = 0;
@@ -226,6 +223,9 @@ bt_log_result(int result, const char *fmt, va_list argptr)
     result_str = is_terminal ? BT_PROMPT_FAIL : BT_PROMPT_FAIL_NO_COLOR;
 
   printf("%s\n", result_str);
+
+  if (do_die && !result)
+    abort();
 }
 
 /**
@@ -486,6 +486,8 @@ void cmd_check_config(char *name UNUSED) {}
 void cmd_reconfig(char *name UNUSED, int type UNUSED, int timeout UNUSED) {}
 void cmd_reconfig_confirm(void) {}
 void cmd_reconfig_undo(void) {}
+void cmd_reconfig_status(void) {}
+void cmd_graceful_restart(void) {}
 void cmd_shutdown(void) {}
 void cmd_reconfig_undo_notify(void) {}
 

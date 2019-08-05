@@ -704,6 +704,7 @@ ac_user_opts='
 enable_option_checking
 enable_client
 enable_debug
+enable_debug_generated
 enable_memcheck
 enable_pthreads
 enable_libssh
@@ -1338,6 +1339,8 @@ Optional Features:
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
   --enable-client         enable building of BIRD client [yes]
   --enable-debug          enable internal debugging routines [no]
+  --enable-debug-generated
+                          enable this to abstain from generating #line [no]
   --enable-memcheck       check memory allocations when debugging [yes]
   --enable-pthreads       enable POSIX threads support [try]
   --enable-libssh         enable LibSSH support together with RPKI [try]
@@ -2181,6 +2184,15 @@ if test "${enable_debug+set}" = set; then :
   enableval=$enable_debug;
 else
   enable_debug=no
+
+fi
+
+
+# Check whether --enable-debug-generated was given.
+if test "${enable_debug_generated+set}" = set; then :
+  enableval=$enable_debug_generated;
+else
+  enable_debug_generated=no
 
 fi
 
@@ -3932,6 +3944,46 @@ if test -z "$GCC" ; then
   as_fn_error $? "This program requires the GNU C Compiler." "$LINENO" 5
 fi
 
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether _Thread_local is known" >&5
+$as_echo_n "checking whether _Thread_local is known... " >&6; }
+if ${bird_cv_thread_local+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+
+	  _Thread_local static int x = 42;
+
+int
+main ()
+{
+
+
+  ;
+  return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  bird_cv_thread_local=yes
+else
+  bird_cv_thread_local=no
+
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $bird_cv_thread_local" >&5
+$as_echo "$bird_cv_thread_local" >&6; }
+
+if test "$bird_cv_thread_local" = yes ; then
+
+$as_echo "#define HAVE_THREAD_LOCAL 1" >>confdefs.h
+
+fi
+
 if test "$enable_pthreads" != no ; then
 
   bird_tmp_cflags="$CFLAGS"
@@ -4163,11 +4215,64 @@ $as_echo "$bird_cv_c_option_fno_strict_overflow" >&6; }
   fi
 
 fi
+
+if test "$enable_debug" = no; then
+
+  bird_tmp_cflags="$CFLAGS"
+  bird_tmp_ldflags="$LDFLAGS"
+  CFLAGS="-flto"
+  LDFLAGS="-flto=4"
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether link time optimizer is available" >&5
+$as_echo_n "checking whether link time optimizer is available... " >&6; }
+if ${bird_cv_c_lto+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+
+      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  bird_cv_c_lto=yes
+else
+  bird_cv_c_lto=no
+
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $bird_cv_c_lto" >&5
+$as_echo "$bird_cv_c_lto" >&6; }
+
+  CFLAGS="$bird_tmp_cflags"
+  LDFLAGS="$bird_tmp_ldflags"
+
+fi
+
+if test "$bird_cv_c_lto" = yes; then
+  CFLAGS="$CFLAGS -flto"
+  LDFLAGS="$LDFLAGS -flto=4"
+fi
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking CFLAGS" >&5
 $as_echo_n "checking CFLAGS... " >&6; }
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $CFLAGS" >&5
 $as_echo "$CFLAGS" >&6; }
 
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking LDFLAGS" >&5
+$as_echo_n "checking LDFLAGS... " >&6; }
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $LDFLAGS" >&5
+$as_echo "$LDFLAGS" >&6; }
 
 ac_ext=c
 ac_cpp='$CPP $CPPFLAGS'
@@ -4635,7 +4740,7 @@ $as_echo_n "checking bison version... " >&6; }
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $BISON_VERSION" >&5
 $as_echo "$BISON_VERSION" >&6; }
-if test "$bird_bison_synclines" = yes; then
+if test "$bird_bison_synclines" = yes && test "$enable_debug_generated" = no; then
   M4FLAGS="$M4FLAGS -s"
 fi
 
@@ -5796,6 +5901,48 @@ fi
 
     fi
   fi
+else
+
+  bird_tmp_cflags="$CFLAGS"
+  CFLAGS=" -Wno-implicit-fallthrough"
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether CC supports -Wno-implicit-fallthrough" >&5
+$as_echo_n "checking whether CC supports -Wno-implicit-fallthrough... " >&6; }
+if ${bird_cv_c_option_wno_implicit_fallthrough+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+
+      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  bird_cv_c_option_wno_implicit_fallthrough=yes
+else
+  bird_cv_c_option_wno_implicit_fallthrough=no
+
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $bird_cv_c_option_wno_implicit_fallthrough" >&5
+$as_echo "$bird_cv_c_option_wno_implicit_fallthrough" >&6; }
+
+  CFLAGS="$bird_tmp_cflags"
+
+
+  if test "$bird_cv_c_option_wno_implicit_fallthrough" = yes ; then
+    CFLAGS="$CFLAGS -Wno-implicit-fallthrough"
+  fi
+
 fi
 
 CLIENT=birdcl

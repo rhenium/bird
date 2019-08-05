@@ -200,6 +200,7 @@ CF_KEYWORDS(RX, BUFFER, LARGE, NORMAL, STUBNET, HIDDEN, SUMMARY, TAG, EXTERNAL)
 CF_KEYWORDS(WAIT, DELAY, LSADB, ECMP, LIMIT, WEIGHT, NSSA, TRANSLATOR, STABILITY)
 CF_KEYWORDS(GLOBAL, LSID, ROUTER, SELF, INSTANCE, REAL, NETMASK, TX, PRIORITY, LENGTH)
 CF_KEYWORDS(MERGE, LSA, SUPPRESSION, MULTICAST, RFC5838, VPN, PE)
+CF_KEYWORDS(GRACEFUL, RESTART, AWARE, TIME)
 
 %type <ld> lsadb_args
 %type <i> ospf_variant ospf_af_mc nbma_eligible
@@ -226,6 +227,8 @@ ospf_proto_start: proto_start ospf_variant
   OSPF_CFG->tick = OSPF_DEFAULT_TICK;
   OSPF_CFG->ospf2 = $2;
   OSPF_CFG->af_ext = !$2;
+  OSPF_CFG->gr_mode = OSPF_GR_AWARE;
+  OSPF_CFG->gr_time = OSPF_DEFAULT_GR_TIME;
 };
 
 ospf_proto:
@@ -258,6 +261,9 @@ ospf_proto_item:
  | RFC5838 bool { OSPF_CFG->af_ext = $2; if (!ospf_cfg_is_v3()) cf_error("RFC5838 option requires OSPFv3"); }
  | VPN PE bool { OSPF_CFG->vpn_pe = $3; }
  | STUB ROUTER bool { OSPF_CFG->stub_router = $3; }
+ | GRACEFUL RESTART bool { OSPF_CFG->gr_mode = $3; }
+ | GRACEFUL RESTART AWARE { OSPF_CFG->gr_mode = OSPF_GR_AWARE; }
+ | GRACEFUL RESTART TIME expr { OSPF_CFG->gr_time = $4; if (($4 < 1) || ($4 > 1800)) cf_error("Graceful restart time must be in range 1-1800"); }
  | ECMP bool { OSPF_CFG->ecmp = $2 ? OSPF_DEFAULT_ECMP_LIMIT : 0; }
  | ECMP bool LIMIT expr { OSPF_CFG->ecmp = $2 ? $4 : 0; }
  | MERGE EXTERNAL bool { OSPF_CFG->merge_external = $3; }
@@ -504,29 +510,29 @@ dynamic_attr: OSPF_TAG { $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_OSPF_TA
 dynamic_attr: OSPF_ROUTER_ID { $$ = f_new_dynamic_attr(EAF_TYPE_ROUTER_ID, T_QUAD, EA_OSPF_ROUTER_ID); } ;
 
 CF_CLI_HELP(SHOW OSPF, ..., [[Show information about OSPF protocol]]);
-CF_CLI(SHOW OSPF, optsym, [<name>], [[Show information about OSPF protocol]])
+CF_CLI(SHOW OSPF, optproto, [<name>], [[Show information about OSPF protocol]])
 { ospf_sh(proto_get_named($3, &proto_ospf)); };
 
-CF_CLI(SHOW OSPF NEIGHBORS, optsym opttext, [<name>] [\"<interface>\"], [[Show information about OSPF neighbors]])
+CF_CLI(SHOW OSPF NEIGHBORS, optproto opttext, [<name>] [\"<interface>\"], [[Show information about OSPF neighbors]])
 { ospf_sh_neigh(proto_get_named($4, &proto_ospf), $5); };
 
-CF_CLI(SHOW OSPF INTERFACE, optsym opttext, [<name>] [\"<interface>\"], [[Show information about interface]])
+CF_CLI(SHOW OSPF INTERFACE, optproto opttext, [<name>] [\"<interface>\"], [[Show information about interface]])
 { ospf_sh_iface(proto_get_named($4, &proto_ospf), $5); };
 
 CF_CLI_HELP(SHOW OSPF TOPOLOGY, [all] [<name>], [[Show information about OSPF network topology]])
 
-CF_CLI(SHOW OSPF TOPOLOGY, optsym opttext, [<name>], [[Show information about reachable OSPF network topology]])
+CF_CLI(SHOW OSPF TOPOLOGY, optproto opttext, [<name>], [[Show information about reachable OSPF network topology]])
 { ospf_sh_state(proto_get_named($4, &proto_ospf), 0, 1); };
 
-CF_CLI(SHOW OSPF TOPOLOGY ALL, optsym opttext, [<name>], [[Show information about all OSPF network topology]])
+CF_CLI(SHOW OSPF TOPOLOGY ALL, optproto opttext, [<name>], [[Show information about all OSPF network topology]])
 { ospf_sh_state(proto_get_named($5, &proto_ospf), 0, 0); };
 
 CF_CLI_HELP(SHOW OSPF STATE, [all] [<name>], [[Show information about OSPF network state]])
 
-CF_CLI(SHOW OSPF STATE, optsym opttext, [<name>], [[Show information about reachable OSPF network state]])
+CF_CLI(SHOW OSPF STATE, optproto opttext, [<name>], [[Show information about reachable OSPF network state]])
 { ospf_sh_state(proto_get_named($4, &proto_ospf), 1, 1); };
 
-CF_CLI(SHOW OSPF STATE ALL, optsym opttext, [<name>], [[Show information about all OSPF network state]])
+CF_CLI(SHOW OSPF STATE ALL, optproto opttext, [<name>], [[Show information about all OSPF network state]])
 { ospf_sh_state(proto_get_named($5, &proto_ospf), 1, 0); };
 
 CF_CLI_HELP(SHOW OSPF LSADB, ..., [[Show content of OSPF LSA database]]);
@@ -544,7 +550,7 @@ lsadb_args:
  | lsadb_args LSID idval { $$ = $1; $$->lsid = $3; }
  | lsadb_args SELF { $$ = $1; $$->router = SH_ROUTER_SELF; }
  | lsadb_args ROUTER idval { $$ = $1; $$->router = $3; }
- | lsadb_args SYM { $$ = $1; $$->name = $2; }
+ | lsadb_args CF_SYM_KNOWN { cf_assert_symbol($2, SYM_PROTO); $$ = $1; $$->proto = (struct ospf_proto *) proto_get_named($2, &proto_ospf); }
  ;
 
 CF_CODE

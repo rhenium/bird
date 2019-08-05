@@ -89,6 +89,7 @@ void protos_build(void);
 void proto_build(struct protocol *);
 void protos_preconfig(struct config *);
 void protos_commit(struct config *new, struct config *old, int force_restart, int type);
+struct proto * proto_spawn(struct proto_config *cf, uint disabled);
 void protos_dump_all(void);
 
 #define GA_UNKNOWN	0		/* Attribute not recognized */
@@ -113,11 +114,13 @@ struct proto_config {
   struct config *global;		/* Global configuration data */
   struct protocol *protocol;		/* Protocol */
   struct proto *proto;			/* Instance we've created */
+  struct proto_config *parent;		/* Parent proto_config for dynamic protocols */
   char *name;
   char *dsc;
   int class;				/* SYM_PROTO or SYM_TEMPLATE */
   u8 net_type;				/* Protocol network type (NET_*), 0 for undefined */
   u8 disabled;				/* Protocol enabled/disabled by default */
+  u8 vrf_set;				/* Related VRF instance (below) is defined */
   u32 debug, mrtdump;			/* Debugging bitfields, both use D_* constants */
   u32 router_id;			/* Protocol specific router ID */
 
@@ -174,6 +177,7 @@ struct proto {
   uint active_channels;			/* Number of active channels */
   byte net_type;			/* Protocol network type (NET_*), 0 for undefined */
   byte disabled;			/* Manually disabled */
+  byte vrf_set;				/* Related VRF instance (above) is defined */
   byte proto_state;			/* Protocol state machine (PS_*, see below) */
   byte active;				/* From PS_START to cleanup after PS_STOP */
   byte do_start;			/* Start actions are scheduled */
@@ -194,8 +198,8 @@ struct proto {
    *	   ifa_notify	Notify protocol about interface address changes.
    *	   rt_notify	Notify protocol about routing table updates.
    *	   neigh_notify	Notify protocol about neighbor cache events.
-   *	   make_tmp_attrs  Construct ea_list from private attrs stored in rta.
-   *	   store_tmp_attrs Store private attrs back to rta. The route MUST NOT be cached.
+   *	   make_tmp_attrs  Add attributes to rta from from private attrs stored in rte. The route and rta MUST NOT be cached.
+   *	   store_tmp_attrs Store private attrs back to rte and undef added attributes. The route and rta MUST NOT be cached.
    *	   preexport  Called as the first step of the route exporting process.
    *			It can construct a new rte, add private attributes and
    *			decide whether the route shall be exported: 1=yes, -1=no,
@@ -211,8 +215,8 @@ struct proto {
   void (*ifa_notify)(struct proto *, unsigned flags, struct ifa *a);
   void (*rt_notify)(struct proto *, struct channel *, struct network *net, struct rte *new, struct rte *old);
   void (*neigh_notify)(struct neighbor *neigh);
-  struct ea_list *(*make_tmp_attrs)(struct rte *rt, struct linpool *pool);
-  void (*store_tmp_attrs)(struct rte *rt);
+  void (*make_tmp_attrs)(struct rte *rt, struct linpool *pool);
+  void (*store_tmp_attrs)(struct rte *rt, struct linpool *pool);
   int (*preexport)(struct proto *, struct rte **rt, struct linpool *pool);
   void (*reload_routes)(struct channel *);
   void (*feed_begin)(struct channel *, int initial);
@@ -255,6 +259,7 @@ struct proto_spec {
 #define PDC_CMD_DISABLE		0x11	/* Result of disable command */
 #define PDC_CMD_RESTART		0x12	/* Result of restart command */
 #define PDC_CMD_SHUTDOWN	0x13	/* Result of global shutdown */
+#define PDC_CMD_GR_DOWN		0x14	/* Result of global graceful restart */
 #define PDC_RX_LIMIT_HIT	0x21	/* Route receive limit reached */
 #define PDC_IN_LIMIT_HIT	0x22	/* Route import limit reached */
 #define PDC_OUT_LIMIT_HIT	0x23	/* Route export limit reached */
@@ -263,6 +268,7 @@ struct proto_spec {
 void *proto_new(struct proto_config *);
 void *proto_config_new(struct protocol *, int class);
 void proto_copy_config(struct proto_config *dest, struct proto_config *src);
+void proto_clone_config(struct symbol *sym, struct proto_config *parent);
 void proto_set_message(struct proto *p, char *msg, int len);
 
 void graceful_restart_recovery(void);
@@ -295,18 +301,6 @@ static inline u32
 proto_get_router_id(struct proto_config *pc)
 {
   return pc->router_id ? pc->router_id : pc->global->router_id;
-}
-
-static inline void
-rte_make_tmp_attrs(struct rte **rt, struct linpool *pool)
-{
-  struct ea_list *(*mta)(struct rte *rt, struct linpool *pool);
-  mta = (*rt)->attrs->src->proto->make_tmp_attrs;
-  if (!mta) return;
-  *rt = rte_cow_rta(*rt, pool);
-  struct ea_list *ea = mta(*rt, pool);
-  ea->next = (*rt)->attrs->eattrs;
-  (*rt)->attrs->eattrs = ea;
 }
 
 
@@ -489,7 +483,7 @@ struct channel_config {
 
   struct proto_config *parent;		/* Where channel is defined (proto or template) */
   struct rtable_config *table;		/* Table we're attached to */
-  struct filter *in_filter, *out_filter; /* Attached filters */
+  const struct filter *in_filter, *out_filter; /* Attached filters */
   struct channel_limit rx_limit;	/* Limit for receiving routes from protocol
 					   (relevant when in_keep_filtered is active) */
   struct channel_limit in_limit;	/* Limit for importing routes from protocol */
@@ -511,8 +505,8 @@ struct channel {
   struct proto *proto;
 
   struct rtable *table;
-  struct filter *in_filter;		/* Input filter */
-  struct filter *out_filter;		/* Output filter */
+  const struct filter *in_filter;	/* Input filter */
+  const struct filter *out_filter;	/* Output filter */
   struct channel_limit rx_limit;	/* Receive limit (for in_keep_filtered) */
   struct channel_limit in_limit;	/* Input limit */
   struct channel_limit out_limit;	/* Output limit */

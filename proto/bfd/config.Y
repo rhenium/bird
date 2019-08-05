@@ -38,10 +38,6 @@ bfd_proto_start: proto_start BFD
   this_proto = proto_config_new(&proto_bfd, $1);
   init_list(&BFD_CFG->patt_list);
   init_list(&BFD_CFG->neigh_list);
-
-  if (bfd_cf)
-    cf_error("Only one BFD instance allowed");
-  bfd_cf = BFD_CFG;
 };
 
 bfd_proto_item:
@@ -134,7 +130,7 @@ bfd_multihop:
 
 bfd_neigh_iface:
    /* empty */ { $$ = NULL; }
- | '%' SYM { $$ = if_get_by_name($2->name); }
+ | '%' symbol { $$ = if_get_by_name($2->name); }
  | DEV text { $$ = if_get_by_name($2); }
  ;
 
@@ -167,7 +163,7 @@ bfd_neighbor: ipa bfd_neigh_iface bfd_neigh_local bfd_neigh_multihop
 
 
 CF_CLI_HELP(SHOW BFD, ..., [[Show information about BFD protocol]]);
-CF_CLI(SHOW BFD SESSIONS, optsym, [<name>], [[Show information about BFD sessions]])
+CF_CLI(SHOW BFD SESSIONS, optproto, [<name>], [[Show information about BFD sessions]])
 { bfd_show_sessions(proto_get_named($4, &proto_bfd)); };
 
 CF_CODE
