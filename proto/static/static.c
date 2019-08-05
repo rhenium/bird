@@ -159,7 +159,8 @@ static_update_bfd(struct static_proto *p, struct static_route *r)
   if (bfd_up && !r->bfd_req)
   {
     // ip_addr local = ipa_nonzero(r->local) ? r->local : nb->ifa->ip;
-    r->bfd_req = bfd_request_session(p->p.pool, r->via, nb->ifa->ip, nb->iface,
+    r->bfd_req = bfd_request_session(p->p.pool, r->via, nb->ifa->ip,
+				     nb->iface, p->p.vrf,
 				     static_bfd_notify, r);
   }
 
@@ -308,7 +309,7 @@ static inline int
 static_same_rte(struct static_route *or, struct static_route *nr)
 {
   /* Note that i_same() requires arguments in (new, old) order */
-  return static_same_dest(or, nr) && i_same(nr->cmds, or->cmds);
+  return static_same_dest(or, nr) && f_same(nr->cmds, or->cmds);
 }
 
 static void

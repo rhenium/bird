@@ -765,6 +765,7 @@ proto_init(struct proto_config *c, node *n)
   p->proto_state = PS_DOWN;
   p->last_state_change = current_time();
   p->vrf = c->vrf;
+  p->vrf_set = c->vrf_set;
   insert_node(&p->n, n);
 
   p->event = ev_new_init(proto_pool, proto_event, p);
@@ -874,6 +875,28 @@ proto_copy_config(struct proto_config *dest, struct proto_config *src)
   dest->protocol->copy_config(dest, src);
 }
 
+void
+proto_clone_config(struct symbol *sym, struct proto_config *parent)
+{
+  struct proto_config *cf = proto_config_new(parent->protocol, SYM_PROTO);
+  proto_copy_config(cf, parent);
+  cf->name = sym->name;
+  cf->proto = NULL;
+  cf->parent = parent;
+
+  sym->class = cf->class;
+  sym->proto = cf;
+}
+
+static void
+proto_undef_clone(struct symbol *sym, struct proto_config *cf)
+{
+  rem_node(&cf->n);
+
+  sym->class = SYM_VOID;
+  sym->proto = NULL;
+}
+
 /**
  * protos_preconfig - pre-configuration processing
  * @c: new configuration
@@ -910,7 +933,8 @@ proto_reconfigure(struct proto *p, struct proto_config *oc, struct proto_config 
   if ((nc->protocol != oc->protocol) ||
       (nc->net_type != oc->net_type) ||
       (nc->disabled != p->disabled) ||
-      (nc->vrf != oc->vrf))
+      (nc->vrf != oc->vrf) ||
+      (nc->vrf_set != oc->vrf_set))
     return 0;
 
   p->name = nc->name;
@@ -973,16 +997,40 @@ protos_commit(struct config *new, struct config *old, int force_reconfig, int ty
     {
       p = oc->proto;
       sym = cf_find_symbol(new, oc->name);
+
+      /* Handle dynamic protocols */
+      if (!sym && oc->parent && !new->shutdown)
+      {
+	struct symbol *parsym = cf_find_symbol(new, oc->parent->name);
+	if (parsym && parsym->class == SYM_PROTO)
+	{
+	  /* This is hack, we would like to share config, but we need to copy it now */
+	  new_config = new;
+	  cfg_mem = new->mem;
+	  conf_this_scope = new->root_scope;
+	  sym = cf_get_symbol(oc->name);
+	  proto_clone_config(sym, parsym->proto);
+	  new_config = NULL;
+	  cfg_mem = NULL;
+	}
+      }
+
       if (sym && sym->class == SYM_PROTO && !new->shutdown)
       {
 	/* Found match, let's check if we can smoothly switch to new configuration */
 	/* No need to check description */
-	nc = sym->def;
+	nc = sym->proto;
 	nc->proto = p;
 
 	/* We will try to reconfigure protocol p */
 	if (! force_reconfig && proto_reconfigure(p, oc, nc, type))
 	  continue;
+
+	if (nc->parent)
+	{
+	  proto_undef_clone(sym, nc);
+	  goto remove;
+	}
 
 	/* Unsuccessful, we will restart it */
 	if (!p->disabled && !nc->disabled)
@@ -997,8 +1045,14 @@ protos_commit(struct config *new, struct config *old, int force_reconfig, int ty
       }
       else if (!new->shutdown)
       {
+      remove:
 	log(L_INFO "Removing protocol %s", p->name);
 	p->down_code = PDC_CF_REMOVE;
+	p->cf_new = NULL;
+      }
+      else if (new->gr_down)
+      {
+	p->down_code = PDC_CMD_GR_DOWN;
 	p->cf_new = NULL;
       }
       else /* global shutdown */
@@ -1103,6 +1157,15 @@ proto_rethink_goal(struct proto *p)
       proto_notify_state(p, (q->shutdown ? q->shutdown(p) : PS_DOWN));
     }
   }
+}
+
+struct proto *
+proto_spawn(struct proto_config *cf, uint disabled)
+{
+  struct proto *p = proto_init(cf, TAIL(proto_list));
+  p->disabled = disabled;
+  proto_rethink_goal(p);
+  return p;
 }
 
 
@@ -1777,8 +1840,8 @@ proto_cmd_show(struct proto *p, uintptr_t verbose, int cnt)
       cli_msg(-1006, "  Message:        %s", p->message);
     if (p->cf->router_id)
       cli_msg(-1006, "  Router ID:      %R", p->cf->router_id);
-    if (p->vrf)
-      cli_msg(-1006, "  VRF:            %s", p->vrf->name);
+    if (p->vrf_set)
+      cli_msg(-1006, "  VRF:            %s", p->vrf ? p->vrf->name : "default");
 
     if (p->proto->show_proto_info)
       p->proto->show_proto_info(p);
@@ -1905,7 +1968,7 @@ proto_apply_cmd_symbol(struct symbol *s, void (* cmd)(struct proto *, uintptr_t,
     return;
   }
 
-  cmd(((struct proto_config *)s->def)->proto, arg, 0);
+  cmd(s->proto->proto, arg, 0);
   cli_msg(0, "");
 }
 
@@ -1948,7 +2011,7 @@ proto_get_named(struct symbol *sym, struct protocol *pr)
     if (sym->class != SYM_PROTO)
       cf_error("%s: Not a protocol", sym->name);
 
-    p = ((struct proto_config *) sym->def)->proto;
+    p = sym->proto->proto;
     if (!p || p->proto != pr)
       cf_error("%s: Not a %s protocol", sym->name, pr->name);
   }

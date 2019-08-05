@@ -33,7 +33,8 @@ extern const char *bt_test_id;
 void bt_init(int argc, char *argv[]);
 int  bt_exit_value(void);
 int bt_test_suite_base(int (*test_fn)(const void *), const char *test_id, const void *test_fn_argument, int forked, int timeout, const char *dsc, ...);
-long int bt_random(void);
+static inline u64 bt_random(void)
+{ return ((u64) random() & 0xffffffff) | ((u64) random() << 32); }
 
 void bt_log_suite_result(int result, const char *fmt, ...);
 void bt_log_suite_case_result(int result, const char *fmt, ...);
@@ -41,7 +42,7 @@ void bt_log_suite_case_result(int result, const char *fmt, ...);
 #define BT_TIMEOUT 			5	/* Default timeout in seconds */
 #define BT_FORKING 			1	/* Forking is enabled in default */
 
-#define BT_RANDOM_SEED 			982451653
+#define BT_RANDOM_SEED 			0x5097d2bb
 
 #define BT_BUFFER_SIZE 			10000
 
@@ -54,11 +55,13 @@ void bt_log_suite_case_result(int result, const char *fmt, ...);
 #define BT_PROMPT_FAIL_NO_COLOR		" ["                 "FAIL"                  "] "
 #define BT_PROMPT_OK_FAIL_STRLEN	8	/* strlen ' [FAIL] ' */
 
+static inline int bt_test_fn_noarg(const void *cp) { return ((int (*)(void)) cp)(); }
+
 #define bt_test_suite(fn, dsc, ...) \
   bt_test_suite_extra(fn, BT_FORKING, BT_TIMEOUT, dsc, ##__VA_ARGS__)
 
 #define bt_test_suite_extra(fn, f, t, dsc, ...) \
-  bt_test_suite_base((int (*)(const void *))fn, #fn, NULL, f, t, dsc, ##__VA_ARGS__)
+  bt_test_suite_base(bt_test_fn_noarg, #fn, fn, f, t, dsc, ##__VA_ARGS__)
 
 #define bt_test_suite_arg(fn, arg, dsc, ...) \
   bt_test_suite_arg_extra(fn, arg, BT_FORKING, BT_TIMEOUT, dsc, ##__VA_ARGS__)

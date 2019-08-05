@@ -127,7 +127,7 @@ ospf_prepare_dbdes(struct ospf_proto *p, struct ospf_neighbor *n)
   {
     struct ospf_dbdes2_packet *ps = (void *) pkt;
     ps->iface_mtu = htons(iface_mtu);
-    ps->options = ifa->oa->options | OPT_O;
+    ps->options = ifa->oa->options & DBDES2_OPT_MASK;
     ps->imms = 0;	/* Will be set later */
     ps->ddseq = htonl(n->dds);
     length = sizeof(struct ospf_dbdes2_packet);
@@ -135,7 +135,8 @@ ospf_prepare_dbdes(struct ospf_proto *p, struct ospf_neighbor *n)
   else /* OSPFv3 */
   {
     struct ospf_dbdes3_packet *ps = (void *) pkt;
-    ps->options = htonl(ifa->oa->options | (ifa->autype == OSPF_AUTH_CRYPT ? OPT_AT : 0));
+    u32 options = ifa->oa->options | (ifa->autype == OSPF_AUTH_CRYPT ? OPT_AT : 0);
+    ps->options = htonl(options & DBDES3_OPT_MASK);
     ps->iface_mtu = htons(iface_mtu);
     ps->padding = 0;
     ps->imms = 0;	/* Will be set later */
@@ -215,7 +216,7 @@ ospf_send_dbdes(struct ospf_proto *p, struct ospf_neighbor *n)
 
   ASSERT((n->state == NEIGHBOR_EXSTART) || (n->state == NEIGHBOR_EXCHANGE));
 
-  if (n->ifa->oa->rt == NULL)
+  if (!n->ifa->oa->rt && !p->gr_recovery)
     return;
 
   ospf_prepare_dbdes(p, n);
@@ -278,6 +279,10 @@ ospf_process_dbdes(struct ospf_proto *p, struct ospf_packet *pkt, struct ospf_ne
     /* Not explicitly mentioned in RFC 5340 4.2.2 but makes sense */
     if (LSA_SCOPE(lsa_type) == LSA_SCOPE_RES)
       DROP1("LSA with invalid scope");
+
+    /* RFC 3623 2.2 (2) special case - check for my router-LSA (GR recovery) */
+    if ((lsa_type == LSA_T_RT) && (lsa.rt == p->router_id))
+      n->got_my_rt_lsa = 1;
 
     en = ospf_hash_find(p->gr, lsa_domain, lsa.id, lsa.rt, lsa_type);
     if (!en || (lsa_comp(&lsa, &(en->lsa)) == CMP_NEWER))

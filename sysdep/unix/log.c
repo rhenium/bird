@@ -309,14 +309,23 @@ die(const char *msg, ...)
 void
 debug(const char *msg, ...)
 {
+#define MAX_DEBUG_BUFSIZE       65536
   va_list args;
-  char buf[1024];
+  static uint bufsize = 4096;
+  static char *buf = NULL;
+
+  if (!buf)
+    buf = mb_alloc(&root_pool, bufsize);
 
   va_start(args, msg);
   if (dbgf)
     {
-      if (bvsnprintf(buf, sizeof(buf), msg, args) < 0)
-	bsprintf(buf + sizeof(buf) - 100, " ... <too long>\n");
+      while (bvsnprintf(buf, bufsize, msg, args) < 0)
+        if (bufsize >= MAX_DEBUG_BUFSIZE)
+          bug("Extremely long debug output, split it.");
+        else
+          buf = mb_realloc(buf, (bufsize *= 2));
+
       fputs(buf, dbgf);
     }
   va_end(args);
@@ -363,6 +372,9 @@ log_switch(int initial, list *logs, char *new_syslog_name)
   if (!logs || EMPTY_LIST(*logs))
     logs = default_log_list(initial, &new_syslog_name);
 
+  /* We shouldn't close the logs when other threads may use them */
+  log_lock();
+
   /* Close the logs to avoid pinning them on disk when deleted */
   if (current_log_list)
     WALK_LIST(l, *current_log_list)
@@ -378,9 +390,8 @@ log_switch(int initial, list *logs, char *new_syslog_name)
   current_log_list = logs;
 
 #ifdef HAVE_SYSLOG_H
-  if (current_syslog_name && new_syslog_name &&
-      !strcmp(current_syslog_name, new_syslog_name))
-    return;
+  if (!bstrcmp(current_syslog_name, new_syslog_name))
+    goto done;
 
   if (current_syslog_name)
   {
@@ -394,7 +405,12 @@ log_switch(int initial, list *logs, char *new_syslog_name)
     current_syslog_name = xstrdup(new_syslog_name);
     openlog(current_syslog_name, LOG_CONS | LOG_NDELAY, LOG_DAEMON);
   }
+
 #endif
+
+done:
+  /* Logs exchange done, let the threads log as before */
+  log_unlock();
 }
 
 void

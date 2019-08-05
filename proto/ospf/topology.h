@@ -33,6 +33,7 @@ struct top_hash_entry
   u32 lb_id;			/* Interface ID of link back iface (for bcast or NBMA networks) */
   u32 dist;			/* Distance from the root */
   int ret_count;		/* Number of retransmission lists referencing the entry */
+  u8 gr_dirty;			/* Local LSA received during GR, will be removed unless reoriginated */
   u8 color;
 #define OUTSPF 0
 #define CANDIDATE 1
@@ -114,10 +115,11 @@ struct top_hash_entry
  */
 
 
-#define LSA_M_BASIC	0
-#define LSA_M_EXPORT	1
-#define LSA_M_RTCALC	2
-#define LSA_M_STALE	3
+#define LSA_M_BASIC		0
+#define LSA_M_EXPORT		1
+#define LSA_M_RTCALC		2
+#define LSA_M_EXPORT_STALE	3
+#define LSA_M_RTCALC_STALE	4
 
 /*
  * LSA entry modes:
@@ -127,9 +129,13 @@ struct top_hash_entry
  * routing table calculation is scheduled. This is also the mode used for LSAs
  * received from neighbors. Example: Router-LSAs, Network-LSAs.
  *
- * LSA_M_EXPORT - like LSA_M_BASIC, but the routing table calculation does not
- * depend on the LSA. Therefore, the calculation is not scheduled when the LSA
- * is changed. Example: AS-external-LSAs for exported routes.
+ * LSA_M_EXPORT - The LSA is originated using ospf_originate_lsa() as a
+ * consequence of route export to the OSPF instance. It has to be reoriginated
+ * during each channel feed, otherwise it is flushed automatically at the end of
+ * the feed. May be originated and flushed asynchronously. Also, routing table
+ * calculation does not depend on the LSA. Therefore, the routing table
+ * calculation is not scheduled when the LSA is changed. Example:
+ * AS-external-LSAs for exported routes.
  *
  * LSA_M_RTCALC - The LSA has to be requested using ospf_originate_lsa() during
  * each routing table calculation, otherwise it is flushed automatically at the
@@ -137,8 +143,11 @@ struct top_hash_entry
  * source for it. Therefore, the calculation is not scheduled when the LSA is
  * changed. Example: Summary-LSAs.
  *
- * LSA_M_STALE - Temporary state for LSA_M_RTCALC that is not requested during
- * the current routing table calculation.
+ * LSA_M_EXPORT_STALE - Temporary state for LSA_M_EXPORT that is not requested
+ * during current external route feed.
+ *
+ * LSA_M_RTCALC_STALE - Temporary state for LSA_M_RTCALC that is not requested
+ * during current routing table calculation.
  *
  *
  * Note that we do not schedule the routing table calculation when the age of
@@ -180,6 +189,8 @@ struct top_hash_entry * ospf_originate_lsa(struct ospf_proto *p, struct ospf_new
 void ospf_advance_lsa(struct ospf_proto *p, struct top_hash_entry *en, struct ospf_lsa_header *lsa, u32 type, u32 domain, void *body);
 void ospf_flush_lsa(struct ospf_proto *p, struct top_hash_entry *en);
 void ospf_update_lsadb(struct ospf_proto *p);
+void ospf_feed_begin(struct channel *C, int initial);
+void ospf_feed_end(struct channel *C);
 
 static inline void ospf_flush2_lsa(struct ospf_proto *p, struct top_hash_entry **en)
 { if (*en) { ospf_flush_lsa(p, *en); *en = NULL; } }
@@ -187,6 +198,7 @@ static inline void ospf_flush2_lsa(struct ospf_proto *p, struct top_hash_entry *
 void ospf_originate_sum_net_lsa(struct ospf_proto *p, struct ospf_area *oa, ort *nf, int metric);
 void ospf_originate_sum_rt_lsa(struct ospf_proto *p, struct ospf_area *oa, u32 drid, int metric, u32 options);
 void ospf_originate_ext_lsa(struct ospf_proto *p, struct ospf_area *oa, ort *nf, u8 mode, u32 metric, u32 ebit, ip_addr fwaddr, u32 tag, int pbit, int dn);
+void ospf_originate_gr_lsa(struct ospf_proto *p, struct ospf_iface *ifa);
 
 void ospf_rt_notify(struct proto *P, struct channel *ch, net *n, rte *new, rte *old);
 void ospf_update_topology(struct ospf_proto *p);
