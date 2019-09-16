@@ -1,3 +1,168 @@
+commit 5235c3f78da15826b0654ba68dc7a897faa42c98
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Sep 10 17:34:41 2019 +0200
+
+    NEWS and version update
+
+commit 532471967e6d92ae7a480367cc6d935cca75c7b2
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Sep 10 17:28:06 2019 +0200
+
+    Doc: Update BGP mask documentation
+
+commit 452e90ba72f57c44b44f9940ac951d2fde417583
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Sep 10 13:45:18 2019 +0200
+
+    Filter: Fix crash with 'where' filters and function calls
+    
+    The old 'where' code computed size value incorrectly, which leads
+    to invalid instruction lines and filter errors or crashes.
+
+commit 1127887a8b111dab18c592f1f3f575920f38bfe3
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Mon Sep 9 13:17:30 2019 +0200
+
+    BGP: Fix handling of bgp_aggregator atttribute
+    
+    The attribute should not be modifiable by filters as we do not
+    support its type.
+
+commit 8388f5a7e14108a1458fea35bfbb5a453e2c563c
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Mon Sep 9 03:13:35 2019 +0200
+
+    BGP: Fix bugs in handling of shutdown messages
+    
+    There is an improper check for valid message size, which may lead to
+    stack overflow and buffer leaks to log when a large message is received.
+    
+    Thanks to Daniel McCarney for bugreport and analysis.
+
+commit 56d8b1e7f6252158caf0ecd3147376b858b16d97
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Aug 29 20:58:16 2019 +0200
+
+    OSPF: Fix 'show ospf lsadb' cmd without proto arg
+    
+    It crashed when used without protocol argument.
+    
+    Thanks to Alexander for the bugreport.
+
+commit 32a254050d3da57ca6d7627aa606a8dce11907ee
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Aug 26 21:53:56 2019 +0200
+
+    Channel refeed with import table splitting between routes for one prefix
+
+commit 5ab3447de18235de566eb5116c0aec24050f5f85
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Aug 21 17:30:00 2019 +0200
+
+    Sysdep: Drop supplementary groups when dropping GID
+    
+    We forgot to do that. Oops.
+
+commit 4fa0e472cf3e8c61a3f67e91d201dbc12ea94221
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Aug 21 17:16:08 2019 +0200
+
+    BGP: Use reallocation for capability structure
+    
+    Instead of having large stack buffer for max amount of AFI/SAFI pairs.
+    The old code is not correct w.r.t. extendeded option length, as more
+    AFI/SAFI pairs may fit into the capability option.
+
+commit 524d2538537b2530bf031daa1d5c8e4653f92c5c
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Aug 20 19:12:59 2019 +0200
+
+    BGP: Implement extended optional parameters length
+    
+    Extends BGP options/capabilities data length to 16bit, to avoid issues
+    with too many capabilities. See draft-ietf-idr-ext-opt-param-07
+
+commit a297a4f044bcc7c38549710a720bc1f97df9ba65
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Aug 13 18:57:40 2019 +0200
+
+    Nest: Fix crash in route reload when some channels are not up.
+    
+    Only channels that are up can be reloaded.
+
+commit b7d7599ce3576f28310af18b403fed49a0840b67
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Aug 13 18:22:07 2019 +0200
+
+    BGP: implement Adj-RIB-Out
+    
+    The patch implements optional internal export table to a channel and
+    hooks it to BGP so it can be used as Adj-RIB-Out. When enabled, all
+    exported (post-filtered) routes are stored there. An export table can be
+    examined using e.g. 'show route export table bgp1.ipv4'.
+
+commit dfe63ed84d42178a53b01071c64f23250e74d6d9
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Aug 13 16:45:27 2019 +0200
+
+    Filter: Fixing empty block and never-executed-statement bug
+
+commit 70a4320bdd44122d7a93bc71c77a9d684b3c9adc
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Mon Aug 12 00:41:36 2019 +0200
+
+    RAdv: Allow solicited RAs to be sent as unicast
+    
+    Add option to send solicited router advertisements as unicast directly
+    to soliciting nodes instead of as multicast to all-nodes group.
+
+commit 9f3e09832081bc029dc98ae6dda49ee86d138fde
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Aug 6 18:54:19 2019 +0200
+
+    Filter: Allow to use set constants / expressions in path masks
+    
+    Allow to not only use set literals in path masks, but also existing
+    set constants or set expressions.
+
+commit ef113c6f725349a2ab52f3cbef18403f82c84134
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Aug 6 16:58:13 2019 +0200
+
+    Filter: Allow to use sets in path masks
+
+commit e2b530aa729f9c5973e498b45dd6f55ab669d1ac
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Aug 6 15:29:06 2019 +0200
+
+    BGP: Improve reconfiguration
+    
+    Several BGP channel options (including 'next hop self') could be
+    reconfigured without session reset, with just route refeed/refresh.
+    The patch improves reconfiguration code to do it that way.
+
+commit f6a6a77640a9749c79a91300d130ba6b5941d408
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Aug 6 15:09:42 2019 +0200
+
+    BGP: Fix 'deterministic med' to work with 'merge paths'
+    
+    The 'deterministic med' option is implemented by suppressing other than
+    best-in-group routes (grouped by ASN) from best route selection. This
+    interferes with 'merge paths' as supressed routes are no longer mergable
+    with best route. This is fixed by suppressing only those routes that are
+    not mergable with best-in-group route.
+
+commit 8c42205e35e24537122a4c821bd3128d698abf1b
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Aug 6 14:53:02 2019 +0200
+
+    Configure: CFLAGS update
+    
+     - add -flto only to default CFLAGS
+     - add -fno-strict-aliasing, -fno-strict-overflow always
+     - remove -Wno-implicit-fallthrough
+
 commit cc02da816fb062c93b4f0d61b0cfa02b673a5e00
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu Aug 1 14:49:03 2019 +0200

@@ -255,6 +255,7 @@ bgp_channel_item:
  | ADD PATHS TX { BGP_CC->add_path = BGP_ADD_PATH_TX; }
  | ADD PATHS bool { BGP_CC->add_path = $3 ? BGP_ADD_PATH_FULL : 0; }
  | IMPORT TABLE bool { BGP_CC->import_table = $3; }
+ | EXPORT TABLE bool { BGP_CC->export_table = $3; }
  | IGP TABLE rtable {
     if (BGP_CC->desc->no_igp)
       cf_error("IGP table not allowed here");
@@ -302,7 +303,7 @@ dynamic_attr: BGP_LOCAL_PREF
 dynamic_attr: BGP_ATOMIC_AGGR
 	{ $$ = f_new_dynamic_attr(EAF_TYPE_OPAQUE, T_ENUM_EMPTY, EA_CODE(PROTOCOL_BGP, BA_ATOMIC_AGGR)); } ;
 dynamic_attr: BGP_AGGREGATOR
-	{ $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_CODE(PROTOCOL_BGP, BA_AGGREGATOR)); } ;
+	{ $$ = f_new_dynamic_attr(EAF_TYPE_OPAQUE, T_ENUM_EMPTY, EA_CODE(PROTOCOL_BGP, BA_AGGREGATOR)); } ;
 dynamic_attr: BGP_COMMUNITY
 	{ $$ = f_new_dynamic_attr(EAF_TYPE_INT_SET, T_CLIST, EA_CODE(PROTOCOL_BGP, BA_COMMUNITY)); } ;
 dynamic_attr: BGP_ORIGINATOR_ID
