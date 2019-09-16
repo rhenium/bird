@@ -654,7 +654,6 @@ CFLAGS
 CC
 CONTROL_SOCKET
 CONFIG_FILE
-runstatedir
 srcdir
 exedir
 objdir
@@ -680,6 +679,7 @@ infodir
 docdir
 oldincludedir
 includedir
+runstatedir
 localstatedir
 sharedstatedir
 sysconfdir
@@ -764,6 +764,7 @@ datadir='${datarootdir}'
 sysconfdir='${prefix}/etc'
 sharedstatedir='${prefix}/com'
 localstatedir='${prefix}/var'
+runstatedir='${localstatedir}/run'
 includedir='${prefix}/include'
 oldincludedir='/usr/include'
 docdir='${datarootdir}/doc/${PACKAGE}'
@@ -1016,6 +1017,15 @@ do
   | -silent | --silent | --silen | --sile | --sil)
     silent=yes ;;
 
+  -runstatedir | --runstatedir | --runstatedi | --runstated \
+  | --runstate | --runstat | --runsta | --runst | --runs \
+  | --run | --ru | --r)
+    ac_prev=runstatedir ;;
+  -runstatedir=* | --runstatedir=* | --runstatedi=* | --runstated=* \
+  | --runstate=* | --runstat=* | --runsta=* | --runst=* | --runs=* \
+  | --run=* | --ru=* | --r=*)
+    runstatedir=$ac_optarg ;;
+
   -sbindir | --sbindir | --sbindi | --sbind | --sbin | --sbi | --sb)
     ac_prev=sbindir ;;
   -sbindir=* | --sbindir=* | --sbindi=* | --sbind=* | --sbin=* \
@@ -1153,7 +1163,7 @@ fi
 for ac_var in	exec_prefix prefix bindir sbindir libexecdir datarootdir \
 		datadir sysconfdir sharedstatedir localstatedir includedir \
 		oldincludedir docdir infodir htmldir dvidir pdfdir psdir \
-		libdir localedir mandir
+		libdir localedir mandir runstatedir
 do
   eval ac_val=\$$ac_var
   # Remove trailing slashes.
@@ -1306,6 +1316,7 @@ Fine tuning of the installation directories:
   --sysconfdir=DIR        read-only single-machine data [PREFIX/etc]
   --sharedstatedir=DIR    modifiable architecture-independent data [PREFIX/com]
   --localstatedir=DIR     modifiable single-machine data [PREFIX/var]
+  --runstatedir=DIR       modifiable per-process data [LOCALSTATEDIR/run]
   --libdir=DIR            object code libraries [EPREFIX/lib]
   --includedir=DIR        C header files [PREFIX/include]
   --oldincludedir=DIR     C header files for non-gcc [/usr/include]
@@ -4047,6 +4058,9 @@ $as_echo "#define USE_PTHREADS 1" >>confdefs.h
   fi
 fi
 
+# This is assumed to be necessary for proper BIRD build
+CFLAGS="$CFLAGS -fno-strict-aliasing -fno-strict-overflow"
+
 if test "$bird_cflags_default" = yes ; then
 
   bird_tmp_cflags="$CFLAGS"
@@ -4121,102 +4135,7 @@ $as_echo "$bird_cv_c_option_wno_missing_init" >&6; }
   CFLAGS="$bird_tmp_cflags"
 
 
-  bird_tmp_cflags="$CFLAGS"
-  CFLAGS=" -fno-strict-aliasing"
-
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether CC supports -fno-strict-aliasing" >&5
-$as_echo_n "checking whether CC supports -fno-strict-aliasing... " >&6; }
-if ${bird_cv_c_option_fno_strict_aliasing+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-
-      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-int
-main ()
-{
-
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_compile "$LINENO"; then :
-  bird_cv_c_option_fno_strict_aliasing=yes
-else
-  bird_cv_c_option_fno_strict_aliasing=no
-
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
-
-
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $bird_cv_c_option_fno_strict_aliasing" >&5
-$as_echo "$bird_cv_c_option_fno_strict_aliasing" >&6; }
-
-  CFLAGS="$bird_tmp_cflags"
-
-
-  bird_tmp_cflags="$CFLAGS"
-  CFLAGS=" -fno-strict-overflow"
-
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether CC supports -fno-strict-overflow" >&5
-$as_echo_n "checking whether CC supports -fno-strict-overflow... " >&6; }
-if ${bird_cv_c_option_fno_strict_overflow+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-
-      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-int
-main ()
-{
-
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_compile "$LINENO"; then :
-  bird_cv_c_option_fno_strict_overflow=yes
-else
-  bird_cv_c_option_fno_strict_overflow=no
-
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
-
-
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $bird_cv_c_option_fno_strict_overflow" >&5
-$as_echo "$bird_cv_c_option_fno_strict_overflow" >&6; }
-
-  CFLAGS="$bird_tmp_cflags"
-
-
-  CFLAGS="$CFLAGS -Wall -Wextra -Wstrict-prototypes -Wno-parentheses"
-
-  if test "$bird_cv_c_option_wno_pointer_sign" = yes ; then
-    CFLAGS="$CFLAGS -Wno-pointer-sign"
-  fi
-
-
-  if test "$bird_cv_c_option_wno_missing_init" = yes ; then
-    CFLAGS="$CFLAGS -Wno-missing-field-initializers"
-  fi
-
-
-  if test "$bird_cv_c_option_fno_strict_aliasing" = yes ; then
-    CFLAGS="$CFLAGS -fno-strict-aliasing"
-  fi
-
-
-  if test "$bird_cv_c_option_fno_strict_overflow" = yes ; then
-    CFLAGS="$CFLAGS -fno-strict-overflow"
-  fi
-
-fi
-
-if test "$enable_debug" = no; then
+  if test "$enable_debug" = no; then
 
   bird_tmp_cflags="$CFLAGS"
   bird_tmp_ldflags="$LDFLAGS"
@@ -4257,12 +4176,26 @@ $as_echo "$bird_cv_c_lto" >&6; }
   CFLAGS="$bird_tmp_cflags"
   LDFLAGS="$bird_tmp_ldflags"
 
+  fi
+
+  if test "$bird_cv_c_lto" = yes; then
+    CFLAGS="$CFLAGS -flto"
+    LDFLAGS="$LDFLAGS -flto=4"
+  fi
+
+  CFLAGS="$CFLAGS -Wall -Wextra -Wstrict-prototypes -Wno-parentheses"
+
+  if test "$bird_cv_c_option_wno_pointer_sign" = yes ; then
+    CFLAGS="$CFLAGS -Wno-pointer-sign"
+  fi
+
+
+  if test "$bird_cv_c_option_wno_missing_init" = yes ; then
+    CFLAGS="$CFLAGS -Wno-missing-field-initializers"
+  fi
+
 fi
 
-if test "$bird_cv_c_lto" = yes; then
-  CFLAGS="$CFLAGS -flto"
-  LDFLAGS="$LDFLAGS -flto=4"
-fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking CFLAGS" >&5
 $as_echo_n "checking CFLAGS... " >&6; }
@@ -5901,48 +5834,6 @@ fi
 
     fi
   fi
-else
-
-  bird_tmp_cflags="$CFLAGS"
-  CFLAGS=" -Wno-implicit-fallthrough"
-
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether CC supports -Wno-implicit-fallthrough" >&5
-$as_echo_n "checking whether CC supports -Wno-implicit-fallthrough... " >&6; }
-if ${bird_cv_c_option_wno_implicit_fallthrough+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-
-      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-int
-main ()
-{
-
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_compile "$LINENO"; then :
-  bird_cv_c_option_wno_implicit_fallthrough=yes
-else
-  bird_cv_c_option_wno_implicit_fallthrough=no
-
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
-
-
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $bird_cv_c_option_wno_implicit_fallthrough" >&5
-$as_echo "$bird_cv_c_option_wno_implicit_fallthrough" >&6; }
-
-  CFLAGS="$bird_tmp_cflags"
-
-
-  if test "$bird_cv_c_option_wno_implicit_fallthrough" = yes ; then
-    CFLAGS="$CFLAGS -Wno-implicit-fallthrough"
-  fi
-
 fi
 
 CLIENT=birdcl
