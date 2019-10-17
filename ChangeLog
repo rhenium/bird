@@ -1,3 +1,179 @@
+commit b000a94275d7bb81868b9d6ad7582e5a3939532a
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Fri Oct 11 00:18:38 2019 +0200
+
+    NEWS and version update
+
+commit 6c9cda6f924ec400e6e55ed009bfaf7a7fd9819d
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Oct 10 23:33:40 2019 +0200
+
+    BGP: Fix reconfiguration with import table
+    
+    Change of some options requires route refresh, but when import table is
+    active, channel reload is done from it instead of doing full route
+    refresh. So in this case we request it internally.
+
+commit eeb2c61653cb8a912a1c92ad3b98932245c2c202
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Oct 10 22:43:41 2019 +0200
+
+    Doc: Minor documentation fixes
+    
+    Thanks to Christoph for the bugreport.
+
+commit 843b10c8b0c28ed3bea9a37b166500aabf5e930f
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Oct 10 15:25:36 2019 +0200
+
+    Nest: Handle non-MPLS on MPLS case in recursive route update
+    
+    When non-MPLS recursive route resolves to MPLS underlying route,
+    then it should get MPLS labels from the the underlying route.
+
+commit 9eace84342bc879abf371a84f8af3bd697e1c0a2
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Oct 10 15:06:32 2019 +0200
+
+    Nest: Handle PtP links in recursive route update
+    
+    Underlying (IGP) route may lead to PtP link, in this case it does not
+    need gateway. Which is different than direct route without gateway.
+    
+    When recursive (BGP) route uses PtP route, it should not use recursive
+    next hop as immediate next hop, while for direct routes it should.
+
+commit cb2b6e0494e685fc4cce52a1d449ffd69bec351e
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Oct 10 14:01:16 2019 +0200
+
+    Nest: Fix recursive route update
+    
+    Missing cleanup can lead to dangling pointer to old next hops.
+
+commit 09ee846d9275b4cb0b77f7e458aba6a71b111c52
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sat Sep 28 14:17:20 2019 +0200
+
+    BGP: AIGP metric support (RFC 7311)
+
+commit 759b204be33fa8485c9e28038ee029a49e2e9d3f
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Oct 1 17:01:29 2019 +0200
+
+    Lib: Support for 64-bit numbers in bvsnprintf()
+    
+    Use 'l' for s64/u64 instead of for long/ulong, as that is much more
+    useful. Also make number() correct with regard to signed/unsigned
+    typecasts.
+
+commit cc95b4594ac924b40325a4f1adcae5312179db40
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Sep 30 13:54:14 2019 +0200
+
+    Build: Pass -g to cc called as linker to explicitly keep debug info
+
+commit d6eea6caee187dc5f6d8ed585a59031039a5c523
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Sep 23 15:41:55 2019 +0200
+
+    Testing measures times
+
+commit 368f70604f347e310ca70828bfdd2504fd116064
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Sep 25 16:37:16 2019 +0200
+
+    LTO: debug info also kept with the final binary
+
+commit 6dda6931d1d8f99d944d85770e235bfe75db0eb6
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Aug 21 17:35:27 2019 +0200
+
+    Perf: allow testing with cached route attributes.
+
+commit 15a758378716a0af1d198c55d56a66da4ef08c93
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Oct 8 14:20:25 2019 +0200
+
+    Doc: Fix duplicated lines
+    
+    Thanks to elados93 for the patch.
+
+commit c41a914d6e9be91cda40c7e7c05a8b4f2b515089
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Sep 30 13:53:24 2019 +0200
+
+    Testing: Don't call vsnprintf with NULL format
+
+commit 24493e9169d3058958ab3ec4d2b02c5753954981
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Oct 4 12:20:02 2019 +0200
+
+    Fixed undefined behavior on signals.
+    
+    The C11 specification allows only sig_atomic_t and _Atomic variable
+    access. All other accesses to global variables are undefined behavior.
+    
+    Using int was probably OK on x86 and x86_64; yet there were some reports
+    from other architectures (especially some MIPS) that in rare cases,
+    after issuing SIGHUP, BIRD did strange things.
+
+commit 4821251ebb13c05e8752f6f54b8e5ad6d87fecaa
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Mon Sep 30 19:10:14 2019 +0200
+
+    BFD: Fix reconfiguration of neighbors
+    
+    The bfd_reconfigure_neighbors() returned after first reconfigured
+    neighbor instead of continuing with the next one.
+    
+    Thanks to Winston Chen for the bugreport and a patch.
+
+commit ca2dacfcee92d8cfecff74dd020c2d16202b0d5c
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Sep 24 17:12:15 2019 +0200
+
+    Nest: Fix bug in export table
+    
+    Exported route may be in modified state, we need to get cached one for
+    rte_same() and rta_clone() to work properly.
+
+commit ea0917bcba86d354f9c8516a4f114c38d04f890b
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Sep 24 00:18:48 2019 +0200
+
+    Filter: Fix eval command
+
+commit 9c79022153c6ef3a6c35b2db8be6b259104e67f3
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Sep 22 23:32:22 2019 +0200
+
+    Nest: Fix help for 'graceful restart' command
+    
+    Multi-worded commands are not automatically added to top-level
+    help output.
+    
+    Thanks to Christoph for the bugreport.
+
+commit 3f477ccb03ed99cf6754baaca179fcf791bcda55
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Sep 20 10:16:51 2019 +0200
+
+    Filters: Function body comparison result now used.
+    
+    Function bodies were compared in post-parse time, yet the result was not
+    used and the functions were incorrectly considered the same as before.
+    
+    Now the result is used to reload affected protocols.
+
+commit eb1e43a9af9e1905b754f1f191d228e2676ce181
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Sep 17 14:45:14 2019 +0200
+
+    BGP: Fix setup with multiple dynamic BGP ranges
+    
+    Based on a patch from Liam Nattrass, thanks.
+
 commit 5235c3f78da15826b0654ba68dc7a897faa42c98
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue Sep 10 17:34:41 2019 +0200
