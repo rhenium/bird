@@ -44,6 +44,10 @@
 #include "lib/string.h"
 #include "lib/alloca.h"
 
+#ifdef CONFIG_BGP
+#include "proto/bgp/bgp.h"
+#endif
+
 pool *rt_table_pool;
 
 static slab *rte_slab;
@@ -2105,11 +2109,13 @@ no_nexthop:
     else
     {
       nhr = nhp;
-      nhp = (nhp ? (nhp->next = lp_allocz(rte_update_pool, NEXTHOP_MAX_SIZE)) : &(a->nh));
+      nhp = (nhp ? (nhp->next = lp_alloc(rte_update_pool, NEXTHOP_MAX_SIZE)) : &(a->nh));
     }
 
+    memset(nhp, 0, NEXTHOP_MAX_SIZE);
     nhp->iface = nh->iface;
     nhp->weight = nh->weight;
+
     if (mls)
     {
       nhp->labels = nh->labels + mls->len;
@@ -2127,11 +2133,20 @@ no_nexthop:
 	continue;
       }
     }
+    else if (nh->labels)
+    {
+      nhp->labels = nh->labels;
+      nhp->labels_orig = 0;
+      memcpy(nhp->label, nh->label, nh->labels * sizeof(u32));
+    }
+
     if (ipa_nonzero(nh->gw))
     {
       nhp->gw = nh->gw;			/* Router nexthop */
       nhp->flags |= (nh->flags & RNF_ONLINK);
     }
+    else if (!(nh->iface->flags & IF_MULTIACCESS) || (nh->iface->flags & IF_LOOPBACK))
+      nhp->gw = IPA_NONE;		/* PtP link - no need for nexthop */
     else if (ipa_nonzero(he->link))
       nhp->gw = he->link;		/* Device nexthop with link-local address known */
     else
@@ -2705,6 +2720,11 @@ rte_update_out(struct channel *c, const net_addr *n, rte *new, rte *old0, int re
   {
     net = net_get(tab, n);
     src = new->attrs->src;
+
+    rte_store_tmp_attrs(new, rte_update_pool, NULL);
+
+    if (!rta_is_cached(new->attrs))
+      new->attrs = rta_lookup(new->attrs);
   }
   else
   {
@@ -2929,7 +2949,7 @@ if_local_addr(ip_addr a, struct iface *i)
   return 0;
 }
 
-static u32
+u32
 rt_get_igp_metric(rte *rt)
 {
   eattr *ea = ea_find(rt->attrs->eattrs, EA_GEN_IGP_METRIC);
@@ -2949,6 +2969,14 @@ rt_get_igp_metric(rte *rt)
 #ifdef CONFIG_RIP
   if (a->source == RTS_RIP)
     return rt->u.rip.metric;
+#endif
+
+#ifdef CONFIG_BGP
+  if (a->source == RTS_BGP)
+  {
+    u64 metric = bgp_total_aigp_metric(rt);
+    return (u32) MIN(metric, (u64) IGP_METRIC_UNKNOWN);
+  }
 #endif
 
   if (a->source == RTS_DEVICE)
