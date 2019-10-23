@@ -1,3 +1,9 @@
+bird2 (2.0.7-2) unstable; urgency=medium
+
+  * Don't compress the bird.conf configuration file
+
+ -- Ondřej Surý <ondrej@sury.org>  Wed, 23 Oct 2019 10:33:19 +0200
+
 bird2 (2.0.7-1) unstable; urgency=medium
 
   * New upstream version 2.0.7
