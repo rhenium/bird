@@ -2862,7 +2862,9 @@ rt_get_igp_metric(rte *rt)
 #ifdef CONFIG_BGP
   if (a->source == RTS_BGP)
   {
-    u64 metric = bgp_total_aigp_metric(rt);
+    u64 metric = bgp_total_xgp_metric(rt);
+    if (metric == IGP_METRIC_UNKNOWN)
+      metric = bgp_total_aigp_metric(rt);
     return (u32) MIN(metric, (u64) IGP_METRIC_UNKNOWN);
   }
 #endif

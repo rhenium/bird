@@ -1,3 +1,9 @@
+bird2 (2.0.7a-1) unstable; urgency=medium
+
+  * Introduce 'xgp_metric' private BGP attribute
+
+ -- Kazuki Yamaguchi <k@rhe.jp>  Wed, 30 Oct 2019 19:33:19 +0900
+
 bird2 (2.0.7-2) unstable; urgency=medium
 
   * Don't compress the bird.conf configuration file
