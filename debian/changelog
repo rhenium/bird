@@ -1,4 +1,4 @@
-bird2 (2.0.7a-1) unstable; urgency=medium
+bird2 (2.0.7b-1) unstable; urgency=medium
 
   * Introduce 'xgp_metric' private BGP attribute
 

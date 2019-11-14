@@ -1965,10 +1965,13 @@ bgp_rte_better(rte *new, rte *old)
   /* RHE-NET - Apply XGP_METRIC metric */
   u32 n2x = bgp_total_xgp_metric(new);
   u32 o2x = bgp_total_xgp_metric(old);
-  if (n2x < o2x)
-    return 1;
-  if (n2x > o2x)
-    return 0;
+  if (n2x != BGP_XGP_METRIC_MAX && o2x != BGP_XGP_METRIC_MAX)
+  {
+    if (n2x < o2x)
+      return 1;
+    if (n2x > o2x)
+      return 0;
+  }
 
   /* RFC 7311 4.1 - Apply AIGP metric */
   u64 n2 = bgp_total_aigp_metric(new);
