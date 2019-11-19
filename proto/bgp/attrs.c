@@ -2408,11 +2408,11 @@ bgp_get_route_info(rte *e, byte *buf)
   u64 metric = bgp_total_aigp_metric(e);
   if (xgp_metric < BGP_XGP_METRIC_MAX)
   {
-    buf += bsprintf(buf, "/%u", xgp_metric);
+    buf += bsprintf(buf, "/%uX", xgp_metric);
   }
   else if (metric < BGP_AIGP_MAX)
   {
-    buf += bsprintf(buf, "/%lu", metric);
+    buf += bsprintf(buf, "/%luA", metric);
   }
   else if (e->attrs->igp_metric)
   {
