@@ -66,6 +66,7 @@ enum f_type {
   T_PATH_MASK_ITEM = 0x2b,	/* Path mask item for path mask constructors */
   T_BYTESTRING = 0x2c,
   T_MAC = 0x2d,
+  T_MLS = 0x2e,
 
   T_ROUTE = 0x78,
   T_ROUTES_BLOCK = 0x79,
@@ -100,6 +101,7 @@ struct f_val {
     const struct f_path_mask *path_mask;
     struct f_path_mask_item pmi;
     struct rte *rte;
+    mpls_label_stack *mls;
   } val;
 };
 
