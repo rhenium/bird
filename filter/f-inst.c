@@ -1202,6 +1202,20 @@
 
   }
 
+  INST(FI_ATTACH_MLS, 1, 0) {	/* ROA Check */
+    NEVER_CONSTANT;
+    ARG(1, T_MLS);
+    ACCESS_EATTRS;
+    ACCESS_RTE;
+    struct rta *rta = (*fs->rte)->attrs;
+
+    const mpls_label_stack *mls = v1.val.mls;
+    rta->nh.labels = mls->len;
+    memcpy(&rta->nh.label, mls->stack, mls->len * sizeof(u32));
+
+    RESULT_VOID;
+  }
+
   INST(FI_FORMAT, 1, 0) {	/* Format */
     ARG_ANY(1);
     RESULT(T_STRING, s, val_format_str(fpool, &v1));

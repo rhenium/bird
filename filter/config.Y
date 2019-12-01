@@ -441,6 +441,7 @@ CF_KEYWORDS(FUNCTION, PRINT, PRINTN, UNSET, RETURN,
 	PREPEND, FIRST, LAST, LAST_NONAGGREGATED, MATCH,
 	EMPTY,
 	FILTER, WHERE, EVAL, ATTRIBUTE,
+	ATTACH_MLS,
 	BT_ASSERT, BT_TEST_SUITE, BT_CHECK_ASSIGN, BT_TEST_SAME, FORMAT)
 
 %nonassoc THEN
@@ -1058,6 +1059,8 @@ cmd:
  | dynamic_attr '.' FILTER '(' term ')' ';'    { $$ = f_generate_complex( FI_CLIST_FILTER, $1, $5 ); }
  | BT_ASSERT '(' get_cf_position term get_cf_position ')' ';' { $$ = assert_done($4, $3 + 1, $5 - 1); }
  | BT_CHECK_ASSIGN '(' get_cf_position lvalue get_cf_position ',' term ')' ';' { $$ = assert_assign(&$4, $7, $3 + 1, $5 - 1); }
+ | ATTACH_MLS '(' label_stack ')' ';' { $$ = f_new_inst(FI_ATTACH_MLS,
+	f_new_inst(FI_CONSTANT, (struct f_val) { .type = T_MLS, .val.mls = $3, })); }
  ;
 
 get_cf_position:
