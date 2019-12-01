@@ -1324,7 +1324,7 @@ dest:
     {
     case RTD_UNICAST:
       r->r.rtm_type = RTN_UNICAST;
-      if (nh->next && !krt_ecmp6(p))
+      if (nh->next && !krt_ecmp6(p) && p->af != AF_MPLS)
 	nl_add_multipath(&r->h, rsize, nh, p->af);
       else
       {
