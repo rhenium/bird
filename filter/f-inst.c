@@ -1210,8 +1210,10 @@
     struct rta *rta = (*fs->rte)->attrs;
 
     const mpls_label_stack *mls = v1.val.mls;
-    rta->nh.labels = mls->len;
-    memcpy(&rta->nh.label, mls->stack, mls->len * sizeof(u32));
+    for (struct nexthop *nh = &rta->nh; nh; nh = nh->next) {
+      nh->labels = mls->len;
+      memcpy(&nh->label, mls->stack, mls->len * sizeof(u32));
+    }
 
     RESULT_VOID;
   }
