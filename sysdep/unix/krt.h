@@ -19,15 +19,6 @@ struct kif_proto;
 #include "sysdep/config.h"
 #include CONFIG_INCLUDE_KRTSYS_H
 
-/* Flags stored in net->n.flags, rest are in nest/route.h */
-
-#define KRF_VERDICT_MASK 0x0f
-#define KRF_CREATE 0			/* Not seen in kernel table */
-#define KRF_SEEN 1			/* Seen in kernel table during last scan */
-#define KRF_UPDATE 2			/* Need to update this entry */
-#define KRF_DELETE 3			/* Should be deleted */
-#define KRF_IGNORE 4			/* To be ignored */
-
 #define KRT_DEFAULT_ECMP_LIMIT	16
 
 #define EA_KRT_SOURCE	EA_CODE(PROTOCOL_KERNEL, 0)
@@ -65,6 +56,8 @@ struct krt_proto {
   timer *scan_timer;
 #endif
 
+  struct bmap sync_map;		/* Keeps track which exported routes were successfully written to kernel */
+  struct bmap seen_map;		/* Routes seen during last periodic scan */
   node krt_node;		/* Node in krt_proto_list */
   byte af;			/* Kernel address family (AF_*) */
   byte ready;			/* Initial feed has been finished */
@@ -85,6 +78,14 @@ struct proto_config * kif_init_config(int class);
 void kif_request_scan(void);
 void krt_got_route(struct krt_proto *p, struct rte *e);
 void krt_got_route_async(struct krt_proto *p, struct rte *e, int new);
+
+static inline int
+krt_get_sync_error(struct krt_proto *p, struct rte *e)
+{
+  return (p->p.proto_state == PS_UP) &&
+    bmap_test(&p->p.main_channel->export_map, e->id) &&
+    !bmap_test(&p->sync_map, e->id);
+}
 
 /* Values for rte->u.krt_sync.src */
 #define KRT_SRC_UNKNOWN	-1	/* Nobody knows */
