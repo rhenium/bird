@@ -1,7 +1,7 @@
-bird2 (2.0.7c-2) unstable; urgency=medium
+bird2 (2.0.7c-3) unstable; urgency=medium
 
   * Introduce 'xgp_metric' private BGP attribute
-  * Introduce 'attach_mls(<label stack>)' filter function
+  * Introduce 'attach_mls([<label stack>])' filter function
 
  -- Kazuki Yamaguchi <k@rhe.jp>  Wed, 30 Oct 2019 19:33:19 +0900
 

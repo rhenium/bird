@@ -1061,6 +1061,8 @@ cmd:
  | BT_CHECK_ASSIGN '(' get_cf_position lvalue get_cf_position ',' term ')' ';' { $$ = assert_assign(&$4, $7, $3 + 1, $5 - 1); }
  | ATTACH_MLS '(' label_stack ')' ';' { $$ = f_new_inst(FI_ATTACH_MLS,
 	f_new_inst(FI_CONSTANT, (struct f_val) { .type = T_MLS, .val.mls = $3, })); }
+ | ATTACH_MLS '(' ')' ';' { $$ = f_new_inst(FI_ATTACH_MLS,
+	f_new_inst(FI_CONSTANT, (struct f_val) { .type = T_MLS, .val.mls = cfg_allocz(sizeof(mpls_label_stack)), })); }
  ;
 
 get_cf_position:

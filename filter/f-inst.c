@@ -1202,7 +1202,7 @@
 
   }
 
-  INST(FI_ATTACH_MLS, 1, 0) {	/* ROA Check */
+  INST(FI_ATTACH_MLS, 1, 0) {	/* attach_mls([stack]) */
     NEVER_CONSTANT;
     ARG(1, T_MLS);
     ACCESS_EATTRS;
@@ -1211,8 +1211,9 @@
 
     const mpls_label_stack *mls = v1.val.mls;
     for (struct nexthop *nh = &rta->nh; nh; nh = nh->next) {
-      nh->labels = mls->len;
-      memcpy(&nh->label, mls->stack, mls->len * sizeof(u32));
+      nh->labels = mls ? mls->len : 0;
+      if (mls)
+        memcpy(&nh->label, mls->stack, mls->len * sizeof(u32));
     }
 
     RESULT_VOID;
