@@ -1,3 +1,9 @@
+bird2 (2.0.7-3) unstable; urgency=medium
+
+  * Don't use /usr/share/doc as ucf source (Closes: #945336)
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 02 Mar 2020 10:19:30 +0100
+
 bird2 (2.0.7-2) unstable; urgency=medium
 
   * Don't compress the bird.conf configuration file
