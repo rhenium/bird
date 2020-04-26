@@ -1,7 +1,8 @@
-bird2 (2.0.7c-3) unstable; urgency=medium
+bird2 (2.0.7d-1) unstable; urgency=medium
 
   * Introduce 'xgp_metric' private BGP attribute
   * Introduce 'attach_mls([<label stack>])' filter function
+  * Allow trailing comma in set literals in filter
 
  -- Kazuki Yamaguchi <k@rhe.jp>  Wed, 30 Oct 2019 19:33:19 +0900
 
