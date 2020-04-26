@@ -1134,7 +1134,7 @@ static const struct bgp_attr_desc bgp_attr_table[] = {
     .format = bgp_format_mpls_label_stack,
   },
   [BA_XGP_METRIC] = {
-    .name = "xgp_metric",
+    .name = "__cost",
     .type = EAF_TYPE_INT,
     .flags = BAF_OPTIONAL,
     .export = bgp_export_xgp_metric,
