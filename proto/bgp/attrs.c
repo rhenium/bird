@@ -375,26 +375,31 @@ bgp_init_aigp_metric(rte *e, u64 *metric, const struct adata **ad)
  * XGP_METRIC
  */
 
-u32
-bgp_total_xgp_metric(rte *e)
+static int
+bgp_total_xgp_metric_(rte *e, u32 *metric)
 {
   eattr *a = ea_find(e->attrs->eattrs, EA_CODE(PROTOCOL_BGP, BA_XGP_METRIC));
   if (!a)
-    return BGP_XGP_METRIC_MAX;
+    return 0;
 
-  u32 xgp_metric = a->u.data;
+  u32 base = a->u.data;
   u32 step = e->attrs->igp_metric;
 
   if (!rte_resolvable(e) || (step >= IGP_METRIC_UNKNOWN))
     step = BGP_XGP_METRIC_MAX;
 
-  if (!step)
-    step = 1;
+  *metric = base + step;
+  if (*metric < base)
+    *metric = BGP_XGP_METRIC_MAX;
 
-  u32 metric = xgp_metric + step;
-  if (metric < xgp_metric)
-    metric = BGP_XGP_METRIC_MAX;
+  return 1;
+}
 
+u32
+bgp_total_xgp_metric(rte *e)
+{
+  u32 metric = BGP_XGP_METRIC_MAX;
+  bgp_total_xgp_metric_(e, &metric);
   return metric;
 }
 
@@ -1803,12 +1808,11 @@ bgp_update_attrs(struct bgp_proto *p, struct bgp_channel *c, rte *e, ea_list *at
     bgp_set_attr_ptr(&attrs, pool, BA_AIGP, 0, ad);
   }
 
-  /* XGP_METRIC attribute - accumulate local metric or originate new one */
-  if (s.local_next_hop)
+  /* XGP_METRIC attribute - update metric if applying 'next hop self' */
+  u32 metric32;
+  if (s.local_next_hop && bgp_total_xgp_metric_(e, &metric32))
   {
-    u32 xgp_metric = bgp_total_xgp_metric(e);
-    if (xgp_metric < BGP_XGP_METRIC_MAX)
-      bgp_set_attr_u32(&attrs, pool, BA_XGP_METRIC, 0, xgp_metric);
+    bgp_set_attr_u32(&attrs, pool, BA_XGP_METRIC, 0, metric32);
   }
 
   /* IBGP route reflection, RFC 4456 */
