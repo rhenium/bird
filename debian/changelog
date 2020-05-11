@@ -1,3 +1,10 @@
+bird2 (2.0.7-4) unstable; urgency=medium
+
+  * Sync the linuxdoc mangled files with linuxdoc-tools_0.9.73-2
+    (Closes: #959642)
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 11 May 2020 10:29:24 +0200
+
 bird2 (2.0.7-3) unstable; urgency=medium
 
   * Don't use /usr/share/doc as ucf source (Closes: #945336)
