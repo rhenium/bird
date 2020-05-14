@@ -357,6 +357,13 @@ static struct nl_want_attrs nexthop_attr_want6[BIRD_RTA_MAX] = {
 };
 
 #ifdef HAVE_MPLS_KERNEL
+static struct nl_want_attrs nexthop_attr_wantmpls[BIRD_RTA_MAX] = {
+  [RTA_VIA]	  = { 1, 0, 0 },
+  [RTA_ENCAP_TYPE]= { 1, 1, sizeof(u16) },
+  [RTA_ENCAP]	  = { 1, 0, 0 },
+  [RTA_NEWDST]	  = { 1, 0, 0 },
+};
+
 static struct nl_want_attrs encap_mpls_want[BIRD_RTA_MAX] = {
   [RTA_DST]       = { 1, 0, 0 },
 };
@@ -401,6 +408,7 @@ static struct nl_want_attrs rtm_attr_want_mpls[BIRD_RTA_MAX] = {
   [RTA_OIF]	  = { 1, 1, sizeof(u32) },
   [RTA_PRIORITY]  = { 1, 1, sizeof(u32) },
   [RTA_METRICS]	  = { 1, 0, 0 },
+  [RTA_MULTIPATH] = { 1, 0, 0 },
   [RTA_FLOW]	  = { 1, 1, sizeof(u32) },
   [RTA_TABLE]	  = { 1, 1, sizeof(u32) },
   [RTA_VIA]	  = { 1, 0, 0 },
@@ -703,6 +711,13 @@ nl_parse_multipath(struct nl_parse_state *s, struct krt_proto *p, struct rtattr 
 	    return NULL;
 	  break;
 
+#ifdef HAVE_MPLS_KERNEL
+	case AF_MPLS:
+	  if (!nl_parse_attrs(RTNH_DATA(nh), nexthop_attr_wantmpls, a, sizeof(a)))
+	    return NULL;
+	  break;
+#endif
+
 	default:
 	  return NULL;
 	}
@@ -728,6 +743,9 @@ nl_parse_multipath(struct nl_parse_state *s, struct krt_proto *p, struct rtattr 
 	}
 
 #ifdef HAVE_MPLS_KERNEL
+      if (af == AF_MPLS && a[RTA_NEWDST])
+	rv->labels = rta_get_mpls(a[RTA_NEWDST], rv->label);
+
       if (a[RTA_ENCAP] && a[RTA_ENCAP_TYPE])
       {
 	if (rta_get_u16(a[RTA_ENCAP_TYPE]) != LWTUNNEL_ENCAP_MPLS) {
