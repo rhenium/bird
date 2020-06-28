@@ -30,6 +30,7 @@ CF_KEYWORDS(BGP, LOCAL, NEIGHBOR, AS, HOLD, TIME, CONNECT, RETRY, KEEPALIVE,
 	GRACEFUL, RESTART, AWARE, CHECK, LINK, PORT, EXTENDED, MESSAGES, SETKEY,
 	STRICT, BIND, CONFEDERATION, MEMBER, MULTICAST, FLOW4, FLOW6, LONG,
 	LIVED, STALE, IMPORT, IBGP, EBGP, MANDATORY, INTERNAL, EXTERNAL, SETS,
+	BGP_XGP_METRIC, XGP_METRIC,
 	DYNAMIC, RANGE, NAME, DIGITS, BGP_AIGP, AIGP, ORIGINATE, COST, ENFORCE,
 	FIRST)
 
@@ -263,6 +264,7 @@ bgp_channel_item:
  | EXPORT TABLE bool { BGP_CC->export_table = $3; }
  | AIGP bool { BGP_CC->aigp = $2; BGP_CC->aigp_originate = 0; }
  | AIGP ORIGINATE { BGP_CC->aigp = 1; BGP_CC->aigp_originate = 1; }
+ | XGP_METRIC bool { BGP_CC->xgp_metric = $2; }
  | COST expr { BGP_CC->cost = $2; if ($2 < 1) cf_error("Cost must be positive"); }
  | IGP TABLE rtable {
     if (BGP_CC->desc->no_igp)
@@ -322,6 +324,8 @@ dynamic_attr: BGP_EXT_COMMUNITY
 	{ $$ = f_new_dynamic_attr(EAF_TYPE_EC_SET, T_ECLIST, EA_CODE(PROTOCOL_BGP, BA_EXT_COMMUNITY)); } ;
 dynamic_attr: BGP_AIGP
 	{ $$ = f_new_dynamic_attr(EAF_TYPE_OPAQUE, T_ENUM_EMPTY, EA_CODE(PROTOCOL_BGP, BA_AIGP)); } ;
+dynamic_attr: BGP_XGP_METRIC
+	{ $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_CODE(PROTOCOL_BGP, BA_XGP_METRIC)); } ;
 dynamic_attr: BGP_LARGE_COMMUNITY
 	{ $$ = f_new_dynamic_attr(EAF_TYPE_LC_SET, T_LCLIST, EA_CODE(PROTOCOL_BGP, BA_LARGE_COMMUNITY)); } ;
 

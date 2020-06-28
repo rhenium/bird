@@ -153,6 +153,7 @@ struct bgp_channel_config {
   u8 add_path;				/* Use ADD-PATH extension [RFC 7911] */
   u8 aigp;				/* AIGP is allowed on this session */
   u8 aigp_originate;			/* AIGP is originated automatically */
+  u8 xgp_metric;			/* Allow our 'xgp_metric' */
   u32 cost;				/* IGP cost for direct next hops */
   u8 import_table;			/* Use c.in_table as Adj-RIB-In */
   u8 export_table;			/* Use c.out_table as Adj-RIB-Out */
@@ -598,6 +599,9 @@ bgp_total_aigp_metric(rte *r)
   return metric;
 }
 
+u32 bgp_total_xgp_metric(rte *e);
+
+#define BGP_XGP_METRIC_MAX		0xffffffff
 
 /* packets.c */
 
@@ -653,6 +657,7 @@ void bgp_update_next_hop(struct bgp_export_state *s, eattr *a, ea_list **to);
 #define BA_LARGE_COMMUNITY	0x20	/* RFC 8092 */
 
 /* Bird's private internal BGP attributes */
+#define BA_XGP_METRIC			0xfc	/* RHE-NET's 'xgp_metric' attribute */
 #define BA_MPLS_LABEL_STACK	0xfe	/* MPLS label stack transfer attribute */
 
 /* BGP connection states */
