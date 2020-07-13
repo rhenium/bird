@@ -1,3 +1,12 @@
+bird2 (2.0.7g-1) unstable; urgency=medium
+
+  * Introduce 'xgp_metric' private BGP attribute
+  * Introduce 'attach_mls([<label stack>])' filter function
+  * Allow trailing comma in set literals in filter
+  * Use route replace on IPv6
+
+ -- Kazuki Yamaguchi <k@rhe.jp>  Mon, 13 Jul 2020 16:31:29 +0900
+
 bird2 (2.0.7-3) unstable; urgency=medium
 
   * Don't use /usr/share/doc as ucf source (Closes: #945336)
