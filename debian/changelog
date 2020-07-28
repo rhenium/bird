@@ -1,3 +1,13 @@
+bird2 (2.0.7i-1) unstable; urgency=medium
+
+  * Allow trailing comma in set literals in filter
+  * Use route replace on IPv6
+  * Introduce 'attach_mls([<label stack>])' filter function
+  * Allow modification of AIGP metric values, at the expense of strict
+    compliance with RFC 7311
+
+ -- Kazuki Yamaguchi <k@rhe.jp>  Wed, 29 Jul 2020 02:07:34 +0900
+
 bird2 (2.0.7-3) unstable; urgency=medium
 
   * Don't use /usr/share/doc as ucf source (Closes: #945336)
