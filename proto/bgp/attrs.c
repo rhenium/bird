@@ -2103,6 +2103,10 @@ bgp_rte_mergable(rte *pri, rte *sec)
   if (p != s)
     return 0;
 
+  /* RFC 7311 4.1 - Apply AIGP metric */
+  if (bgp_total_aigp_metric(pri) != bgp_total_aigp_metric(sec))
+    return 0;
+
   /* RFC 4271 9.1.2.2. a)  Use AS path lengths */
   if (pri_bgp->cf->compare_path_lengths || sec_bgp->cf->compare_path_lengths)
   {
