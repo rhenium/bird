@@ -286,6 +286,38 @@ bgp_init_aigp_metric(rte *e, u64 *metric, const struct adata **ad)
   return *metric < IGP_METRIC_UNKNOWN;
 }
 
+/*
+ * XGP_METRIC
+ */
+
+static int
+bgp_total_xgp_metric_(rte *e, u32 *metric)
+{
+  eattr *a = ea_find(e->attrs->eattrs, EA_CODE(PROTOCOL_BGP, BA_XGP_METRIC));
+  if (!a)
+    return 0;
+
+  u32 base = a->u.data;
+  u32 step = e->attrs->igp_metric;
+
+  if (!rte_resolvable(e) || (step >= IGP_METRIC_UNKNOWN))
+    step = BGP_XGP_METRIC_MAX;
+
+  *metric = base + step;
+  if (*metric < base)
+    *metric = BGP_XGP_METRIC_MAX;
+
+  return 1;
+}
+
+u32
+bgp_total_xgp_metric(rte *e)
+{
+  u32 metric = BGP_XGP_METRIC_MAX;
+  bgp_total_xgp_metric_(e, &metric);
+  return metric;
+}
+
 
 /*
  *	Attribute hooks
@@ -764,6 +796,24 @@ bgp_decode_aigp(struct bgp_parse_state *s, uint code UNUSED, uint flags, byte *d
 
 
 static void
+bgp_export_xgp_metric(struct bgp_export_state *s, eattr *a)
+{
+  if (!s->channel->cf->xgp_metric)
+    UNSET(a);
+}
+
+static void
+bgp_decode_xgp_metric(struct bgp_parse_state *s, uint code UNUSED, uint flags, byte *data, uint len, ea_list **to)
+{
+  if (len != 4)
+    WITHDRAW(BAD_LENGTH, "XGP_METRIC", len);
+
+  u32 val = get_u32(data);
+  bgp_set_attr_u32(to, s->pool, BA_XGP_METRIC, flags, val);
+}
+
+
+static void
 bgp_export_large_community(struct bgp_export_state *s, eattr *a)
 {
   if (a->u.ptr->length == 0)
@@ -1002,6 +1052,14 @@ static const struct bgp_attr_desc bgp_attr_table[] = {
     .encode = bgp_encode_mpls_label_stack,
     .decode = bgp_decode_mpls_label_stack,
     .format = bgp_format_mpls_label_stack,
+  },
+  [BA_XGP_METRIC] = {
+    .name = "__cost",
+    .type = EAF_TYPE_INT,
+    .flags = BAF_OPTIONAL,
+    .export = bgp_export_xgp_metric,
+    .encode = bgp_encode_u32,
+    .decode = bgp_decode_xgp_metric,
   },
 };
 
@@ -1673,6 +1731,13 @@ bgp_update_attrs(struct bgp_proto *p, struct bgp_channel *c, rte *e, ea_list *at
     bgp_set_attr_u32(&attrs, pool, BA_AIGP, 0, metric32);
   }
 
+  /* XGP_METRIC attribute - update metric if applying 'next hop self' */
+  u32 metric32;
+  if (s.local_next_hop && bgp_total_xgp_metric_(e, &metric32))
+  {
+    bgp_set_attr_u32(&attrs, pool, BA_XGP_METRIC, 0, metric32);
+  }
+
   /* IBGP route reflection, RFC 4456 */
   if (src && src->is_internal && p->is_internal && (src->local_as == p->local_as))
   {
@@ -1823,6 +1888,14 @@ bgp_rte_better(rte *new, rte *old)
   if (n > o)
     return 1;
   if (n < o)
+    return 0;
+
+  /* RHE-NET - Apply XGP_METRIC metric */
+  u32 n2x = bgp_total_xgp_metric(new);
+  u32 o2x = bgp_total_xgp_metric(old);
+  if (n2x < o2x)
+    return 1;
+  if (n2x > o2x)
     return 0;
 
   /* RFC 7311 4.1 - Apply AIGP metric */
@@ -2256,10 +2329,15 @@ bgp_get_route_info(rte *e, byte *buf)
   if (rte_stale(e))
     buf += bsprintf(buf, "s");
 
+  u32 xgp_metric = bgp_total_xgp_metric(e);
   u64 metric = bgp_total_aigp_metric(e);
-  if (metric < BGP_AIGP_MAX)
+  if (xgp_metric < BGP_XGP_METRIC_MAX)
   {
-    buf += bsprintf(buf, "/%lu", metric);
+    buf += bsprintf(buf, "/%uX", xgp_metric);
+  }
+  else if (metric < BGP_AIGP_MAX)
+  {
+    buf += bsprintf(buf, "/%luA", metric);
   }
   else if (e->attrs->igp_metric)
   {

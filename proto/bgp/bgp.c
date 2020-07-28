@@ -2116,6 +2116,7 @@ bgp_channel_reconfigure(struct channel *C, struct channel_config *CC, int *impor
 
   if ((new->gw_mode != old->gw_mode) ||
       (new->aigp != old->aigp) ||
+      (new->xgp_metric != old->xgp_metric) ||
       (new->cost != old->cost))
   {
     /* import_changed itself does not force ROUTE_REFRESH when import_table is active */
@@ -2130,7 +2131,8 @@ bgp_channel_reconfigure(struct channel *C, struct channel_config *CC, int *impor
       (new->next_hop_keep != old->next_hop_keep) ||
       (new->missing_lladdr != old->missing_lladdr) ||
       (new->aigp != old->aigp) ||
-      (new->aigp_originate != old->aigp_originate))
+      (new->aigp_originate != old->aigp_originate) ||
+      (new->xgp_metric != old->xgp_metric))
     *export_changed = 1;
 
   c->cf = new;
