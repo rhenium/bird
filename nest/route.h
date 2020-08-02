@@ -428,7 +428,7 @@ struct nexthop {
   byte weight;
   byte labels_orig;			/* Number of labels before hostentry was applied */
   byte labels;				/* Number of all labels */
-  u32 label[0];
+  u32 label[MPLS_MAX_LABEL_STACK];
 };
 
 #define RNF_ONLINK		0x1	/* Gateway is onlink regardless of IP ranges */
@@ -675,10 +675,10 @@ ea_set_attr_data(ea_list **to, struct linpool *pool, uint id, uint flags, uint t
 }
 
 
-#define NEXTHOP_MAX_SIZE (sizeof(struct nexthop) + sizeof(u32)*MPLS_MAX_LABEL_STACK)
+#define NEXTHOP_MAX_SIZE sizeof(struct nexthop)
 
-static inline size_t nexthop_size(const struct nexthop *nh)
-{ return sizeof(struct nexthop) + sizeof(u32)*nh->labels; }
+static inline size_t nexthop_size(const struct nexthop *nh UNUSED)
+{ return sizeof(struct nexthop); }
 int nexthop__same(struct nexthop *x, struct nexthop *y); /* Compare multipath nexthops */
 static inline int nexthop_same(struct nexthop *x, struct nexthop *y)
 { return (x == y) || nexthop__same(x, y); }
@@ -690,8 +690,8 @@ void nexthop_insert(struct nexthop **n, struct nexthop *y);
 int nexthop_is_sorted(struct nexthop *x);
 
 void rta_init(void);
-static inline size_t rta_size(const rta *a) { return sizeof(rta) + sizeof(u32)*a->nh.labels; }
-#define RTA_MAX_SIZE (sizeof(rta) + sizeof(u32)*MPLS_MAX_LABEL_STACK)
+static inline size_t rta_size(const rta *a UNUSED) { return sizeof(rta); }
+#define RTA_MAX_SIZE sizeof(rta)
 rta *rta_lookup(rta *);			/* Get rta equivalent to this one, uc++ */
 static inline int rta_is_cached(rta *r) { return r->cached; }
 static inline rta *rta_clone(rta *r) { r->uc++; return r; }
