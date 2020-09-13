@@ -591,7 +591,13 @@ static void
 bfd_reconfigure_iface(struct bfd_proto *p, struct bfd_iface *ifa, struct bfd_config *nc)
 {
   struct bfd_iface_config *nic = bfd_find_iface_config(nc, ifa->iface);
-  ifa->changed = !!memcmp(nic, ifa->cf, sizeof(struct bfd_iface_config));
+  ifa->changed =
+    nic->min_rx_int != ifa->cf->min_rx_int ||
+    nic->min_tx_int != ifa->cf->min_tx_int ||
+    nic->idle_tx_int != ifa->cf->idle_tx_int ||
+    nic->multiplier != ifa->cf->multiplier ||
+    nic->passive != ifa->cf->passive ||
+    nic->auth_type != ifa->cf->auth_type;
 
   /* This should be probably changed to not access ifa->cf from the BFD thread */
   birdloop_enter(p->loop);
