@@ -1,3 +1,10 @@
+bird2 (2.0.7-4.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Fix collect2: error: ld returned 1 exit status (Closes: #966906)
+
+ -- Benjamin Drung <bdrung@debian.org>  Sat, 02 Jan 2021 18:12:44 +0100
+
 bird2 (2.0.7-4) unstable; urgency=medium
 
   * Sync the linuxdoc mangled files with linuxdoc-tools_0.9.73-2
