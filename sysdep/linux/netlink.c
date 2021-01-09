@@ -69,9 +69,6 @@
 #define RTA_ENCAP  22
 #endif
 
-#define krt_ipv4(p) ((p)->af == AF_INET)
-#define krt_ecmp6(p) ((p)->af == AF_INET6)
-
 const int rt_default_ecmp = 16;
 
 /*
@@ -97,13 +94,14 @@ const int rt_default_ecmp = 16;
  *
  * Whatever the kernel version is, IPv6 ECMP routes are sent as multiple routes
  * for the same prefix.
+ *
+ * RHE: Modified to use RTA_MULTIPATH on IPv6 as I can ignore Linux < 4.11.
  */
 
 struct nl_parse_state
 {
   struct linpool *pool;
   int scan;
-  int merge;
 
   net *net;
   rta *attrs;
@@ -1351,7 +1349,7 @@ dest:
     {
     case RTD_UNICAST:
       r->r.rtm_type = RTN_UNICAST;
-      if (nh->next && !krt_ecmp6(p))
+      if (nh->next)
 	nl_add_multipath(&r->h, rsize, nh, p->af, eattrs);
       else
       {
@@ -1385,21 +1383,6 @@ static inline int
 nl_add_rte(struct krt_proto *p, rte *e)
 {
   rta *a = e->attrs;
-  int err = 0;
-
-  if (krt_ecmp6(p) && a->nh.next)
-  {
-    struct nexthop *nh = &(a->nh);
-
-    err = nl_send_route(p, e, NL_OP_ADD, RTD_UNICAST, nh);
-    if (err < 0)
-      return err;
-
-    for (nh = nh->next; nh; nh = nh->next)
-      err += nl_send_route(p, e, NL_OP_APPEND, RTD_UNICAST, nh);
-
-    return err;
-  }
 
   return nl_send_route(p, e, NL_OP_ADD, a->dest, &(a->nh));
 }
@@ -1407,14 +1390,7 @@ nl_add_rte(struct krt_proto *p, rte *e)
 static inline int
 nl_delete_rte(struct krt_proto *p, rte *e)
 {
-  int err = 0;
-
-  /* For IPv6, we just repeatedly request DELETE until we get error */
-  do
-    err = nl_send_route(p, e, NL_OP_DELETE, RTD_NONE, NULL);
-  while (krt_ecmp6(p) && !err);
-
-  return err;
+  return nl_send_route(p, e, NL_OP_DELETE, RTD_NONE, NULL);
 }
 
 static inline int
@@ -1433,16 +1409,9 @@ krt_replace_rte(struct krt_proto *p, net *n UNUSED, rte *new, rte *old)
   /*
    * We use NL_OP_REPLACE for IPv4, it has an issue with not checking for
    * matching rtm_protocol, but that is OK when dedicated priority is used.
-   *
-   * We do not use NL_OP_REPLACE for IPv6, as it has broken semantics for ECMP
-   * and with some kernel versions ECMP replace crashes kernel. Would need more
-   * testing and checks for kernel versions.
-   *
-   * For IPv6, we use NL_OP_DELETE and then NL_OP_ADD. We also do not trust the
-   * old route value, so we do not try to optimize IPv6 ECMP reconfigurations.
    */
 
-  if (krt_ipv4(p) && old && new)
+  if (old && new)
   {
     err = nl_replace_rte(p, new);
   }
@@ -1462,24 +1431,6 @@ krt_replace_rte(struct krt_proto *p, net *n UNUSED, rte *new, rte *old)
     else
       bmap_set(&p->sync_map, new->id);
   }
-}
-
-static int
-nl_mergable_route(struct nl_parse_state *s, net *net, struct krt_proto *p, uint priority, uint krt_type, uint rtm_family)
-{
-  /* Route merging is used for IPv6 scans */
-  if (!s->scan || (rtm_family != AF_INET6))
-    return 0;
-
-  /* Saved and new route must have same network, proto/table, and priority */
-  if ((s->net != net) || (s->proto != p) || (s->krt_metric != priority))
-    return 0;
-
-  /* Both must be regular unicast routes */
-  if ((s->krt_type != RTN_UNICAST) || (krt_type != RTN_UNICAST))
-    return 0;
-
-  return 1;
 }
 
 static void
@@ -1652,7 +1603,7 @@ nl_parse_route(struct nl_parse_state *s, struct nlmsghdr *h)
 
   net *net = net_get(p->p.main_channel->table, n);
 
-  if (s->net && !nl_mergable_route(s, net, p, priority, i->rtm_type, i->rtm_family))
+  if (s->net)
     nl_announce_route(s);
 
   rta *ra = lp_allocz(s->pool, RTA_MAX_SIZE);
