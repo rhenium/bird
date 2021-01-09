@@ -1,3 +1,18 @@
+bird2 (2.0.7.14-20210109-1) unstable; urgency=medium
+
+  * Based on 17663b6a7c50 ("RPKI: Remove port (and SSH username) from 'Cache
+    server' output line", 2021-01-07).
+  * Allow trailing comma in set literals in filter
+  * Use route replace on IPv6
+  * Introduce 'attach_mls([<label stack>])' filter function
+  * Allow modification of AIGP metric values, at the expense of strict
+    compliance with RFC 7311
+  * Possibly fixed buffer overflow bug with kernel route installing
+  * Better logging in BFD protocol.
+  * Probably strict check is performed on constant expression.
+
+ -- Kazuki Yamaguchi <k@rhe.jp>  Sat, 09 Jan 2021 19:37:08 +0900
+
 bird2 (2.0.7-4.1) unstable; urgency=medium
 
   * Non-maintainer upload.
