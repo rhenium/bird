@@ -312,7 +312,7 @@ bgp_initiate(struct bgp_proto *p)
   {
     p->start_state = BSS_DELAY;
     BGP_TRACE(D_EVENTS, "Startup delayed by %d seconds due to errors", p->startup_delay);
-    bgp_start_timer(p->startup_timer, p->startup_delay);
+    bgp_start_timer(p->startup_timer, p->startup_delay, 1);
   }
   else
     bgp_startup(p);
@@ -335,21 +335,24 @@ err1:
  * bgp_start_timer - start a BGP timer
  * @t: timer
  * @value: time (in seconds) to fire (0 to disable the timer)
+ * @use_randomize: the randomization procedure in RFC 4271 should be applied
  *
  * This functions calls tm_start() on @t with time @value and the amount of
  * randomization suggested by the BGP standard. Please use it for all BGP
  * timers.
  */
 void
-bgp_start_timer(timer *t, uint value)
+bgp_start_timer(timer *t, uint value, int use_randomize)
 {
-  if (value)
+  if (value && use_randomize)
   {
     /* The randomization procedure is specified in RFC 4271 section 10 */
     btime time = value S;
     btime randomize = random() % ((time / 4) + 1);
     tm_start(t, time - randomize);
   }
+  else if (value)
+    tm_start(t, value S);
   else
     tm_stop(t);
 }
@@ -724,7 +727,7 @@ bgp_conn_enter_close_state(struct bgp_conn *conn)
   conn->sk->rx_hook = NULL;
 
   /* Timeout for CLOSE state, if we cannot send notification soon then we just hangup */
-  bgp_start_timer(conn->hold_timer, 10);
+  bgp_start_timer(conn->hold_timer, 10, 0);
 
   if (os == BS_ESTABLISHED)
     bgp_conn_leave_established_state(conn, p);
@@ -960,7 +963,7 @@ bgp_send_open(struct bgp_conn *conn)
   bgp_prepare_capabilities(conn);
   bgp_schedule_packet(conn, NULL, PKT_OPEN);
   bgp_conn_set_state(conn, BS_OPENSENT);
-  bgp_start_timer(conn->hold_timer, conn->bgp->cf->initial_hold_time);
+  bgp_start_timer(conn->hold_timer, conn->bgp->cf->initial_hold_time, 0);
 }
 
 static void
@@ -1037,7 +1040,7 @@ bgp_hold_timeout(timer *t)
      and perhaps just not processed BGP packets in time. */
 
   if (sk_rx_ready(conn->sk) > 0)
-    bgp_start_timer(conn->hold_timer, 10);
+    bgp_start_timer(conn->hold_timer, 10, 0);
   else if ((conn->state == BS_ESTABLISHED) && p->llgr_ready)
   {
     BGP_TRACE(D_EVENTS, "Hold timer expired");
@@ -1097,7 +1100,7 @@ bgp_active(struct bgp_proto *p)
   BGP_TRACE(D_EVENTS, "Connect delayed by %d seconds", delay);
   bgp_setup_conn(p, conn);
   bgp_conn_set_state(conn, BS_ACTIVE);
-  bgp_start_timer(conn->connect_timer, delay);
+  bgp_start_timer(conn->connect_timer, delay, 1);
 }
 
 /**
@@ -1145,7 +1148,7 @@ bgp_connect(struct bgp_proto *p)	/* Enter Connect state and start establishing c
       goto err;
 
   DBG("BGP: Waiting for connect success\n");
-  bgp_start_timer(conn->connect_timer, p->cf->connect_retry_time);
+  bgp_start_timer(conn->connect_timer, p->cf->connect_retry_time, 1);
   return;
 
 err:
