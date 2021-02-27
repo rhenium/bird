@@ -1,3 +1,20 @@
+bird2 (2.0.7.16-20210227-2) unstable; urgency=medium
+
+  * Based on d3782c72b924 ("Nest: Add option to control automatic RPKI reload",
+    2021-02-12).
+  * Allow trailing comma in set literals in filter.
+  * Use route replace on IPv6.
+  * Introduce 'attach_mls([<label stack>])' filter function.
+  * Allow modification of AIGP metric values, at the expense of strict
+    compliance with RFC 7311.
+  * Possibly fixed buffer overflow bug with kernel route installing
+  * Better logging in BFD protocol.
+  * Probably strict check is performed on constant expression.
+  * Allow setting BGP AGGREGATOR attribute in filter.
+  * Fix jitter application to BGP filters as specified in RFC 4271 section 10.
+
+ -- Kazuki Yamaguchi <k@rhe.jp>  Sat, 27 Feb 2021 18:15:43 +0900
+
 bird2 (2.0.7-4.1) unstable; urgency=medium
 
   * Non-maintainer upload.
