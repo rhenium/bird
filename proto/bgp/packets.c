@@ -252,6 +252,14 @@ bgp_prepare_capabilities(struct bgp_conn *conn)
   if (p->cf->llgr_mode)
     caps->llgr_aware = 1;
 
+  if (p->cf->enable_hostname && config->hostname)
+  {
+    size_t length = strlen(config->hostname);
+    char *hostname = mb_allocz(p->p.pool, length+1);
+    memcpy(hostname, config->hostname, length+1);
+    caps->hostname = hostname;
+  }
+
   /* Allocate and fill per-AF fields */
   WALK_LIST(c, p->p.channels)
   {
@@ -408,6 +416,24 @@ bgp_write_capabilities(struct bgp_conn *conn, byte *buf)
 	put_u24(buf+4, ac->llgr_time);
 	buf += 7;
       }
+
+    data[-1] = buf - data;
+  }
+
+  if (caps->hostname)
+  {
+    *buf++ = 73;                /* Capability 73: Hostname */
+    *buf++ = 0;			/* Capability data length */
+    data = buf;
+
+    /* Hostname */
+    size_t length = strlen(caps->hostname);
+    *buf++ = length;
+    memcpy(buf, caps->hostname, length);
+    buf += length;
+
+    /* Domain, not implemented */
+    *buf++ = 0;
 
     data[-1] = buf - data;
   }
@@ -572,6 +598,21 @@ bgp_read_capabilities(struct bgp_conn *conn, byte *pos, int len)
 	ac->llgr_time = get_u24(pos + 2+i+4);
       }
       break;
+
+    case 73: /* Hostname, RFC draft */
+      if ((cl < 2) || (cl < 2 + pos[2]))
+        goto err;
+
+      int length = pos[2];
+      char *hostname = mb_allocz(p->p.pool, length+1);
+      memcpy(hostname, pos + 3, length);
+      hostname[length] = 0;
+
+      for (i = 0; i < length; i++)
+        if (hostname[i] < ' ')
+          hostname[i] = ' ';
+
+      caps->hostname = hostname;
 
       /* We can safely ignore all other capabilities */
     }
@@ -1157,7 +1198,10 @@ bgp_decode_next_hop_ip(struct bgp_parse_state *s, byte *data, uint len, rta *a)
     nh[0] = ipa_from_ip6(get_ip6(data));
     nh[1] = ipa_from_ip6(get_ip6(data+16));
 
-    if (ipa_is_ip4(nh[0]) || !ip6_is_link_local(nh[1]))
+    if (ipa_is_link_local(nh[0]))
+    { nh[1] = nh[0]; nh[0] = IPA_NONE; }
+
+    if (ipa_is_ip4(nh[0]) || !ipa_is_link_local(nh[1]))
       nh[1] = IPA_NONE;
   }
   else
@@ -1824,19 +1868,15 @@ bgp_decode_nlri_flow4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
       bgp_parse_error(s, 1);
     }
 
-    if (data[0] != FLOW_TYPE_DST_PREFIX)
-    {
-      log(L_REMOTE "%s: No dst prefix at first pos", s->proto->p.name);
-      bgp_parse_error(s, 1);
-    }
+    ip4_addr px = IP4_NONE;
+    uint pxlen = 0;
 
     /* Decode dst prefix */
-    ip4_addr px = IP4_NONE;
-    uint pxlen = data[1];
-
-    // FIXME: Use some generic function
-    memcpy(&px, data+2, BYTES(pxlen));
-    px = ip4_and(ip4_ntoh(px), ip4_mkmask(pxlen));
+    if (data[0] == FLOW_TYPE_DST_PREFIX)
+    {
+      px = flow_read_ip4_part(data);
+      pxlen = flow_read_pxlen(data);
+    }
 
     /* Prepare the flow */
     net_addr *n = alloca(sizeof(struct net_addr_flow4) + flen);
@@ -1916,19 +1956,15 @@ bgp_decode_nlri_flow6(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
       bgp_parse_error(s, 1);
     }
 
-    if (data[0] != FLOW_TYPE_DST_PREFIX)
-    {
-      log(L_REMOTE "%s: No dst prefix at first pos", s->proto->p.name);
-      bgp_parse_error(s, 1);
-    }
+    ip6_addr px = IP6_NONE;
+    uint pxlen = 0;
 
     /* Decode dst prefix */
-    ip6_addr px = IP6_NONE;
-    uint pxlen = data[1];
-
-    // FIXME: Use some generic function
-    memcpy(&px, data+2, BYTES(pxlen));
-    px = ip6_and(ip6_ntoh(px), ip6_mkmask(pxlen));
+    if (data[0] == FLOW_TYPE_DST_PREFIX)
+    {
+      px = flow_read_ip6_part(data);
+      pxlen = flow_read_pxlen(data);
+    }
 
     /* Prepare the flow */
     net_addr *n = alloca(sizeof(struct net_addr_flow6) + flen);
@@ -2308,6 +2344,7 @@ again: ;
 
 done:
   BGP_TRACE_RL(&rl_snd_update, D_PACKETS, "Sending UPDATE");
+  p->stats.tx_updates++;
   lp_flush(s.pool);
 
   return res;
@@ -2343,6 +2380,7 @@ bgp_create_end_mark(struct bgp_channel *c, byte *buf)
   struct bgp_proto *p = (void *) c->c.proto;
 
   BGP_TRACE(D_PACKETS, "Sending END-OF-RIB");
+  p->stats.tx_updates++;
 
   return (c->afi == BGP_AF_IPV4) ?
     bgp_create_ip_end_mark(c, buf):
@@ -2423,6 +2461,8 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
   ea_list *ea = NULL;
 
   BGP_TRACE_RL(&rl_rcv_update, D_PACKETS, "Got UPDATE");
+  p->last_rx_update = current_time();
+  p->stats.rx_updates++;
 
   /* Workaround for some BGP implementations that skip initial KEEPALIVE */
   if (conn->state == BS_OPENCONFIRM)
@@ -2709,6 +2749,9 @@ bgp_send(struct bgp_conn *conn, uint type, uint len)
 {
   sock *sk = conn->sk;
   byte *buf = sk->tbuf;
+
+  conn->bgp->stats.tx_messages++;
+  conn->bgp->stats.tx_bytes += len;
 
   memset(buf, 0xff, 16);		/* Marker */
   put_u16(buf+16, len);
@@ -3083,6 +3126,8 @@ bgp_rx_packet(struct bgp_conn *conn, byte *pkt, uint len)
   byte type = pkt[18];
 
   DBG("BGP: Got packet %02x (%d bytes)\n", type, len);
+  conn->bgp->stats.rx_messages++;
+  conn->bgp->stats.rx_bytes += len;
 
   if (conn->bgp->p.mrtdump & MD_MESSAGES)
     bgp_dump_message(conn, pkt, len);

@@ -185,159 +185,6 @@ f_generate_empty(struct f_dynamic_attr dyn)
   return f_new_inst(FI_EA_SET, f_new_inst(FI_CONSTANT, empty), dyn);
 }
 
-#if 0
-
-static inline struct f_inst *
-f_generate_dpair(struct f_inst *t1, struct f_inst *t2)
-{
-  struct f_inst *rv;
-
-  if ((t1->fi_code == FI_CONSTANT) && (t2->fi_code == FI_CONSTANT)) {
-    if ((t1->val.type != T_INT) || (t2->val.type != T_INT))
-      cf_error( "Can't operate with value of non-integer type in pair constructor");
-
-    check_u16(t1->a[1].i);
-    check_u16(t2->a[1].i);
-
-    rv = f_new_inst(FI_CONSTANT);
-    rv->val = (struct f_val) {
-      .type = T_PAIR,
-      .val.i = pair(t1->a[1].i, t2->a[1].i),
-    };
-  }
-  else {
-    rv = f_new_inst(FI_PAIR_CONSTRUCT);
-    rv->a[0].p = t1;
-    rv->a[1].p = t2;
-  }
-
-  return rv;
-}
-
-static inline struct f_inst *
-f_generate_ec(u16 kind, struct f_inst *tk, struct f_inst *tv)
-{
-  struct f_inst *rv;
-  int c1 = 0, c2 = 0, ipv4_used = 0;
-  u32 key = 0, val2 = 0;
-
-  if (tk->fi_code == FI_CONSTANT) {
-    c1 = 1;
-    struct f_val *val = &(tk->val);
-
-    if (val->type == T_INT) {
-      ipv4_used = 0; key = val->val.i;
-    }
-    else if (tk->val.type == T_QUAD) {
-      ipv4_used = 1; key = val->val.i;
-    }
-    else if ((val->type == T_IP) && ipa_is_ip4(val->val.ip)) {
-      ipv4_used = 1; key = ipa_to_u32(val->val.ip);
-    }
-    else
-      cf_error("Can't operate with key of non-integer/IPv4 type in EC constructor");
-  }
-
-  if (tv->fi_code == FI_CONSTANT) {
-    if (tv->val.type != T_INT)
-      cf_error("Can't operate with value of non-integer type in EC constructor");
-    c2 = 1;
-    val2 = tv->val.val.i;
-  }
-
-  if (c1 && c2) {
-    u64 ec;
-
-    if (kind == EC_GENERIC) {
-      ec = ec_generic(key, val2);
-    }
-    else if (ipv4_used) {
-      check_u16(val2);
-      ec = ec_ip4(kind, key, val2);
-    }
-    else if (key < 0x10000) {
-      ec = ec_as2(kind, key, val2);
-    }
-    else {
-      check_u16(val2);
-      ec = ec_as4(kind, key, val2);
-    }
-
-    rv = f_new_inst(FI_CONSTANT);
-    rv->val = (struct f_val) {
-      .type = T_EC,
-      .val.ec = ec,
-    };
-  }
-  else {
-    rv = f_new_inst(FI_EC_CONSTRUCT);
-    rv->aux = kind;
-    rv->a[0].p = tk;
-    rv->a[1].p = tv;
-  }
-
-  return rv;
-}
-
-static inline struct f_inst *
-f_generate_lc(struct f_inst *t1, struct f_inst *t2, struct f_inst *t3)
-{
-  struct f_inst *rv;
-
-  if ((t1->fi_code == FI_CONSTANT) && (t2->fi_code == FI_CONSTANT) && (t3->fi_code == FI_CONSTANT)) {
-    if ((t1->val.type != T_INT) || (t2->val.type != T_INT) || (t3->val.type != T_INT))
-      cf_error( "LC - Can't operate with value of non-integer type in tuple constructor");
-
-    rv = f_new_inst(FI_CONSTANT);
-    rv->val = (struct f_val) {
-      .type = T_LC,
-      .val.lc = (lcomm) { t1->a[1].i, t2->a[1].i, t3->a[1].i },
-    };
-  }
-  else
-  {
-    rv = f_new_inst(FI_LC_CONSTRUCT);
-    rv->a[0].p = t1;
-    rv->a[1].p = t2;
-    rv->a[2].p = t3;
-  }
-
-  return rv;
-}
-
-static inline struct f_inst *
-f_generate_path_mask(struct f_inst *t)
-{
-  uint len = 0;
-  uint dyn = 0;
-  for (const struct f_inst *tt = t; tt; tt = tt->next) {
-    if (tt->fi_code != FI_CONSTANT)
-      dyn++;
-    len++;
-  }
-
-  if (dyn) {
-    struct f_inst *pmc = f_new_inst(FI_PATHMASK_CONSTRUCT);
-    pmc->a[0].p = t;
-    pmc->a[1].i = len;
-    return pmc;
-  }
-
-  struct f_path_mask *pm = cfg_allocz(sizeof(struct f_path_mask) + len * sizeof(struct f_path_mask_item));
-
-  uint i = 0;
-  for (const struct f_inst *tt = t; tt; tt = tt->next)
-    pm->item[i++] = tt->val.val.pmi;
-
-  pm->len = i;
-  struct f_inst *pmc = f_new_inst(FI_CONSTANT);
-  pmc->val = (struct f_val) { .type = T_PATH_MASK, .val.path_mask = pm, };
-
-  return pmc;
-}
-
-#endif
-
 /*
  * Remove all new lines and doubled whitespaces
  * and convert all tabulators to spaces
@@ -426,14 +273,14 @@ assert_assign(struct f_lval *lval, struct f_inst *expr, const char *start, const
 CF_DECLS
 
 CF_KEYWORDS(FUNCTION, PRINT, PRINTN, UNSET, RETURN,
-	ACCEPT, REJECT, ERROR, QUITBIRD,
+	ACCEPT, REJECT, ERROR,
 	INT, BOOL, IP, TYPE, PREFIX, RD, PAIR, QUAD, EC, LC,
 	SET, STRING, BGPMASK, BGPPATH, CLIST, ECLIST, LCLIST,
 	IF, THEN, ELSE, CASE,
 	TRUE, FALSE, RT, RO, UNKNOWN, GENERIC,
-	FROM, GW, NET, MASK, PROTO, SOURCE, SCOPE, DEST, IFNAME, IFINDEX,
+	FROM, GW, NET, MASK, PROTO, SOURCE, SCOPE, DEST, IFNAME, IFINDEX, WEIGHT,
 	PREFERENCE,
-	ROA_CHECK, ASN, SRC,
+	ROA_CHECK, ASN, SRC, DST,
 	IS_V4, IS_V6,
 	LEN, MAXLEN,
 	DEFINED,
@@ -775,8 +622,8 @@ fprefix:
  ;
 
 fprefix_set:
-   fprefix { $$ = f_new_trie(cfg_mem, sizeof(struct f_trie_node)); trie_add_prefix($$, &($1.net), $1.lo, $1.hi); }
- | fprefix_set ',' fprefix { $$ = $1; trie_add_prefix($$, &($3.net), $3.lo, $3.hi); }
+   fprefix { $$ = f_new_trie(cfg_mem, 0); trie_add_prefix($$, &($1.net), $1.lo, $1.hi); }
+ | fprefix_set ',' fprefix { $$ = $1; if (!trie_add_prefix($$, &($3.net), $3.lo, $3.hi)) cf_error("Mixed IPv4/IPv6 prefixes in prefix set"); }
  ;
 
 switch_body: /* EMPTY */ { $$ = NULL; }
@@ -815,6 +662,7 @@ bgp_path_tail:
  }
  | '*' bgp_path_tail		{ $$ = f_new_inst(FI_CONSTANT, (struct f_val) { .type = T_PATH_MASK_ITEM, .val.pmi = { .kind = PM_ASTERISK }, }); $$->next = $2; }
  | '?' bgp_path_tail		{ $$ = f_new_inst(FI_CONSTANT, (struct f_val) { .type = T_PATH_MASK_ITEM, .val.pmi = { .kind = PM_QUESTION }, }); $$->next = $2; }
+ | '+' bgp_path_tail 		{ $$ = f_new_inst(FI_CONSTANT, (struct f_val) { .type = T_PATH_MASK_ITEM, .val.pmi = { .kind = PM_LOOP }, }); $$->next = $2; }
  | bgp_path_expr bgp_path_tail	{ $$ = $1; $$->next = $2; }
  | 				{ $$ = NULL; }
  ;
@@ -902,6 +750,7 @@ static_attr:
  | DEST    { $$ = f_new_static_attr(T_ENUM_RTD,   SA_DEST,	0); }
  | IFNAME  { $$ = f_new_static_attr(T_STRING,     SA_IFNAME,	0); }
  | IFINDEX { $$ = f_new_static_attr(T_INT,        SA_IFINDEX,	1); }
+ | WEIGHT  { $$ = f_new_static_attr(T_INT,        SA_WEIGHT,	0); }
  ;
 
 term:
@@ -940,7 +789,8 @@ term:
  | term '.' LEN { $$ = f_new_inst(FI_LENGTH, $1); }
  | term '.' MAXLEN { $$ = f_new_inst(FI_ROA_MAXLEN, $1); }
  | term '.' ASN { $$ = f_new_inst(FI_ROA_ASN, $1); }
- | term '.' SRC { $$ = f_new_inst(FI_SADR_SRC, $1); }
+ | term '.' SRC { $$ = f_new_inst(FI_NET_SRC, $1); }
+ | term '.' DST { $$ = f_new_inst(FI_NET_DST, $1); }
  | term '.' MASK '(' term ')' { $$ = f_new_inst(FI_IP_MASK, $1, $5); }
  | term '.' FIRST { $$ = f_new_inst(FI_AS_PATH_FIRST, $1); }
  | term '.' LAST  { $$ = f_new_inst(FI_AS_PATH_LAST, $1); }
@@ -974,8 +824,7 @@ term:
  ;
 
 break_command:
-   QUITBIRD { $$ = F_QUITBIRD; }
- | ACCEPT { $$ = F_ACCEPT; }
+   ACCEPT { $$ = F_ACCEPT; }
  | REJECT { $$ = F_REJECT; }
  | ERROR { $$ = F_ERROR; }
  ;

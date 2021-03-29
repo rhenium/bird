@@ -38,6 +38,7 @@ enum f_type {
   T_ENUM_ROA = 0x35,
   T_ENUM_NETTYPE = 0x36,
   T_ENUM_RA_PREFERENCE = 0x37,
+  T_ENUM_AF = 0x38,
 
 /* new enums go here */
   T_ENUM_EMPTY = 0x3f,	/* Special hack for atomic_aggr */
@@ -71,7 +72,7 @@ struct f_val {
     lcomm lc;
     ip_addr ip;
     const net_addr *net;
-    char *s;
+    const char *s;
     const struct f_tree *t;
     const struct f_trie *ti;
     const struct adata *ad;
@@ -98,6 +99,7 @@ enum f_sa_code {
   SA_DEST,
   SA_IFNAME,
   SA_IFINDEX,
+  SA_WEIGHT,
 } PACKED;
 
 /* Static attribute definition (members of struct rta) */
@@ -137,19 +139,35 @@ struct f_tree {
   void *data;
 };
 
+struct f_trie_node4
+{
+  ip4_addr addr, mask, accept;
+  uint plen;
+  struct f_trie_node4 *c[2];
+};
+
+struct f_trie_node6
+{
+  ip6_addr addr, mask, accept;
+  uint plen;
+  struct f_trie_node6 *c[2];
+};
+
 struct f_trie_node
 {
-  ip_addr addr, mask, accept;
-  uint plen;
-  struct f_trie_node *c[2];
+  union {
+    struct f_trie_node4 v4;
+    struct f_trie_node6 v6;
+  };
 };
 
 struct f_trie
 {
   linpool *lp;
-  int zero;
-  uint node_size;
-  struct f_trie_node root[0];		/* Root trie node follows */
+  u8 zero;
+  s8 ipv4;				/* -1 for undefined / empty */
+  u16 data_size;			/* Additional data for each trie node */
+  struct f_trie_node root;		/* Root trie node */
 };
 
 struct f_tree *f_new_tree(void);
@@ -157,14 +175,17 @@ struct f_tree *build_tree(struct f_tree *);
 const struct f_tree *find_tree(const struct f_tree *t, const struct f_val *val);
 int same_tree(const struct f_tree *t0, const struct f_tree *t2);
 void tree_format(const struct f_tree *t, buffer *buf);
+void tree_walk(const struct f_tree *t, void (*hook)(const struct f_tree *, void *), void *data);
 
-struct f_trie *f_new_trie(linpool *lp, uint node_size);
+struct f_trie *f_new_trie(linpool *lp, uint data_size);
 void *trie_add_prefix(struct f_trie *t, const net_addr *n, uint l, uint h);
 int trie_match_net(const struct f_trie *t, const net_addr *n);
 int trie_same(const struct f_trie *t1, const struct f_trie *t2);
 void trie_format(const struct f_trie *t, buffer *buf);
 
 #define F_CMP_ERROR 999
+
+const char *f_type_name(enum f_type t);
 
 int val_same(const struct f_val *v1, const struct f_val *v2);
 int val_compare(const struct f_val *v1, const struct f_val *v2);

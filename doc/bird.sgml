@@ -504,8 +504,14 @@ include "tablename.conf";;
 	command-line option.
 
 	<tag><label id="opt-debug-protocols">debug protocols all|off|{ states|routes|filters|interfaces|events|packets [, <m/.../] }</tag>
-	Set global defaults of protocol debugging options. See <cf/debug/ in the
-	following section. Default: off.
+	Set global defaults of protocol debugging options.
+	See <ref id="proto-debug" name="debug"> in the following section.
+	Default: off.
+
+	<tag><label id="opt-debug-channels">debug channels all|off|{ states|routes|filters|events [, <m/.../] }</tag>
+	Set global defaults of channel debugging options.
+	See <ref id="channel-debug" name="debug"> in the channel section.
+	Default: off.
 
 	<tag><label id="opt-debug-commands">debug commands <m/number/</tag>
 	Control logging of client connections (0 for no logging, 1 for logging
@@ -585,6 +591,9 @@ include "tablename.conf";;
 	See <ref id="proto-iface" name="interface"> section for detailed
 	description of interface patterns with extended clauses.
 
+	<tag><label id="opt-hostname">hostname "<m/name/"</tag>
+	Set hostname. Default: node name as returned by `uname -n'.
+
 	<tag><label id="opt-graceful-restart">graceful restart wait <m/number/</tag>
 	During graceful restart recovery, BIRD waits for convergence of routing
 	protocols. This option allows to specify a timeout for the recovery to
@@ -654,12 +663,14 @@ agreement").
 	Set protocol debugging options. If asked, each protocol is capable of
 	writing trace messages about its work to the log (with category
 	<cf/trace/). You can either request printing of <cf/all/ trace messages
-	or only of the types selected: <cf/states/ for protocol state changes
+	or only of the selected types: <cf/states/ for protocol state changes
 	(protocol going up, down, starting, stopping etc.), <cf/routes/ for
 	routes exchanged with the routing table, <cf/filters/ for details on
-	route filtering, <cf/interfaces/ for interface change events sent to the
-	protocol, <cf/events/ for events internal to the protocol and <cf/packets/
-	for packets sent and received by the protocol. Default: off.
+	route filtering, <cf/interfaces/ for interface change events sent to
+	the protocol, <cf/events/ for events internal to the protocol and
+	<cf/packets/ for packets sent and received by the protocol. Classes
+	<cf/routes/ and <cf/filters/ can be also set per-channel using
+	<ref id="channel-debug" name="channel debugging option">) Default: off.
 
 	<tag><label id="proto-mrtdump">mrtdump all|off|{ states|messages [, <m/.../] }</tag>
 	Set protocol MRTdump flags. MRTdump is a standard binary format for
@@ -783,11 +794,12 @@ agreement").
 
 <descrip>
 	<tag><label id="proto-pass-id">id <M>num</M></tag>
-	ID of the password, (1-255). If it is not used, BIRD will choose ID based
-	on an order of the password item in the interface. For example, second
-	password item in one interface will have default ID 2. ID is used by
-	some routing protocols to identify which password was used to
-	authenticate protocol packets.
+	ID of the password, (0-255). If it is not specified, BIRD will choose ID
+	based on an order of the password item in the interface, starting from
+	1. For example, second password item in one interface will have default
+	ID 2. ID 0 is allowed by BIRD, but some other implementations may not
+	allow it. ID is used by some routing protocols to identify which
+	password was used to authenticate protocol packets.
 
 	<tag><label id="proto-pass-gen-from">generate from "<m/time/"</tag>
 	The start time of the usage of the password for packet signing.
@@ -827,6 +839,16 @@ templates. Multiple definitions of the same channel are forbidden, but channels
 inherited from templates can be updated by new definitions.
 
 <descrip>
+	<tag><label id="channel-debug">debug all|off|{ states|routes|filters [, <m/.../] }</tag>
+	Set channel debugging options. Like in <ref id="proto-debug"
+	name="protocol debugging">, channels are capable of writing trace
+	messages about its work to the log (with category <cf/trace/). You can
+	either request printing of <cf/all/ trace messages or only of the
+	selected types: <cf/states/ for channel state changes (channel going up,
+	down, feeding, reloading etc.), <cf/routes/ for routes propagated
+	through the channel, <cf/filters/ for details on route filtering,
+	remaining debug flags are not used in channel debug. Default: off.
+
 	<tag><label id="proto-table">table <m/name/</tag>
 	Specify a table to which the channel is connected. Default: the first
 	table of given nettype.
@@ -852,6 +874,19 @@ inherited from templates can be updated by new definitions.
 	but they are hidden and not propagated to other protocols. But it is
 	possible to show them using <cf/show route filtered/. Note that this
 	option does not work for the pipe protocol. Default: off.
+
+	<tag><label id="proto-rpki-reload">rpki reload <m/switch/</tag>
+	Import or export filters may depend on route RPKI status (using
+	<cf/roa_check()/ operator). In contrast to to other filter operators,
+	this status for the same route may change as the content of ROA tables
+	changes. When this option is active, BIRD activates automatic reload of
+	affected channels whenever ROA tables are updated (after a short settle
+	time). When disabled, route reloads have to be requested manually. The
+	option is ignored if <cf/roa_check()/ is not used in channel filters.
+	Note that for BGP channels, automatic reload requires
+	<ref id="bgp-import-table" name="import table"> or
+	<ref id="bgp-export-table" name="export table"> (for respective
+	direction). Default: on.
 
 	<tag><label id="proto-import-limit">import limit [<m/number/ | off ] [action warn | block | restart | disable]</tag>
 	Specify an import route limit (a maximum number of routes imported from
@@ -1271,7 +1306,7 @@ in the foot).
 	<tag><label id="type-ip">ip</tag>
 	This type can hold a single IP address. The IPv4 addresses are stored as
 	IPv4-Mapped IPv6 addresses so one data type for both of them is used.
-	Whether the address is IPv4 or not may be checked by <cf>.is_ip4</cf>
+	Whether the address is IPv4 or not may be checked by <cf>.is_v4</cf>
 	which returns a <cf/bool/. IP addresses are written in the standard
 	notation (<cf/10.20.30.40/ or <cf/fec0:3:4::1/). You can apply special
 	operator <cf>.mask(<M>num</M>)</cf> on values of type ip. It masks out
@@ -1295,7 +1330,9 @@ in the foot).
 	prefix. The literals are written as <cf><m/ipaddress//<m/pxlen/ from
 	<m/ipaddress//<m/pxlen/</cf>, where the first part is the destination
 	prefix and the second art is the source prefix. They support the same
-	operators as IP prefixes, but just for the destination part.
+	operators as IP prefixes, but just for the destination part. They also
+	support <cf/.src/ and <cf/.dst/ operators to get respective parts of the
+	address as separate <cf/NET_IP6/ values.
 
 	<cf/NET_VPN4/ and <cf/NET_VPN6/ prefixes hold an IP prefix with VPN
 	Route Distinguisher (<rfc id="4364">). They support the same special
@@ -1309,7 +1346,9 @@ in the foot).
 	and <cf/.asn/ which extracts the ASN.
 
 	<cf/NET_FLOW4/ and <cf/NET_FLOW6/ hold an IP prefix together with a
-	flowspec rule. Filters currently don't support flowspec parsing.
+	flowspec rule. Filters currently do not support much flowspec parsing,
+	only <cf/.src/ and <cf/.dst/ operators to get source and destination
+	parts of the flowspec as separate <cf/NET_IP4/ / <cf/NET_IP6/ values.
 
 	<cf/NET_MPLS/ holds a single MPLS label and its handling is currently
 	not implemented.
@@ -1415,9 +1454,10 @@ in the foot).
 	<cf>192.168.0.0/16{16,24}</cf> and <cf>192.168.0.0/16 ge 24</cf> as
 	<cf>192.168.0.0/16{24,32}</cf>.
 
-	It is possible to mix IPv4 and IPv6 prefixes/addresses in a prefix/ip set
-	but its behavior may change between versions without any warning; don't do
-	it unless you are more than sure what you are doing. (Really, don't do it.)
+	It is not possible to mix IPv4 and IPv6 prefixes in a prefix set. It is
+	currently possible to mix IPv4 and IPv6 addresses in an ip set, but that
+	behavior may change between versions without any warning; don't do it
+	unless you are more than sure what you are doing. (Really, don't do it.)
 
 	<tag><label id="type-enum">enum</tag>
 	Enumeration types are fixed sets of possibilities. You can't define your
@@ -1466,11 +1506,16 @@ in the foot).
 	<cf/*/ matches any (even empty) sequence of arbitrary AS numbers and
 	<cf/?/ matches one arbitrary AS number. For example, if <cf>bgp_path</cf>
  	is 4 3 2 1, then: <tt>bgp_path &tilde; [= * 4 3 * =]</tt> is true,
-	but <tt>bgp_path &tilde; [= * 4 5 * =]</tt> is false. BGP mask
-	expressions can also contain integer expressions enclosed in parenthesis
-	and integer variables, for example <tt>[= * 4 (1+2) a =]</tt>. You can
-	also use ranges (e.g. <tt>[= * 3..5 2 100..200 * =]</tt>) and sets
-	(e.g. <tt>[= 1 2 [3, 5, 7] * =]</tt>).
+	but <tt>bgp_path &tilde; [= * 4 5 * =]</tt> is false. There is also
+	<cf/+/ operator which matches one or multiple instances of previous
+	expression, e.g. <tt>[= 1 2+ 3 =]</tt> matches both path 1 2 3 and path
+	1 2 2 2 3, but not 1 3 nor 1 2 4 3. Note that while <cf/*/ and <cf/?/
+	are wildcard-style operators, <cf/+/ is regex-style operator.
+
+	BGP mask expressions can also contain integer expressions enclosed in
+	parenthesis and integer variables, for example <tt>[= * 4 (1+2) a =]</tt>.
+	You can also use ranges (e.g. <tt>[= * 3..5 2 100..200 * =]</tt>)
+	and sets (e.g. <tt>[= 1 2 [3, 5, 7] * =]</tt>).
 
 	<tag><label id="type-clist">clist</tag>
 	Clist is similar to a set, except that unlike other sets, it can be
@@ -1636,9 +1681,8 @@ Common route attributes are:
 	<tag><label id="rta-source"><m/enum/ source</tag>
 	what protocol has told me about this route. Possible values:
 	<cf/RTS_DUMMY/, <cf/RTS_STATIC/, <cf/RTS_INHERIT/, <cf/RTS_DEVICE/,
-	<cf/RTS_STATIC_DEVICE/, <cf/RTS_REDIRECT/, <cf/RTS_RIP/, <cf/RTS_OSPF/,
-	<cf/RTS_OSPF_IA/, <cf/RTS_OSPF_EXT1/, <cf/RTS_OSPF_EXT2/, <cf/RTS_BGP/,
-	<cf/RTS_PIPE/, <cf/RTS_BABEL/.
+	<cf/RTS_RIP/, <cf/RTS_OSPF/, <cf/RTS_OSPF_IA/, <cf/RTS_OSPF_EXT1/,
+	<cf/RTS_OSPF_EXT2/, <cf/RTS_BGP/, <cf/RTS_PIPE/, <cf/RTS_BABEL/.
 
 	<tag><label id="rta-dest"><m/enum/ dest</tag>
 	Type of destination the packets should be sent to
@@ -1662,6 +1706,15 @@ Common route attributes are:
 	be used for interface matching, however indexes might change on interface
 	creation/removal. Zero is returned for routes with undefined outgoing
 	interfaces. Read-only.
+
+	<tag><label id="rta-weight"><m/int/ weight</tag>
+	Multipath weight of route next hops. Valid values are 1-256. Reading
+	returns the weight of the first next hop, setting it sets weights of all
+	next hops to the specified value. Therefore, this attribute is not much
+	useful for manipulating individual next hops of an ECMP route, but can
+	be used in BGP multipath setup to set weights of individual routes that
+	are merged to one ECMP route during export to the Kernel protocol
+	(with active <ref id="krt-merge-paths" name="marge paths"> option).
 
 	<tag><label id="rta-igp-metric"><m/int/ igp_metric</tag>
 	The optional attribute that can be used to specify a distance to the
@@ -1693,9 +1746,6 @@ protocol sections.
 	<tag><label id="print">print|printn <m/expr/ [<m/, expr.../]</tag>
 	Prints given expressions; useful mainly while debugging filters. The
 	<cf/printn/ variant does not terminate the line.
-
-	<tag><label id="quitbird">quitbird</tag>
-	Terminates BIRD. Useful when debugging the filter interpreter.
 </descrip>
 
 
@@ -1935,6 +1985,8 @@ configuration is often sufficient.
 
 <p>Note that to use BFD for other protocols like OSPF or BGP, these protocols
 also have to be configured to request BFD sessions, usually by <cf/bfd/ option.
+In BGP case, it is also possible to specify per-peer BFD session options (e.g.
+rx/tx intervals) as a part of the <cf/bfd/ option.
 
 <p>A BFD instance not associated with any VRF handles session requests from all
 other protocols, even ones associated with a VRF. Such setup would work for
@@ -1951,6 +2003,7 @@ milliseconds.
 
 <code>
 protocol bfd [&lt;name&gt;] {
+	accept [ipv4|ipv6] [direct|multihop];
 	interface &lt;interface pattern&gt; {
 		interval &lt;time&gt;;
 		min rx interval &lt;time&gt;;
@@ -1985,6 +2038,14 @@ protocol bfd [&lt;name&gt;] {
 </code>
 
 <descrip>
+	<tag><label id="bfd-accept">accept [ipv4|ipv6] [direct|multihop]</tag>
+	A BFD protocol instance accepts (by default) all BFD session requests
+	(with regard to VRF restrictions, see above). This option controls
+	whether IPv4 / IPv6 and direct / multihop session requests are accepted
+	(and which listening sockets are opened). It can be used, for example,
+	to configure separate BFD protocol instances for IPv4 and for IPv6
+	sessions.
+
 	<tag><label id="bfd-iface">interface <m/pattern/ [, <m/.../] { <m/options/ }</tag>
 	Interface definitions allow to specify options for sessions associated
 	with such interfaces and also may contain interface specific options.
@@ -2298,14 +2359,17 @@ using the following configuration parameters:
 	immediately shut down. Note that this option cannot be used with
 	multihop BGP. Default: enabled for direct BGP, disabled otherwise.
 
-	<tag><label id="bgp-bfd">bfd <M>switch</M>|graceful</tag>
+	<tag><label id="bgp-bfd">bfd <M>switch</M>|graceful| { <m/options/ }</tag>
 	BGP could use BFD protocol as an advisory mechanism for neighbor
 	liveness and failure detection. If enabled, BIRD setups a BFD session
 	for the BGP neighbor and tracks its liveness by it. This has an
 	advantage of an order of magnitude lower detection times in case of
 	failure. When a neighbor failure is detected, the BGP session is
 	restarted. Optionally, it can be configured (by <cf/graceful/ argument)
-	to trigger graceful restart instead of regular restart. Note that BFD
+	to trigger graceful restart instead of regular restart. It is also
+	possible to specify section with per-peer BFD session options instead of
+	just switch argument. Most BFD session specific options are allowed here
+	with the exception of authentication options. here Note that BFD
 	protocol also has to be configured, see <ref id="bfd" name="BFD">
 	section for details. Default: disabled.
 
@@ -2395,6 +2459,25 @@ using the following configuration parameters:
 	completely disabled and you should ensure loop-free behavior by some
 	other means. Default: 0 (no local AS number allowed).
 
+	<tag><label id="bgp-allow-as-sets">allow as sets [<m/switch/]</tag>
+	AS path attribute received with BGP routes may contain not only
+	sequences of AS numbers, but also sets of AS numbers. These rarely used
+	artifacts are results of inter-AS route aggregation. AS sets are
+	deprecated (<rfc id="6472">), and likely to be rejected in the future,
+	as they complicate security features like RPKI validation. When this
+	option is disabled, then received AS paths with AS sets are rejected as
+	malformed and corresponding BGP updates are treated as withdraws.
+	Default: on.
+
+	<tag><label id="bgp-enforce-first-as">enforce first as [<m/switch/]</tag>
+	Routes received from an EBGP neighbor are generally expected to have the
+	first (leftmost) AS number in their AS path equal to the neighbor AS
+	number. This is not enforced by default as there are legitimate cases
+	where it is not true, e.g. connections to route servers. When this
+	option is enabled, routes with non-matching first AS number are rejected
+	and corresponding updates are treated as withdraws. The option is valid
+	on EBGP sessions only. Default: off.
+
 	<tag><label id="bgp-enable-route-refresh">enable route refresh <m/switch/</tag>
 	After the initial route exchange, BGP protocol uses incremental updates
 	to keep BGP speakers synchronized. Sometimes (e.g., if BGP speaker
@@ -2469,8 +2552,8 @@ using the following configuration parameters:
 
 	<tag><label id="bgp-enable-extended-messages">enable extended messages <m/switch/</tag>
 	The BGP protocol uses maximum message length of 4096 bytes. This option
-	provides an extension to allow extended messages with length up
-	to 65535 bytes. Default: off.
+	provides an extension (<rfc id="8654">) to allow extended messages with
+	length up to 65535 bytes. Default: off.
 
 	<tag><label id="bgp-capabilities">capabilities <m/switch/</tag>
 	Use capability advertisement to advertise optional capabilities. This is
@@ -2486,6 +2569,9 @@ using the following configuration parameters:
 	widespread and required by some BGP implementations (Cisco and Quagga).
 	This option is relevant to IPv4 mode with enabled capability
 	advertisement only. Default: on.
+
+	<tag><label id="bgp-advertise-hostname">advertise hostname <m/switch/</tag>
+	Advertise hostname capability along with the hostname. Default: off.
 
 	<tag><label id="bgp-disable-after-error">disable after error <m/switch/</tag>
 	When an error is encountered (either locally or by the other side),
@@ -2655,30 +2741,15 @@ be used in explicit configuration.
 	BGP session (if acceptable), or the preferred address of an associated
 	interface.
 
-	<tag><label id="bgp-missing-lladdr">missing lladdr self|drop|ignore</tag>
-	Next Hop attribute in BGP-IPv6 sometimes contains just the global IPv6
-	address, but sometimes it has to contain both global and link-local IPv6
-	addresses. This option specifies what to do if BIRD have to send both
-	addresses but does not know link-local address. This situation might
-	happen when routes from other protocols are exported to BGP, or when
-	improper updates are received from BGP peers. <cf/self/ means that BIRD
-	advertises its own local address instead. <cf/drop/ means that BIRD
-	skips that prefixes and logs error. <cf/ignore/ means that BIRD ignores
-	the problem and sends just the global address (and therefore forms
-	improper BGP update). Default: <cf/self/, unless BIRD is configured as a
-	route server (option <cf/rs client/), in that case default is <cf/ignore/,
-	because route servers usually do not forward packets themselves.
-
 	<tag><label id="bgp-gateway">gateway direct|recursive</tag>
 	For received routes, their <cf/gw/ (immediate next hop) attribute is
 	computed from received <cf/bgp_next_hop/ attribute. This option
 	specifies how it is computed. Direct mode means that the IP address from
-	<cf/bgp_next_hop/ is used if it is directly reachable, otherwise the
-	neighbor IP address is used. Recursive mode means that the gateway is
-	computed by an IGP routing table lookup for the IP address from
-	<cf/bgp_next_hop/. Note that there is just one level of indirection in
-	recursive mode - the route obtained by the lookup must not be recursive
-	itself, to prevent mutually recursive routes.
+	<cf/bgp_next_hop/ is used and must be directly reachable. Recursive mode
+	means that the gateway is computed by an IGP routing table lookup for
+	the IP address from <cf/bgp_next_hop/. Note that there is just one level
+	of indirection in recursive mode - the route obtained by the lookup must
+	not be recursive itself, to prevent mutually recursive routes.
 
 	Recursive mode is the behavior specified by the BGP
 	standard. Direct mode is simpler, does not require any routes in a
@@ -3358,18 +3429,18 @@ protocol ospf [v2|v3] &lt;name&gt; {
                 networks {
 			&lt;prefix&gt;;
 			&lt;prefix&gt; hidden;
-		}
+		};
                 external {
 			&lt;prefix&gt;;
 			&lt;prefix&gt; hidden;
 			&lt;prefix&gt; tag &lt;num&gt;;
-		}
+		};
 		stubnet &lt;prefix&gt;;
 		stubnet &lt;prefix&gt; {
 			hidden &lt;switch&gt;;
 			summary &lt;switch&gt;;
 			cost &lt;num&gt;;
-		}
+		};
 		interface &lt;interface pattern&gt; [instance &lt;num&gt;] {
 			cost &lt;num&gt;;
 			stub &lt;switch&gt;;
@@ -3389,6 +3460,7 @@ protocol ospf [v2|v3] &lt;name&gt; {
 			strict nonbroadcast &lt;switch&gt;;
 			real broadcast &lt;switch&gt;;
 			ptp netmask &lt;switch&gt;;
+			ptp address &lt;switch&gt;;
 			check link &lt;switch&gt;;
 			bfd &lt;switch&gt;;
 			ecmp weight &lt;num&gt;;
@@ -3725,11 +3797,28 @@ protocol ospf [v2|v3] &lt;name&gt; {
 	In <cf/type ptp/ network configurations, OSPFv2 implementations should
 	ignore received netmask field in hello packets and should send hello
 	packets with zero netmask field on unnumbered PtP links. But some OSPFv2
-	implementations perform netmask checking even for PtP links. This option
-	specifies whether real netmask will be used in hello packets on <cf/type
- 	ptp/ interfaces. You should ignore this option unless you meet some
-	compatibility problems related to this issue. Default value is no for
-	unnumbered PtP links, yes otherwise.
+	implementations perform netmask checking even for PtP links.
+
+	This option specifies whether real netmask will be used in hello packets
+	on <cf/type ptp/ interfaces. You should ignore this option unless you
+	meet some compatibility problems related to this issue. Default value is
+	no for unnumbered PtP links, yes otherwise.
+
+	<tag><label id="ospf-ptp-address">ptp address <m/switch/</tag>
+	In <cf/type ptp/ network configurations, OSPFv2 implementations should
+	use IP address for regular PtP links and interface id for unnumbered PtP
+	links in data field of link description records in router LSA. This data
+	field has only local meaning for PtP links, but some broken OSPFv2
+	implementations assume there is an IP address and use it as a next hop
+	in SPF calculations. Note that interface id for unnumbered PtP links is
+	necessary when graceful restart is enabled to distinguish PtP links with
+	the same local IP address.
+
+	This option specifies whether an IP address will be used in data field
+	for <cf/type ptp/ interfaces, it is ignored for other interfaces. You
+	should ignore this option unless you meet some compatibility problems
+	related to this issue. Default value is no for unnumbered PtP links when
+	graceful restart is enabled, yes otherwise.
 
 	<tag><label id="ospf-check-link">check link <M>switch</M></tag>
 	If set, a hardware link state (reported by OS) is taken into consideration.
@@ -3876,7 +3965,7 @@ protocol ospf MyOSPF {
 		networks {
 			172.16.1.0/24;
 			172.16.2.0/24 hidden;
-		}
+		};
 		interface "-arc0" , "arc*" {
 			type nonbroadcast;
 			authentication none;
@@ -4409,7 +4498,8 @@ you can't use RIP on networks where maximal distance is higher than 15
 hosts.
 
 <p>BIRD supports RIPv1 (<rfc id="1058">), RIPv2 (<rfc id="2453">), RIPng (<rfc
-id="2080">), and RIP cryptographic authentication (<rfc id="4822">).
+id="2080">), Triggered RIP for demand circuits (<rfc id="2091">), and RIP
+cryptographic authentication (<rfc id="4822">).
 
 <p>RIP is a very simple protocol, and it has a lot of shortcomings. Slow
 convergence, big network load and inability to handle larger networks makes it
@@ -4439,6 +4529,7 @@ protocol rip [ng] [&lt;name&gt;] {
 		version 1|2;
 		split horizon &lt;switch&gt;;
 		poison reverse &lt;switch&gt;;
+		demand circuit &lt;switch&gt;;
 		check zero &lt;switch&gt;;
 		update time &lt;number&gt;;
 		timeout time &lt;number&gt;;
@@ -4542,6 +4633,16 @@ protocol rip [ng] [&lt;name&gt;] {
 	reverse variant (propagating routes back with an infinity metric) is
 	used. The poisoned reverse has some advantages in faster convergence,
 	but uses more network traffic. Default: yes.
+
+	<tag><label id="rip-iface-demand-circuit">demand circuit <m/switch/</tag>
+	Regular RIP sends periodic full updates on an interface. There is the
+	Triggered RIP extension for demand circuits (<rfc id="2091">), which
+	removes periodic updates and introduces update acknowledgments. When
+	enabled, there is no RIP communication in steady-state network. Note
+	that in order to work, it must be enabled on both sides. As there are
+	no hello packets, it depends on hardware link state to detect neighbor
+	failures. Also, it is designed for PtP links and it does not work
+	properly with multiple RIP neighbors on an interface. Default: no.
 
 	<tag><label id="rip-iface-check-zero">check zero <m/switch/</tag>
 	Received RIPv1 packets with non-zero values in reserved fields should
@@ -4673,21 +4774,21 @@ protocol rip {
 <sect1>Introduction
 
 <p>The Resource Public Key Infrastructure (RPKI) is mechanism for origin
-validation of BGP routes (RFC 6480). BIRD supports only so-called RPKI-based
-origin validation. There is implemented RPKI to Router (RPKI-RTR) protocol (RFC
-6810). It uses some of the RPKI data to allow a router to verify that the
-autonomous system announcing an IP address prefix is in fact authorized to do
-so. This is not crypto checked so can be violated. But it should prevent the
-vast majority of accidental hijackings on the Internet today, e.g. the famous
-Pakastani accidental announcement of YouTube's address space.
+validation of BGP routes (<rfc id="6480">). BIRD supports only so-called
+RPKI-based origin validation. There is implemented RPKI to Router (RPKI-RTR)
+protocol (<rfc id="6810">). It uses some of the RPKI data to allow a router to
+verify that the autonomous system announcing an IP address prefix is in fact
+authorized to do so. This is not crypto checked so can be violated. But it
+should prevent the vast majority of accidental hijackings on the Internet today,
+e.g. the famous Pakistani accidental announcement of YouTube's address space.
 
 <p>The RPKI-RTR protocol receives and maintains a set of ROAs from a cache
-server (also called validator). You can validate routes (RFC 6483) using
-function <cf/roa_check()/ in filter and set it as import filter at the BGP
-protocol. BIRD should re-validate all of affected routes after RPKI update by
-RFC 6811, but we don't support it yet! You can use a BIRD's client command
-<cf>reload in <m/bgp_protocol_name/</cf> for manual call of revalidation of all
-routes.
+server (also called validator). You can validate routes (<rfc id="6483">,
+<rfc id="6811">) using function <cf/roa_check()/ in filter and set it as import
+filter at the BGP protocol. BIRD offers crude automatic re-validating of
+affected routes after RPKI update, see option <ref id="proto-rpki-reload"
+name="rpki reload">. Or you can use a BIRD client command <cf>reload in
+<m/bgp_protocol_name/</cf> for manual call of revalidation of all routes.
 
 <sect1>Supported transports
 <p>
@@ -4760,6 +4861,11 @@ specify both channels.
         minutes) to 172800 seconds (two days).  A keyword <cf/keep/
         suppresses updating this value by a cache server.
         Default: 7200 seconds
+
+	<tag>ignore max length <m/switch/</tag>
+	Ignore received max length in ROA records and use max value (32 or 128)
+	instead. This may be useful for implementing loose RPKI check for
+	blackholes. Default: disabled.
 
         <tag>transport tcp</tag> Unprotected transport over TCP. It's a default
         transport. Should be used only on secure private networks.
@@ -4863,8 +4969,15 @@ default route to prevent routing loops).
 
 <p>There are three classes of definitions in Static protocol configuration --
 global options, static route definitions, and per-route options. Usually, the
-definition of the protocol contains mainly a list of static routes.
-Static routes have no specific attributes.
+definition of the protocol contains mainly a list of static routes. Static
+routes have no specific attributes, but <ref id="rta-igp-metric" name="igp_metric">
+attribute is used to compare static routes with the same preference.
+
+<p>The list of static routes may contain multiple routes for the same network
+(usually, but not necessary, distinquished by <cf/preference/ or <cf/igp_metric/),
+but only routes of the same network type are allowed, as the static protocol
+has just one channel. E.g., to have both IPv4 and IPv6 static routes, define two
+static protocols, each with appropriate routes and channel.
 
 <p>Global options:
 
@@ -4889,8 +5002,8 @@ Static routes have no specific attributes.
 <ref id="type-prefix" name="dependent on network type">.
 
 <descrip>
-	<tag>route <m/prefix/ via <m/ip/|<m/"interface"/ [mpls <m/num/[/<m/num/[/<m/num/[...]]]]</tag>
-	Next hop routes may bear one or more <ref id="route-next-hop" name="next hops">.
+	<tag>route <m/prefix/ via <m/ip/|<m/"interface"/ [<m/per-nexthop options/] [via ...]</tag>
+	Regular routes may bear one or more <ref id="route-next-hop" name="next hops">.
 	Every next hop is preceded by <cf/via/ and configured as shown.
 
 	<tag>route <m/prefix/ recursive <m/ip/ [mpls <m/num/[/<m/num/[/<m/num/[...]]]]</tag>
@@ -4908,6 +5021,46 @@ Static routes have no specific attributes.
 the next hop of the route is not a neighbor at the moment), Static just
 uninstalls the route from the table it is connected to and adds it again as soon
 as the destination becomes adjacent again.
+
+<sect2>Per-nexthop options
+
+<p>There are several options that in a case of multipath route are per-nexthop
+(i.e., they can be used multiple times for a route, one time for each nexthop).
+Syntactically, they are not separate options but just parts of <cf/route/
+statement after each <cf/via/ statement, not separated by semicolons. E.g.,
+statement <cf/route 10.0.0.0/8 via 192.0.2.1 bfd weight 1 via 192.0.2.2 weight
+2;/ describes a route with two nexthops, the first nexthop has two per-nexthop
+options (<cf/bfd/ and <cf/weight 1/), the second nexthop has just <cf/weight 2/.
+
+<descrip>
+	<tag><label id="static-route-bfd">bfd <m/switch/</tag>
+	The Static protocol could use BFD protocol for next hop liveness
+	detection. If enabled, a BFD session to the route next hop is created
+	and the static route is BFD-controlled -- the static route is announced
+	only if the next hop liveness is confirmed by BFD. If the BFD session
+	fails, the static route (or just the affected nexthop from multiple
+	ones) is removed. Note that this is a bit different compared to other
+	protocols, which may use BFD as an advisory mechanism for fast failure
+	detection but ignore it if a BFD session is not even established. Note
+	that BFD protocol also has to be configured, see <ref id="bfd" name="BFD">
+	section for details. Default value is no.
+
+	<tag><label id="static-route-mpls">mpls <m/num/[/<m/num/[/<m/num/[...]]]</tag>
+	MPLS labels that should be pushed to packets forwarded by the route.
+	The option could be used for both IP routes (on MPLS ingress routers)
+	and MPLS switching rules (on MPLS transit routers). Default value is
+	no labels.
+
+	<tag><label id="static-route-onlink">onlink <m/switch/</tag>
+	Onlink flag means that the specified nexthop is accessible on the
+	(specified) interface regardless of IP prefixes of the interface. The
+	interface must be attached to nexthop IP address using link-local-scope
+	format (e.g. <cf/192.0.2.1%eth0/). Default value is no.
+
+	<tag><label id="static-route-weight">weight <m/switch/</tag>
+	For multipath routes, this value specifies a relative weight of the
+	nexthop. Allowed values are 1-256. Default value is 1.
+</descrip>
 
 <sect1>Route Origin Authorization
 
@@ -5047,21 +5200,6 @@ protocol static {
 <sect1>Per-route options
 <p>
 <descrip>
-	<tag><label id="static-route-bfd">bfd <m/switch/</tag>
-	The Static protocol could use BFD protocol for next hop liveness
-	detection. If enabled, a BFD session to the route next hop is created
-	and the static route is BFD-controlled -- the static route is announced
-	only if the next hop liveness is confirmed by BFD. If the BFD session
-	fails, the static route is removed. Note that this is a bit different
-	compared to other protocols, which may use BFD as an advisory mechanism
-	for fast failure detection but ignores it if a BFD session is not even
-	established.
-
-	This option can be used for static routes with a direct next hop, or
-	also for for individual next hops in a static multipath route (see
-	above). Note that BFD protocol also has to be configured, see
-	<ref id="bfd" name="BFD"> section for details. Default value is no.
-
 	<tag><label id="static-route-filter"><m/filter expression/</tag>
 	This is a special option that allows filter expressions to be configured
 	on per-route basis. Can be used multiple times. These expressions are
@@ -5071,7 +5209,8 @@ protocol static {
 	exported to the OSPF protocol.
 </descrip>
 
-<sect1>Example static config
+<sect1>Example static configs
+<label id="static-example">
 
 <p><code>
 protocol static {
@@ -5082,16 +5221,29 @@ protocol static {
 		via 198.51.100.10 weight 2
 		via 198.51.100.20 bfd	# BFD-controlled next hop
 		via 192.0.2.1;
-	route 203.0.113.0/24 unreachable; # Sink route
+	route 203.0.113.0/24 blackhole; # Sink route
 	route 10.2.0.0/24 via "arc0";	# Secondary network
 	route 192.168.10.0/24 via 198.51.100.100 {
 		ospf_metric1 = 20;	# Set extended attribute
-	}
-	route 192.168.10.0/24 via 198.51.100.100 {
+	};
+	route 192.168.11.0/24 via 198.51.100.100 {
 		ospf_metric2 = 100;	# Set extended attribute
 		ospf_tag = 2;		# Set extended attribute
-		bfd;			# BFD-controlled route
-	}
+	};
+	route 192.168.12.0/24 via 198.51.100.100 {
+		bgp_community.add((65535, 65281));	# Set extended BGP attribute
+		bgp_large_community.add((64512, 1, 1));	# Set extended BGP attribute
+	};
+}
+
+protocol static {
+	ipv6;						# Channel is mandatory
+	route 2001:db8:10::/48 via 2001:db8:1::1;	# Route with global nexthop
+	route 2001:db8:20::/48 via fe80::10%eth0;	# Route with link-local nexthop
+	route 2001:db8:30::/48 via fe80::20%'eth1.60';	# Iface with non-alphanumeric characters
+	route 2001:db8:40::/48 via "eth2";		# Direct route to eth2
+	route 2001:db8::/32 unreachable;		# Unreachable route
+	route ::/0 via 2001:db8:1::1 bfd;		# BFD-controlled default route
 }
 </code>
 

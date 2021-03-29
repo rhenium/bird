@@ -253,9 +253,9 @@ timer_init(void)
  * type &btime.
  */
 btime
-tm_parse_time(char *x)
+tm_parse_time(const char *x)
 {
-  struct tm tm;
+  struct tm tm = {};
   int usec, n1, n2, n3, r;
 
   r = sscanf(x, "%d-%d-%d%n %d:%d:%d%n.%d%n",

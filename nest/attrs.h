@@ -30,7 +30,7 @@
 
 struct f_tree;
 
-int as_path_valid(byte *data, uint len, int bs, int confed, char *err, uint elen);
+int as_path_valid(byte *data, uint len, int bs, int sets, int confed, char *err, uint elen);
 int as_path_16to32(byte *dst, const byte *src, uint len);
 int as_path_32to16(byte *dst, const byte *src, uint len);
 int as_path_contains_as4(const struct adata *path);
@@ -61,6 +61,7 @@ static inline struct adata *as_path_prepend(struct linpool *pool, const struct a
 #define PM_ASN_EXPR	3
 #define PM_ASN_RANGE	4
 #define PM_ASN_SET	5
+#define PM_LOOP		6
 
 struct f_path_mask_item {
   union {
@@ -111,7 +112,7 @@ static inline struct adata *
 aggregator_to_old(struct linpool *pool, const struct adata *a)
 {
   struct adata *d = lp_alloc_adata(pool, 8);
-  put_u32(d->data, 0xFFFF);
+  put_u32(d->data, AS_TRANS);
   memcpy(d->data + 4, a->data + 4, 4);
   return d;
 }

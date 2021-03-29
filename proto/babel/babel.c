@@ -113,7 +113,7 @@ babel_get_source(struct babel_proto *p, struct babel_entry *e, u64 router_id)
   if (s)
     return s;
 
-  s = sl_alloc(p->source_slab);
+  s = sl_allocz(p->source_slab);
   s->router_id = router_id;
   s->expires = current_time() + BABEL_GARBAGE_INTERVAL;
   s->seqno = 0;
@@ -159,8 +159,7 @@ babel_get_route(struct babel_proto *p, struct babel_entry *e, struct babel_neigh
   if (r)
     return r;
 
-  r = sl_alloc(p->route_slab);
-  memset(r, 0, sizeof(*r));
+  r = sl_allocz(p->route_slab);
 
   r->e = e;
   r->neigh = nbr;
@@ -323,7 +322,7 @@ babel_add_seqno_request(struct babel_proto *p, struct babel_entry *e,
     }
 
   /* No entries found */
-  sr = sl_alloc(p->seqno_slab);
+  sr = sl_allocz(p->seqno_slab);
 
 found:
   sr->router_id = router_id;
@@ -639,6 +638,14 @@ babel_announce_rte(struct babel_proto *p, struct babel_entry *e)
       .nh.gw = r->next_hop,
       .nh.iface = r->neigh->ifa->iface,
     };
+
+    /*
+     * If we cannot find a reachable neighbour, set the entry to be onlink. This
+     * makes it possible to, e.g., assign /32 addresses on a mesh interface and
+     * have routing work.
+     */
+    if (!neigh_find(&p->p, r->next_hop, r->neigh->ifa->iface, 0))
+      a0.nh.flags = RNF_ONLINK;
 
     rta *a = rta_lookup(&a0);
     rte *rte = rte_get_temp(a);
@@ -1852,7 +1859,7 @@ babel_get_route_info(rte *rte, byte *buf)
 }
 
 static int
-babel_get_attr(eattr *a, byte *buf, int buflen UNUSED)
+babel_get_attr(const eattr *a, byte *buf, int buflen UNUSED)
 {
   switch (a->id)
   {
@@ -1874,7 +1881,7 @@ babel_get_attr(eattr *a, byte *buf, int buflen UNUSED)
 }
 
 void
-babel_show_interfaces(struct proto *P, char *iff)
+babel_show_interfaces(struct proto *P, const char *iff)
 {
   struct babel_proto *p = (void *) P;
   struct babel_iface *ifa = NULL;
@@ -1883,7 +1890,6 @@ babel_show_interfaces(struct proto *P, char *iff)
   if (p->p.proto_state != PS_UP)
   {
     cli_msg(-1023, "%s: is not up", p->p.name);
-    cli_msg(0, "");
     return;
   }
 
@@ -1907,12 +1913,10 @@ babel_show_interfaces(struct proto *P, char *iff)
 	    ifa->cf->rxcost, nbrs, MAX(timer, 0),
 	    ifa->next_hop_ip4, ifa->next_hop_ip6);
   }
-
-  cli_msg(0, "");
 }
 
 void
-babel_show_neighbors(struct proto *P, char *iff)
+babel_show_neighbors(struct proto *P, const char *iff)
 {
   struct babel_proto *p = (void *) P;
   struct babel_iface *ifa = NULL;
@@ -1922,7 +1926,6 @@ babel_show_neighbors(struct proto *P, char *iff)
   if (p->p.proto_state != PS_UP)
   {
     cli_msg(-1024, "%s: is not up", p->p.name);
-    cli_msg(0, "");
     return;
   }
 
@@ -1947,8 +1950,6 @@ babel_show_neighbors(struct proto *P, char *iff)
 	      n->addr, ifa->iface->name, n->cost, rts, hellos, MAX(timer, 0));
     }
   }
-
-  cli_msg(0, "");
 }
 
 static void
@@ -1990,7 +1991,6 @@ babel_show_entries(struct proto *P)
   if (p->p.proto_state != PS_UP)
   {
     cli_msg(-1025, "%s: is not up", p->p.name);
-    cli_msg(0, "");
     return;
   }
 
@@ -2000,8 +2000,6 @@ babel_show_entries(struct proto *P)
 
   babel_show_entries_(p, &p->ip4_rtable);
   babel_show_entries_(p, &p->ip6_rtable);
-
-  cli_msg(0, "");
 }
 
 static void
@@ -2033,7 +2031,6 @@ babel_show_routes(struct proto *P)
   if (p->p.proto_state != PS_UP)
   {
     cli_msg(-1025, "%s: is not up", p->p.name);
-    cli_msg(0, "");
     return;
   }
 
@@ -2043,8 +2040,6 @@ babel_show_routes(struct proto *P)
 
   babel_show_routes_(p, &p->ip4_rtable);
   babel_show_routes_(p, &p->ip6_rtable);
-
-  cli_msg(0, "");
 }
 
 

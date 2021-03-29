@@ -27,18 +27,20 @@ struct config {
   list symbols;				/* Configured symbols in config order */
 
   int mrtdump_file;			/* Configured MRTDump file (sysdep, fd in unix) */
-  char *syslog_name;			/* Name used for syslog (NULL -> no syslog) */
+  const char *syslog_name;		/* Name used for syslog (NULL -> no syslog) */
   struct rtable_config *def_tables[NET_MAX]; /* Default routing tables for each network */
   struct iface_patt *router_id_from;	/* Configured list of router ID iface patterns */
 
   u32 router_id;			/* Our Router ID */
-  unsigned proto_default_debug;		/* Default protocol debug mask */
-  unsigned proto_default_mrtdump;	/* Default protocol mrtdump mask */
+  u32 proto_default_debug;		/* Default protocol debug mask */
+  u32 proto_default_mrtdump;		/* Default protocol mrtdump mask */
+  u32 channel_default_debug;		/* Default channel debug mask */
   struct timeformat tf_route;		/* Time format for 'show route' */
   struct timeformat tf_proto;		/* Time format for 'show protocol' */
   struct timeformat tf_log;		/* Time format for the logfile */
   struct timeformat tf_base;		/* Time format for other purposes */
   u32 gr_wait;				/* Graceful restart wait timeout (sec) */
+  const char *hostname;			/* Hostname */
 
   int cli_debug;			/* Tracing of CLI connections and commands */
   int latency_debug;			/* I/O loop tracks duration of each event */
@@ -198,11 +200,11 @@ struct symbol *cf_localize_symbol(struct symbol *sym);
  * Result: Pointer to the newly defined symbol. If we are in the top-level
  * scope, it's the same @sym as passed to the function.
  */
-#define cf_define_symbol(sym_, type_, var_, def_) ({ \
-    struct symbol *sym = cf_localize_symbol(sym_); \
-    sym->class = type_; \
-    sym->var_ = def_; \
-    sym; })
+#define cf_define_symbol(osym_, type_, var_, def_) ({ \
+    struct symbol *sym_ = cf_localize_symbol(osym_); \
+    sym_->class = type_; \
+    sym_->var_ = def_; \
+    sym_; })
 
 void cf_push_scope(struct symbol *);
 void cf_pop_scope(void);

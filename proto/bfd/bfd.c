@@ -27,13 +27,13 @@
  * related to the session and two timers (TX timer for periodic packets and hold
  * timer for session timeout). These sessions are allocated from @session_slab
  * and are accessible by two hash tables, @session_hash_id (by session ID) and
- * @session_hash_ip (by IP addresses of neighbors). Slab and both hashes are in
- * the main protocol structure &bfd_proto. The protocol logic related to BFD
- * sessions is implemented in internal functions bfd_session_*(), which are
- * expected to be called from the context of BFD thread, and external functions
- * bfd_add_session(), bfd_remove_session() and bfd_reconfigure_session(), which
- * form an interface to the BFD core for the rest and are expected to be called
- * from the context of main thread.
+ * @session_hash_ip (by IP addresses of neighbors and associated interfaces).
+ * Slab and both hashes are in the main protocol structure &bfd_proto. The
+ * protocol logic related to BFD sessions is implemented in internal functions
+ * bfd_session_*(), which are expected to be called from the context of BFD
+ * thread, and external functions bfd_add_session(), bfd_remove_session() and
+ * bfd_reconfigure_session(), which form an interface to the BFD core for the
+ * rest and are expected to be called from the context of main thread.
  *
  * Each BFD session has an associated BFD interface, represented by structure
  * &bfd_iface. A BFD interface contains a socket used for TX (the one for RX is
@@ -108,10 +108,10 @@
 #define HASH_ID_EQ(a,b)		a == b
 #define HASH_ID_FN(k)		k
 
-#define HASH_IP_KEY(n)		n->addr
+#define HASH_IP_KEY(n)		n->addr, n->ifindex
 #define HASH_IP_NEXT(n)		n->next_ip
-#define HASH_IP_EQ(a,b)		ipa_equal(a,b)
-#define HASH_IP_FN(k)		ipa_hash(k)
+#define HASH_IP_EQ(a1,n1,a2,n2)	ipa_equal(a1, a2) && n1 == n2
+#define HASH_IP_FN(a,n)		ipa_hash(a) ^ u32_hash(n)
 
 static list bfd_proto_list;
 static list bfd_wait_list;
@@ -127,6 +127,18 @@ static inline void bfd_notify_kick(struct bfd_proto *p);
 /*
  *	BFD sessions
  */
+
+static inline struct bfd_session_config
+bfd_merge_options(const struct bfd_iface_config *cf, const struct bfd_options *opts)
+{
+  return (struct bfd_session_config) {
+    .min_rx_int = opts->min_rx_int ?: cf->min_rx_int,
+    .min_tx_int = opts->min_tx_int ?: cf->min_tx_int,
+    .idle_tx_int = opts->idle_tx_int ?: cf->idle_tx_int,
+    .multiplier = opts->multiplier ?: cf->multiplier,
+    .passive = opts->passive_set ? opts->passive : cf->passive
+  };
+}
 
 static void
 bfd_session_update_state(struct bfd_session *s, uint state, uint diag)
@@ -152,10 +164,10 @@ bfd_session_update_state(struct bfd_session *s, uint state, uint diag)
   bfd_unlock_sessions(p);
 
   if (state == BFD_STATE_UP)
-    bfd_session_set_min_tx(s, s->ifa->cf->min_tx_int);
+    bfd_session_set_min_tx(s, s->cf.min_tx_int);
 
   if (old_state == BFD_STATE_UP)
-    bfd_session_set_min_tx(s, s->ifa->cf->idle_tx_int);
+    bfd_session_set_min_tx(s, s->cf.idle_tx_int);
 
   if (notify)
     bfd_notify_kick(p);
@@ -373,9 +385,9 @@ bfd_find_session_by_id(struct bfd_proto *p, u32 id)
 }
 
 struct bfd_session *
-bfd_find_session_by_addr(struct bfd_proto *p, ip_addr addr)
+bfd_find_session_by_addr(struct bfd_proto *p, ip_addr addr, uint ifindex)
 {
-  return HASH_FIND(p->session_hash_ip, HASH_IP, addr);
+  return HASH_FIND(p->session_hash_ip, HASH_IP, addr, ifindex);
 }
 
 static void
@@ -405,31 +417,31 @@ bfd_get_free_id(struct bfd_proto *p)
 }
 
 static struct bfd_session *
-bfd_add_session(struct bfd_proto *p, ip_addr addr, ip_addr local, struct iface *iface)
+bfd_add_session(struct bfd_proto *p, ip_addr addr, ip_addr local, struct iface *iface, struct bfd_options *opts)
 {
   birdloop_enter(p->loop);
 
   struct bfd_iface *ifa = bfd_get_iface(p, local, iface);
 
-  struct bfd_session *s = sl_alloc(p->session_slab);
-  bzero(s, sizeof(struct bfd_session));
-
+  struct bfd_session *s = sl_allocz(p->session_slab);
   s->addr = addr;
   s->ifa = ifa;
+  s->ifindex = iface ? iface->index : 0;
   s->loc_id = bfd_get_free_id(p);
 
   HASH_INSERT(p->session_hash_id, HASH_ID, s);
   HASH_INSERT(p->session_hash_ip, HASH_IP, s);
 
+  s->cf = bfd_merge_options(ifa->cf, opts);
 
   /* Initialization of state variables - see RFC 5880 6.8.1 */
   s->loc_state = BFD_STATE_DOWN;
   s->rem_state = BFD_STATE_DOWN;
-  s->des_min_tx_int = s->des_min_tx_new = ifa->cf->idle_tx_int;
-  s->req_min_rx_int = s->req_min_rx_new = ifa->cf->min_rx_int;
+  s->des_min_tx_int = s->des_min_tx_new = s->cf.idle_tx_int;
+  s->req_min_rx_int = s->req_min_rx_new = s->cf.min_rx_int;
   s->rem_min_rx_int = 1;
-  s->detect_mult = ifa->cf->multiplier;
-  s->passive = ifa->cf->passive;
+  s->detect_mult = s->cf.multiplier;
+  s->passive = s->cf.passive;
   s->tx_csn = random_u32();
 
   s->tx_timer = tm_new_init(p->tpool, bfd_tx_timer_hook, s, 0, 0);
@@ -506,15 +518,19 @@ bfd_remove_session(struct bfd_proto *p, struct bfd_session *s)
 static void
 bfd_reconfigure_session(struct bfd_proto *p, struct bfd_session *s)
 {
+  if (EMPTY_LIST(s->request_list))
+    return;
+
   birdloop_enter(p->loop);
 
-  struct bfd_iface_config *cf = s->ifa->cf;
+  struct bfd_request *req = SKIP_BACK(struct bfd_request, n, HEAD(s->request_list));
+  s->cf = bfd_merge_options(s->ifa->cf, &req->opts);
 
-  u32 tx = (s->loc_state == BFD_STATE_UP) ? cf->min_tx_int : cf->idle_tx_int;
+  u32 tx = (s->loc_state == BFD_STATE_UP) ? s->cf.min_tx_int : s->cf.idle_tx_int;
   bfd_session_set_min_tx(s, tx);
-  bfd_session_set_min_rx(s, cf->min_rx_int);
-  s->detect_mult = cf->multiplier;
-  s->passive = cf->passive;
+  bfd_session_set_min_rx(s, s->cf.min_rx_int);
+  s->detect_mult = s->cf.multiplier;
+  s->passive = s->cf.passive;
 
   bfd_session_control_tx_timer(s, 0);
 
@@ -590,12 +606,20 @@ bfd_free_iface(struct bfd_iface *ifa)
 static void
 bfd_reconfigure_iface(struct bfd_proto *p, struct bfd_iface *ifa, struct bfd_config *nc)
 {
-  struct bfd_iface_config *nic = bfd_find_iface_config(nc, ifa->iface);
-  ifa->changed = !!memcmp(nic, ifa->cf, sizeof(struct bfd_iface_config));
+  struct bfd_iface_config *new = bfd_find_iface_config(nc, ifa->iface);
+  struct bfd_iface_config *old = ifa->cf;
+
+  /* Check options that are handled in bfd_reconfigure_session() */
+  ifa->changed =
+    (new->min_rx_int != old->min_rx_int) ||
+    (new->min_tx_int != old->min_tx_int) ||
+    (new->idle_tx_int != old->idle_tx_int) ||
+    (new->multiplier != old->multiplier) ||
+    (new->passive != old->passive);
 
   /* This should be probably changed to not access ifa->cf from the BFD thread */
   birdloop_enter(p->loop);
-  ifa->cf = nic;
+  ifa->cf = new;
   birdloop_leave(p->loop);
 }
 
@@ -624,14 +648,23 @@ bfd_request_notify(struct bfd_request *req, u8 state, u8 diag)
 static int
 bfd_add_request(struct bfd_proto *p, struct bfd_request *req)
 {
+  struct bfd_config *cf = (struct bfd_config *) (p->p.cf);
+
   if (p->p.vrf_set && (p->p.vrf != req->vrf))
     return 0;
 
-  struct bfd_session *s = bfd_find_session_by_addr(p, req->addr);
+  if (ipa_is_ip4(req->addr) ? !cf->accept_ipv4 : !cf->accept_ipv6)
+    return 0;
+
+  if (req->iface ? !cf->accept_direct : !cf->accept_multihop)
+    return 0;
+
+  uint ifindex = req->iface ? req->iface->index : 0;
+  struct bfd_session *s = bfd_find_session_by_addr(p, req->addr, ifindex);
   u8 state, diag;
 
   if (!s)
-    s = bfd_add_session(p, req->addr, req->local, req->iface);
+    s = bfd_add_session(p, req->addr, req->local, req->iface, &req->opts);
 
   rem_node(&req->n);
   add_tail(&s->request_list, &req->n);
@@ -690,7 +723,8 @@ static struct resclass bfd_request_class;
 struct bfd_request *
 bfd_request_session(pool *p, ip_addr addr, ip_addr local,
 		    struct iface *iface, struct iface *vrf,
-		    void (*hook)(struct bfd_request *), void *data)
+		    void (*hook)(struct bfd_request *), void *data,
+		    const struct bfd_options *opts)
 {
   struct bfd_request *req = ralloc(p, &bfd_request_class);
 
@@ -702,12 +736,29 @@ bfd_request_session(pool *p, ip_addr addr, ip_addr local,
   req->iface = iface;
   req->vrf = vrf;
 
+  if (opts)
+    req->opts = *opts;
+
   bfd_submit_request(req);
 
   req->hook = hook;
   req->data = data;
 
   return req;
+}
+
+void
+bfd_update_request(struct bfd_request *req, const struct bfd_options *opts)
+{
+  struct bfd_session *s = req->session;
+
+  if (!memcmp(opts, &req->opts, sizeof(const struct bfd_options)))
+    return;
+
+  req->opts = *opts;
+
+  if (s)
+    bfd_reconfigure_session(s->ifa->bfd, s);
 }
 
 static void
@@ -759,7 +810,7 @@ bfd_neigh_notify(struct neighbor *nb)
   if ((nb->scope > 0) && !n->req)
   {
     ip_addr local = ipa_nonzero(n->local) ? n->local : nb->ifa->ip;
-    n->req = bfd_request_session(p->p.pool, n->addr, local, nb->iface, p->p.vrf, NULL, NULL);
+    n->req = bfd_request_session(p->p.pool, n->addr, local, nb->iface, p->p.vrf, NULL, NULL, NULL);
   }
 
   if ((nb->scope <= 0) && n->req)
@@ -776,7 +827,7 @@ bfd_start_neighbor(struct bfd_proto *p, struct bfd_neighbor *n)
 
   if (n->multihop)
   {
-    n->req = bfd_request_session(p->p.pool, n->addr, n->local, NULL, p->p.vrf, NULL, NULL);
+    n->req = bfd_request_session(p->p.pool, n->addr, n->local, NULL, p->p.vrf, NULL, NULL, NULL);
     return;
   }
 
@@ -986,10 +1037,19 @@ bfd_start(struct proto *P)
   add_tail(&bfd_proto_list, &p->bfd_node);
 
   birdloop_enter(p->loop);
-  p->rx4_1 = bfd_open_rx_sk(p, 0, SK_IPV4);
-  p->rx4_m = bfd_open_rx_sk(p, 1, SK_IPV4);
-  p->rx6_1 = bfd_open_rx_sk(p, 0, SK_IPV6);
-  p->rx6_m = bfd_open_rx_sk(p, 1, SK_IPV6);
+
+  if (cf->accept_ipv4 && cf->accept_direct)
+    p->rx4_1 = bfd_open_rx_sk(p, 0, SK_IPV4);
+
+  if (cf->accept_ipv4 && cf->accept_multihop)
+    p->rx4_m = bfd_open_rx_sk(p, 1, SK_IPV4);
+
+  if (cf->accept_ipv6 && cf->accept_direct)
+    p->rx6_1 = bfd_open_rx_sk(p, 0, SK_IPV6);
+
+  if (cf->accept_ipv6 && cf->accept_multihop)
+    p->rx6_m = bfd_open_rx_sk(p, 1, SK_IPV6);
+
   birdloop_leave(p->loop);
 
   bfd_take_requests(p);
@@ -1034,9 +1094,16 @@ static int
 bfd_reconfigure(struct proto *P, struct proto_config *c)
 {
   struct bfd_proto *p = (struct bfd_proto *) P;
-  // struct bfd_config *old = (struct bfd_config *) (P->cf);
+  struct bfd_config *old = (struct bfd_config *) (P->cf);
   struct bfd_config *new = (struct bfd_config *) c;
   struct bfd_iface *ifa;
+
+  /* TODO: Improve accept reconfiguration */
+  if ((new->accept_ipv4 != old->accept_ipv4) ||
+      (new->accept_ipv6 != old->accept_ipv6) ||
+      (new->accept_direct != old->accept_direct) ||
+      (new->accept_multihop != old->accept_multihop))
+    return 0;
 
   birdloop_mask_wakeups(p->loop);
 
@@ -1080,7 +1147,6 @@ bfd_show_sessions(struct proto *P)
   if (p->p.proto_state != PS_UP)
   {
     cli_msg(-1020, "%s: is not up", p->p.name);
-    cli_msg(0, "");
     return;
   }
 
@@ -1105,8 +1171,6 @@ bfd_show_sessions(struct proto *P)
 	    s->addr, ifname, bfd_state_names[state], tbuf, tx_int, timeout);
   }
   HASH_WALK_END;
-
-  cli_msg(0, "");
 }
 
 

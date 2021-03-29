@@ -539,6 +539,12 @@ krt_dump_attrs(rte *e)
  *	Routes
  */
 
+static inline int
+krt_is_installed(struct krt_proto *p, net *n)
+{
+  return n->routes && bmap_test(&p->p.main_channel->export_map, n->routes->id);
+}
+
 static void
 krt_flush_routes(struct krt_proto *p)
 {
@@ -547,12 +553,10 @@ krt_flush_routes(struct krt_proto *p)
   KRT_TRACE(p, D_EVENTS, "Flushing kernel routes");
   FIB_WALK(&t->fib, net, n)
     {
-      rte *e = n->routes;
-      if (rte_is_valid(e) && (n->n.flags & KRF_INSTALLED))
+      if (krt_is_installed(p, n))
 	{
 	  /* FIXME: this does not work if gw is changed in export filter */
-	  krt_replace_rte(p, e->net, NULL, e);
-	  n->n.flags &= ~KRF_INSTALLED;
+	  krt_replace_rte(p, n, NULL, n->routes);
 	}
     }
   FIB_WALK_END;
@@ -579,7 +583,7 @@ krt_export_net(struct krt_proto *p, net *net, rte **rt_free)
 
   rte_make_tmp_attrs(&rt, krt_filter_lp, NULL);
 
-  /* We could run krt_preexport() here, but it is already handled by KRF_INSTALLED */
+  /* We could run krt_preexport() here, but it is already handled by krt_is_installed() */
 
   if (filter == FILTER_ACCEPT)
     goto accept;
@@ -621,19 +625,17 @@ krt_same_dest(rte *k, rte *e)
 void
 krt_got_route(struct krt_proto *p, rte *e)
 {
-  net *net = e->net;
-  int verdict;
+  rte *new = NULL, *rt_free = NULL;
+  net *n = e->net;
 
 #ifdef KRT_ALLOW_LEARN
   switch (e->u.krt.src)
     {
     case KRT_SRC_KERNEL:
-      verdict = KRF_IGNORE;
-      goto sentenced;
+      goto ignore;
 
     case KRT_SRC_REDIRECT:
-      verdict = KRF_DELETE;
-      goto sentenced;
+      goto delete;
 
     case  KRT_SRC_ALIEN:
       if (KRT_CF->learn)
@@ -648,58 +650,68 @@ krt_got_route(struct krt_proto *p, rte *e)
 #endif
   /* The rest is for KRT_SRC_BIRD (or KRT_SRC_UNKNOWN) */
 
-  if (net->n.flags & KRF_VERDICT_MASK)
-    {
-      /* Route to this destination was already seen. Strange, but it happens... */
-      krt_trace_in(p, e, "already seen");
-      rte_free(e);
-      return;
-    }
 
+  /* We wait for the initial feed to have correct installed state */
   if (!p->ready)
-    {
-      /* We wait for the initial feed to have correct KRF_INSTALLED flag */
-      verdict = KRF_IGNORE;
-      goto sentenced;
-    }
+    goto ignore;
 
-  if (net->n.flags & KRF_INSTALLED)
-    {
-      rte *new, *rt_free;
+  if (!krt_is_installed(p, n))
+    goto delete;
 
-      new = krt_export_net(p, net, &rt_free);
+  new = krt_export_net(p, n, &rt_free);
 
-      /* TODO: There also may be changes in route eattrs, we ignore that for now. */
+  /* Rejected by filters */
+  if (!new)
+    goto delete;
 
-      if (!new)
-	verdict = KRF_DELETE;
-      else if ((net->n.flags & KRF_SYNC_ERROR) || !krt_same_dest(e, new))
-	verdict = KRF_UPDATE;
-      else
-	verdict = KRF_SEEN;
+  /* Route to this destination was already seen. Strange, but it happens... */
+  if (bmap_test(&p->seen_map, new->id))
+    goto aseen;
 
-      if (rt_free)
-	rte_free(rt_free);
+  /* Mark route as seen */
+  bmap_set(&p->seen_map, new->id);
 
-      lp_flush(krt_filter_lp);
-    }
-  else
-    verdict = KRF_DELETE;
+  /* TODO: There also may be changes in route eattrs, we ignore that for now. */
+  if (!bmap_test(&p->sync_map, new->id) || !krt_same_dest(e, new))
+    goto update;
 
- sentenced:
-  krt_trace_in(p, e, ((char *[]) { "?", "seen", "will be updated", "will be removed", "ignored" }) [verdict]);
-  net->n.flags = (net->n.flags & ~KRF_VERDICT_MASK) | verdict;
-  if (verdict == KRF_UPDATE || verdict == KRF_DELETE)
-    {
-      /* Get a cached copy of attributes and temporarily link the route */
-      rta *a = e->attrs;
-      a->source = RTS_DUMMY;
-      e->attrs = rta_lookup(a);
-      e->next = net->routes;
-      net->routes = e;
-    }
-  else
-    rte_free(e);
+  goto seen;
+
+seen:
+  krt_trace_in(p, e, "seen");
+  goto done;
+
+aseen:
+  krt_trace_in(p, e, "already seen");
+  goto done;
+
+ignore:
+  krt_trace_in(p, e, "ignored");
+  goto done;
+
+update:
+  krt_trace_in(p, new, "updating");
+  krt_replace_rte(p, n, new, e);
+  goto done;
+
+delete:
+  krt_trace_in(p, e, "deleting");
+  krt_replace_rte(p, n, NULL, e);
+  goto done;
+
+done:
+  rte_free(e);
+
+  if (rt_free)
+    rte_free(rt_free);
+
+  lp_flush(krt_filter_lp);
+}
+
+static void
+krt_init_scan(struct krt_proto *p)
+{
+  bmap_reset(&p->seen_map, 1024);
 }
 
 static void
@@ -709,62 +721,24 @@ krt_prune(struct krt_proto *p)
 
   KRT_TRACE(p, D_EVENTS, "Pruning table %s", t->name);
   FIB_WALK(&t->fib, net, n)
+  {
+    if (p->ready && krt_is_installed(p, n) && !bmap_test(&p->seen_map, n->routes->id))
     {
-      int verdict = n->n.flags & KRF_VERDICT_MASK;
-      rte *new, *old, *rt_free = NULL;
+      rte *rt_free = NULL;
+      rte *new = krt_export_net(p, n, &rt_free);
 
-      if (verdict == KRF_UPDATE || verdict == KRF_DELETE)
-	{
-	  /* Get a dummy route from krt_got_route() */
-	  old = n->routes;
-	  n->routes = old->next;
-	}
-      else
-	old = NULL;
+      if (new)
+      {
+	krt_trace_in(p, new, "installing");
+	krt_replace_rte(p, n, new, NULL);
+      }
 
-      if (verdict == KRF_CREATE || verdict == KRF_UPDATE)
-	{
-	  /* We have to run export filter to get proper 'new' route */
-	  new = krt_export_net(p, n, &rt_free);
-
-	  if (!new)
-	    verdict = (verdict == KRF_CREATE) ? KRF_IGNORE : KRF_DELETE;
-	}
-      else
-	new = NULL;
-
-      switch (verdict)
-	{
-	case KRF_CREATE:
-	  if (new && (n->n.flags & KRF_INSTALLED))
-	    {
-	      krt_trace_in(p, new, "reinstalling");
-	      krt_replace_rte(p, n, new, NULL);
-	    }
-	  break;
-	case KRF_SEEN:
-	case KRF_IGNORE:
-	  /* Nothing happens */
-	  break;
-	case KRF_UPDATE:
-	  krt_trace_in(p, new, "updating");
-	  krt_replace_rte(p, n, new, old);
-	  break;
-	case KRF_DELETE:
-	  krt_trace_in(p, old, "deleting");
-	  krt_replace_rte(p, n, NULL, old);
-	  break;
-	default:
-	  bug("krt_prune: invalid route status");
-	}
-
-      if (old)
-	rte_free(old);
       if (rt_free)
 	rte_free(rt_free);
+
       lp_flush(krt_filter_lp);
-      n->n.flags &= ~KRF_VERDICT_MASK;
     }
+  }
   FIB_WALK_END;
 
 #ifdef KRT_ALLOW_LEARN
@@ -822,6 +796,7 @@ static void
 krt_scan(timer *t UNUSED)
 {
   struct krt_proto *p;
+  node *n;
 
   kif_force_scan();
 
@@ -829,14 +804,13 @@ krt_scan(timer *t UNUSED)
   p = SKIP_BACK(struct krt_proto, krt_node, HEAD(krt_proto_list));
   KRT_TRACE(p, D_EVENTS, "Scanning routing table");
 
+  WALK_LIST2(p, n, krt_proto_list, krt_node)
+    krt_init_scan(p);
+
   krt_do_scan(NULL);
 
-  void *q;
-  WALK_LIST(q, krt_proto_list)
-  {
-    p = SKIP_BACK(struct krt_proto, krt_node, q);
+  WALK_LIST2(p, n, krt_proto_list, krt_node)
     krt_prune(p);
-  }
 }
 
 static void
@@ -878,6 +852,7 @@ krt_scan(timer *t)
   kif_force_scan();
 
   KRT_TRACE(p, D_EVENTS, "Scanning routing table");
+  krt_init_scan(p);
   krt_do_scan(p);
   krt_prune(p);
 }
@@ -933,22 +908,7 @@ krt_preexport(struct proto *P, rte **new, struct linpool *pool UNUSED)
   rte *e = *new;
 
   if (e->attrs->src->proto == P)
-  {
-#ifdef CONFIG_SINGLE_ROUTE
-    /*
-     * Implicit withdraw - when the imported kernel route becomes the best one,
-     * we know that the previous one exported to the kernel was already removed,
-     * but if we processed the update as usual, we would send withdraw to the
-     * kernel, which would remove the new imported route instead.
-     *
-     * We will remove KRT_INSTALLED flag, which stops such withdraw to be
-     * processed in krt_rt_notify() and krt_replace_rte().
-     */
-    if (e == e->net->routes)
-      e->net->n.flags &= ~KRF_INSTALLED;
-#endif
     return -1;
-  }
 
   if (!krt_capable(e))
     return -1;
@@ -964,12 +924,19 @@ krt_rt_notify(struct proto *P, struct channel *ch UNUSED, net *net,
 
   if (config->shutdown)
     return;
-  if (!(net->n.flags & KRF_INSTALLED))
-    old = NULL;
-  if (new)
-    net->n.flags |= KRF_INSTALLED;
-  else
-    net->n.flags &= ~KRF_INSTALLED;
+
+#ifdef CONFIG_SINGLE_ROUTE
+  /*
+   * Implicit withdraw - when the imported kernel route becomes the best one,
+   * we know that the previous one exported to the kernel was already removed,
+   * but if we processed the update as usual, we would send withdraw to the
+   * kernel, which would remove the new imported route instead.
+   */
+  rte *best = net->routes;
+  if (!new && best && (best->attrs->src->proto == P))
+    return;
+#endif
+
   if (p->initialized)		/* Before first scan we don't touch the routes */
     krt_replace_rte(p, net, new, old);
 }
@@ -1041,6 +1008,10 @@ krt_postconfig(struct proto_config *CF)
 {
   struct krt_config *cf = (void *) CF;
 
+  /* Do not check templates at all */
+  if (cf->c.class == SYM_TEMPLATE)
+    return;
+
   if (EMPTY_LIST(CF->channels))
     cf_error("Channel not specified");
 
@@ -1101,6 +1072,8 @@ krt_start(struct proto *P)
   default: log(L_ERR "KRT: Tried to start with strange net type: %d", p->p.net_type); return PS_START; break;
   }
 
+  bmap_init(&p->sync_map, p->p.pool, 1024);
+  bmap_init(&p->seen_map, p->p.pool, 1024);
   add_tail(&krt_proto_list, &p->krt_node);
 
 #ifdef KRT_ALLOW_LEARN
@@ -1140,6 +1113,7 @@ krt_shutdown(struct proto *P)
 
   krt_sys_shutdown(p);
   rem_node(&p->krt_node);
+  bmap_free(&p->sync_map);
 
   return PS_DOWN;
 }
@@ -1186,7 +1160,7 @@ krt_copy_config(struct proto_config *dest, struct proto_config *src)
 }
 
 static int
-krt_get_attr(eattr *a, byte *buf, int buflen)
+krt_get_attr(const eattr *a, byte *buf, int buflen)
 {
   switch (a->id)
   {

@@ -104,7 +104,7 @@
  *	m4_dnl	(103)	  [[ put it here ]]
  *	m4_dnl		  ...
  *	m4_dnl		  if (all arguments are constant)
- *	m4_dnl	(108)	    [[ put it here ]]	    
+ *	m4_dnl	(108)	    [[ put it here ]]
  *	m4_dnl		}
  *	m4_dnl	For writing directly to constructor argument list, use FID_NEW_ARGS.
  *	m4_dnl	For computing something in constructor (103), use FID_NEW_BODY.
@@ -172,6 +172,22 @@
  *	m4_dnl	use macros f1 and f2.
  *	m4_dnl	For writing directly here, use FID_SAME_BODY.
  *
+ *	m4_dnl		f_add_lines(...)
+ *	m4_dnl		{
+ *	m4_dnl		  switch (what_->fi_code) {
+ *	m4_dnl		    case FI_EXAMPLE:
+ *	m4_dnl	(109)	      [[ put it here ]]
+ *	m4_dnl		      break;
+ *	m4_dnl		  }
+ *	m4_dnl		}
+ *	m4_dnl	This code adds new filter lines reachable from the instruction
+ *	m4_dnl	to the filter iterator line buffer. This is for instructions
+ *	m4_dnl  that changes conrol flow, like FI_CONDITION or FI_CALL, most
+ *	m4_dnl  instructions do not need to update it. It is used in generic
+ *	m4_dnl  filter iteration code (FILTER_ITERATE*). For accessing your
+ *	m4_dnl  custom instruction data, use macros f1 and f2. For writing
+ *	m4_dnl	directly here, use FID_ITERATE_BODY.
+ *
  *	m4_dnl		interpret(...)
  *	m4_dnl		{
  *	m4_dnl		  switch (what->fi_code) {
@@ -226,6 +242,9 @@
   }
   INST(FI_AND, 1, 1) {
     ARG(1,T_BOOL);
+    ARG_TYPE_STATIC(2,T_BOOL);
+    RESULT_TYPE(T_BOOL);
+
     if (v1.val.i)
       LINE(2,0);
     else
@@ -233,6 +252,9 @@
   }
   INST(FI_OR, 1, 1) {
     ARG(1,T_BOOL);
+    ARG_TYPE_STATIC(2,T_BOOL);
+    RESULT_TYPE(T_BOOL);
+
     if (!v1.val.i)
       LINE(2,0);
     else
@@ -255,7 +277,7 @@
 
     FID_MEMBER(enum ec_subtype, ecs, f1->ecs != f2->ecs, "ec subtype %s", ec_subtype_str(item->ecs));
 
-    int check, ipv4_used;
+    int ipv4_used;
     u32 key, val;
 
     if (v1.type == T_INT) {
@@ -273,21 +295,20 @@
 
     val = v2.val.i;
 
-    if (ecs == EC_GENERIC) {
-      check = 0; RESULT(T_EC, ec, ec_generic(key, val));
-    }
-    else if (ipv4_used) {
-      check = 1; RESULT(T_EC, ec, ec_ip4(ecs, key, val));
-    }
-    else if (key < 0x10000) {
-      check = 0; RESULT(T_EC, ec, ec_as2(ecs, key, val));
-    }
-    else {
-      check = 1; RESULT(T_EC, ec, ec_as4(ecs, key, val));
-    }
-
-    if (check && (val > 0xFFFF))
-      runtime("Value %u > %u out of bounds in EC constructor", val, 0xFFFF);
+    if (ecs == EC_GENERIC)
+      RESULT(T_EC, ec, ec_generic(key, val));
+    else if (ipv4_used)
+      if (val <= 0xFFFF)
+	RESULT(T_EC, ec, ec_ip4(ecs, key, val));
+      else
+	runtime("4-byte value %u can't be used with IP-address key in extended community", val);
+    else if (key < 0x10000)
+      RESULT(T_EC, ec, ec_as2(ecs, key, val));
+    else
+      if (val <= 0xFFFF)
+	RESULT(T_EC, ec, ec_as4(ecs, key, val));
+      else
+	runtime("4-byte value %u can't be used with 4-byte ASN in extended community", val);
   }
 
   INST(FI_LC_CONSTRUCT, 3, 1) {
@@ -306,6 +327,17 @@
     for (uint i=0; i<whati->varcount; i++) {
       switch (vv(i).type) {
 	case T_PATH_MASK_ITEM:
+	  if (vv(i).val.pmi.kind == PM_LOOP)
+	  {
+	    if (i == 0)
+	      runtime("Path mask iterator '+' cannot be first");
+
+	    /* We want PM_LOOP as prefix operator */
+	    pm->item[i] = pm->item[i - 1];
+	    pm->item[i - 1] = vv(i).val.pmi;
+	    break;
+	  }
+
 	  pm->item[i] = vv(i).val.pmi;
 	  break;
 
@@ -351,6 +383,8 @@
   INST(FI_LT, 2, 1) {
     ARG_ANY(1);
     ARG_ANY(2);
+    ARG_SAME_TYPE(1, 2);
+
     int i = val_compare(&v1, &v2);
     if (i == F_CMP_ERROR)
       runtime( "Can't compare values of incompatible types" );
@@ -360,6 +394,8 @@
   INST(FI_LTE, 2, 1) {
     ARG_ANY(1);
     ARG_ANY(2);
+    ARG_SAME_TYPE(1, 2);
+
     int i = val_compare(&v1, &v2);
     if (i == F_CMP_ERROR)
       runtime( "Can't compare values of incompatible types" );
@@ -416,18 +452,7 @@
     NEVER_CONSTANT;
     ARG_ANY(1);
     SYMBOL;
-
-    if ((sym->class != (SYM_VARIABLE | v1.type)) && (v1.type != T_VOID))
-    {
-      /* IP->Quad implicit conversion */
-      if ((sym->class == (SYM_VARIABLE | T_QUAD)) && val_is_ip4(&v1))
-	v1 = (struct f_val) {
-	  .type = T_QUAD,
-	  .val.i = ipa_to_u32(v1.val.ip),
-	};
-      else
-	runtime( "Assigning to variable of incompatible type" );
-    }
+    ARG_TYPE(1, sym->class & 0xff);
 
     fstk->vstk[curline.vbase + sym->offset] = v1;
   }
@@ -435,6 +460,7 @@
   INST(FI_VAR_GET, 0, 1) {
     SYMBOL;
     NEVER_CONSTANT;
+    RESULT_TYPE(sym->class & 0xff);
     RESULT_VAL(fstk->vstk[curline.vbase + sym->offset]);
   }
 
@@ -447,6 +473,7 @@
       val_dump(&(item->val))
     );
 
+    RESULT_TYPE(val.type);
     RESULT_VAL(val);
   }
 
@@ -479,8 +506,6 @@
     FID_MEMBER(enum filter_return, fret, f1->fret != f2->fret, "%s", filter_return_str(item->fret));
 
     switch (whati->fret) {
-    case F_QUITBIRD:
-      die( "Filter asked me to die" );
     case F_ACCEPT:	/* Should take care about turning ACCEPT into MODIFY */
     case F_ERROR:
     case F_REJECT:	/* Maybe print complete route along with reason to reject route? */
@@ -507,6 +532,7 @@
       case SA_DEST:	RESULT(sa.f_type, i, rta->dest); break;
       case SA_IFNAME:	RESULT(sa.f_type, s, rta->nh.iface ? rta->nh.iface->name : ""); break;
       case SA_IFINDEX:	RESULT(sa.f_type, i, rta->nh.iface ? rta->nh.iface->index : 0); break;
+      case SA_WEIGHT:	RESULT(sa.f_type, i, rta->nh.weight + 1); break;
 
       default:
 	bug("Invalid static attribute access (%u/%u)", sa.f_type, sa.sa_code);
@@ -518,8 +544,7 @@
     ACCESS_RTE;
     ARG_ANY(1);
     STATIC_ATTR;
-    if (sa.f_type != v1.type)
-      runtime( "Attempt to set static attribute to incompatible type" );
+    ARG_TYPE(1, sa.f_type);
 
     f_rta_cow(fs);
     {
@@ -534,7 +559,8 @@
       case SA_GW:
 	{
 	  ip_addr ip = v1.val.ip;
-	  neighbor *n = neigh_find(rta->src->proto, ip, NULL, 0);
+	  struct iface *ifa = ipa_is_link_local(ip) ? rta->nh.iface : NULL;
+	  neighbor *n = neigh_find(rta->src->proto, ip, ifa, 0);
 	  if (!n || (n->scope == SCOPE_HOST))
 	    runtime( "Invalid gw address" );
 
@@ -578,6 +604,20 @@
 	}
 	break;
 
+      case SA_WEIGHT:
+        {
+	  int i = v1.val.i;
+	  if (i < 1 || i > 256)
+	    runtime( "Setting weight value out of bounds" );
+	  if (rta->dest != RTD_UNICAST)
+	    runtime( "Setting weight needs regular nexthop " );
+
+	  /* Set weight on all next hops */
+	  for (struct nexthop *nh = &rta->nh; nh; nh = nh->next)
+	    nh->weight = i - 1;
+        }
+	break;
+
       default:
 	bug("Invalid static attribute access (%u/%u)", sa.f_type, sa.sa_code);
       }
@@ -588,31 +628,32 @@
     DYNAMIC_ATTR;
     ACCESS_RTE;
     ACCESS_EATTRS;
+    RESULT_TYPE(da.f_type);
     {
       eattr *e = ea_find(*fs->eattrs, da.ea_code);
 
       if (!e) {
 	/* A special case: undefined as_path looks like empty as_path */
 	if (da.type == EAF_TYPE_AS_PATH) {
-	  RESULT(T_PATH, ad, &null_adata);
+	  RESULT_(T_PATH, ad, &null_adata);
 	  break;
 	}
 
 	/* The same special case for int_set */
 	if (da.type == EAF_TYPE_INT_SET) {
-	  RESULT(T_CLIST, ad, &null_adata);
+	  RESULT_(T_CLIST, ad, &null_adata);
 	  break;
 	}
 
 	/* The same special case for ec_set */
 	if (da.type == EAF_TYPE_EC_SET) {
-	  RESULT(T_ECLIST, ad, &null_adata);
+	  RESULT_(T_ECLIST, ad, &null_adata);
 	  break;
 	}
 
 	/* The same special case for lc_set */
 	if (da.type == EAF_TYPE_LC_SET) {
-	  RESULT(T_LCLIST, ad, &null_adata);
+	  RESULT_(T_LCLIST, ad, &null_adata);
 	  break;
 	}
 
@@ -623,31 +664,31 @@
 
       switch (e->type & EAF_TYPE_MASK) {
       case EAF_TYPE_INT:
-	RESULT(da.f_type, i, e->u.data);
+	RESULT_(da.f_type, i, e->u.data);
 	break;
       case EAF_TYPE_ROUTER_ID:
-	RESULT(T_QUAD, i, e->u.data);
+	RESULT_(T_QUAD, i, e->u.data);
 	break;
       case EAF_TYPE_OPAQUE:
-	RESULT(T_ENUM_EMPTY, i, 0);
+	RESULT_(T_ENUM_EMPTY, i, 0);
 	break;
       case EAF_TYPE_IP_ADDRESS:
-	RESULT(T_IP, ip, *((ip_addr *) e->u.ptr->data));
+	RESULT_(T_IP, ip, *((ip_addr *) e->u.ptr->data));
 	break;
       case EAF_TYPE_AS_PATH:
-	RESULT(T_PATH, ad, e->u.ptr);
+	RESULT_(T_PATH, ad, e->u.ptr);
 	break;
       case EAF_TYPE_BITFIELD:
-	RESULT(T_BOOL, i, !!(e->u.data & (1u << da.bit)));
+	RESULT_(T_BOOL, i, !!(e->u.data & (1u << da.bit)));
 	break;
       case EAF_TYPE_INT_SET:
-	RESULT(T_CLIST, ad, e->u.ptr);
+	RESULT_(T_CLIST, ad, e->u.ptr);
 	break;
       case EAF_TYPE_EC_SET:
-	RESULT(T_ECLIST, ad, e->u.ptr);
+	RESULT_(T_ECLIST, ad, e->u.ptr);
 	break;
       case EAF_TYPE_LC_SET:
-	RESULT(T_LCLIST, ad, e->u.ptr);
+	RESULT_(T_LCLIST, ad, e->u.ptr);
 	break;
       case EAF_TYPE_UNDEF:
 	RESULT_VOID;
@@ -663,6 +704,7 @@
     ACCESS_EATTRS;
     ARG_ANY(1);
     DYNAMIC_ATTR;
+    ARG_TYPE(1, da.f_type);
     {
       struct ea_list *l = lp_alloc(fs->pool, sizeof(struct ea_list) + sizeof(eattr));
 
@@ -675,20 +717,7 @@
 
       switch (da.type) {
       case EAF_TYPE_INT:
-	if (v1.type != da.f_type)
-	  runtime( "Setting int attribute to non-int value" );
-	l->attrs[0].u.data = v1.val.i;
-	break;
-
       case EAF_TYPE_ROUTER_ID:
-	/* IP->Quad implicit conversion */
-	if (val_is_ip4(&v1)) {
-	  l->attrs[0].u.data = ipa_to_u32(v1.val.ip);
-	  break;
-	}
-	/* T_INT for backward compatibility */
-	if ((v1.type != T_QUAD) && (v1.type != T_INT))
-	  runtime( "Setting quad attribute to non-quad value" );
 	l->attrs[0].u.data = v1.val.i;
 	break;
 
@@ -696,9 +725,7 @@
 	runtime( "Setting opaque attribute is not allowed" );
 	break;
 
-      case EAF_TYPE_IP_ADDRESS:
-	if (v1.type != T_IP)
-	  runtime( "Setting ip attribute to non-ip value" );
+      case EAF_TYPE_IP_ADDRESS:;
 	int len = sizeof(ip_addr);
 	struct adata *ad = lp_alloc(fs->pool, sizeof(struct adata) + len);
 	ad->length = len;
@@ -707,14 +734,13 @@
 	break;
 
       case EAF_TYPE_AS_PATH:
-	if (v1.type != T_PATH)
-	  runtime( "Setting path attribute to non-path value" );
+      case EAF_TYPE_INT_SET:
+      case EAF_TYPE_EC_SET:
+      case EAF_TYPE_LC_SET:
 	l->attrs[0].u.ptr = v1.val.ad;
 	break;
 
       case EAF_TYPE_BITFIELD:
-	if (v1.type != T_BOOL)
-	  runtime( "Setting bit in bitfield attribute to non-bool value" );
 	{
 	  /* First, we have to find the old value */
 	  eattr *e = ea_find(*fs->eattrs, da.ea_code);
@@ -725,24 +751,6 @@
 	  else
 	    l->attrs[0].u.data = data & ~(1u << da.bit);
 	}
-	break;
-
-      case EAF_TYPE_INT_SET:
-	if (v1.type != T_CLIST)
-	  runtime( "Setting clist attribute to non-clist value" );
-	l->attrs[0].u.ptr = v1.val.ad;
-	break;
-
-      case EAF_TYPE_EC_SET:
-	if (v1.type != T_ECLIST)
-	  runtime( "Setting eclist attribute to non-eclist value" );
-	l->attrs[0].u.ptr = v1.val.ad;
-	break;
-
-      case EAF_TYPE_LC_SET:
-	if (v1.type != T_LCLIST)
-	  runtime( "Setting lclist attribute to non-lclist value" );
-	l->attrs[0].u.ptr = v1.val.ad;
 	break;
 
       default:
@@ -803,16 +811,74 @@
     }
   }
 
-  INST(FI_SADR_SRC, 1, 1) { 	/* Get SADR src prefix */
+  INST(FI_NET_SRC, 1, 1) { 	/* Get src prefix */
     ARG(1, T_NET);
-    if (!net_is_sadr(v1.val.net))
-      runtime( "SADR expected" );
 
-    net_addr_ip6_sadr *net = (void *) v1.val.net;
+    net_addr_union *net = (void *) v1.val.net;
     net_addr *src = falloc(sizeof(net_addr_ip6));
-    net_fill_ip6(src, net->src_prefix, net->src_pxlen);
+    const byte *part;
+
+    switch(v1.val.net->type) {
+    case NET_FLOW4:
+      part = flow4_get_part(&net->flow4, FLOW_TYPE_SRC_PREFIX);
+      if (part)
+	net_fill_ip4(src, flow_read_ip4_part(part), flow_read_pxlen(part));
+      else
+	net_fill_ip4(src, IP4_NONE, 0);
+      break;
+
+    case NET_FLOW6:
+      part = flow6_get_part(&net->flow6, FLOW_TYPE_SRC_PREFIX);
+      if (part)
+	net_fill_ip6(src, flow_read_ip6_part(part), flow_read_pxlen(part));
+      else
+	net_fill_ip6(src, IP6_NONE, 0);
+      break;
+
+    case NET_IP6_SADR:
+      net_fill_ip6(src, net->ip6_sadr.src_prefix, net->ip6_sadr.src_pxlen);
+      break;
+
+    default:
+      runtime( "Flow or SADR expected" );
+    }
 
     RESULT(T_NET, net, src);
+  }
+
+  INST(FI_NET_DST, 1, 1) { 	/* Get dst prefix */
+    ARG(1, T_NET);
+
+    net_addr_union *net = (void *) v1.val.net;
+    net_addr *dst = falloc(sizeof(net_addr_ip6));
+    const byte *part;
+
+    switch(v1.val.net->type) {
+    case NET_FLOW4:
+      part = flow4_get_part(&net->flow4, FLOW_TYPE_DST_PREFIX);
+      if (part)
+	net_fill_ip4(dst, flow_read_ip4_part(part), flow_read_pxlen(part));
+      else
+	net_fill_ip4(dst, IP4_NONE, 0);
+      break;
+
+    case NET_FLOW6:
+      part = flow6_get_part(&net->flow6, FLOW_TYPE_DST_PREFIX);
+      if (part)
+	net_fill_ip6(dst, flow_read_ip6_part(part), flow_read_pxlen(part));
+      else
+	net_fill_ip6(dst, IP6_NONE, 0);
+      break;
+
+    case NET_IP6_SADR:
+      net_fill_ip6(dst, net->ip6_sadr.dst_prefix, net->ip6_sadr.dst_pxlen);
+      break;
+
+    default:
+      runtime( "Flow or SADR expected" );
+    }
+
+    RESULT(T_NET, net, dst);
   }
 
   INST(FI_ROA_MAXLEN, 1, 1) { 	/* Get ROA max prefix length */
@@ -849,14 +915,14 @@
 
   INST(FI_AS_PATH_FIRST, 1, 1) {	/* Get first ASN from AS PATH */
     ARG(1, T_PATH);
-    int as = 0;
+    u32 as = 0;
     as_path_get_first(v1.val.ad, &as);
     RESULT(T_INT, i, as);
   }
 
   INST(FI_AS_PATH_LAST, 1, 1) {		/* Get last ASN from AS PATH */
     ARG(1, T_PATH);
-    int as = 0;
+    u32 as = 0;
     as_path_get_last(v1.val.ad, &as);
     RESULT(T_INT, i, as);
   }
@@ -873,18 +939,17 @@
     uint retpos = fstk->vcnt;
 
     /* Drop every sub-block including ourselves */
-    while ((fstk->ecnt-- > 0) && !(fstk->estk[fstk->ecnt].emask & FE_RETURN))
-      ;
+    do fstk->ecnt--;
+    while ((fstk->ecnt > 0) && !(fstk->estk[fstk->ecnt].emask & FE_RETURN));
 
     /* Now we are at the caller frame; if no such, try to convert to accept/reject. */
     if (!fstk->ecnt)
+    {
       if (fstk->vstk[retpos].type == T_BOOL)
-	if (fstk->vstk[retpos].val.i)
-	  return F_ACCEPT;
-	else
-	  return F_REJECT;
+	return (fstk->vstk[retpos].val.i) ? F_ACCEPT :  F_REJECT;
       else
 	runtime("Can't return non-bool from non-function");
+    }
 
     /* Set the value stack position, overwriting the former implicit void */
     fstk->vcnt = fstk->estk[fstk->ecnt].ventry - 1;
@@ -898,8 +963,12 @@
     SYMBOL;
 
     FID_SAME_BODY()
-      if (!(f2->sym->flags & SYM_FLAG_SAME))
+      if (!(f1->sym->flags & SYM_FLAG_SAME))
 	return 0;
+
+    FID_ITERATE_BODY()
+      BUFFER_PUSH(fit->lines) = whati->sym->function;
+
     FID_INTERPRET_BODY()
 
     /* Push the body on stack */
@@ -929,6 +998,10 @@
 
     FID_MEMBER(struct f_tree *, tree, [[!same_tree(f1->tree, f2->tree)]], "tree %p", item->tree);
 
+    FID_ITERATE_BODY()
+      tree_walk(whati->tree, f_add_tree_lines, fit);
+
+    FID_INTERPRET_BODY()
     const struct f_tree *t = find_tree(tree, &v1);
     if (!t) {
       v1.type = T_VOID;
@@ -960,6 +1033,8 @@
   INST(FI_CLIST_ADD, 2, 1) {	/* (Extended) Community list add */
     ARG_ANY(1);
     ARG_ANY(2);
+    RESULT_TYPE(f1->type);
+
     if (v1.type == T_PATH)
       runtime("Can't add to path");
 
@@ -969,14 +1044,14 @@
       struct f_val dummy;
 
       if ((v2.type == T_PAIR) || (v2.type == T_QUAD))
-	RESULT(T_CLIST, ad, [[ int_set_add(fpool, v1.val.ad, v2.val.i) ]]);
+	RESULT_(T_CLIST, ad, [[ int_set_add(fpool, v1.val.ad, v2.val.i) ]]);
       /* IP->Quad implicit conversion */
       else if (val_is_ip4(&v2))
-	RESULT(T_CLIST, ad, [[ int_set_add(fpool, v1.val.ad, ipa_to_u32(v2.val.ip)) ]]);
+	RESULT_(T_CLIST, ad, [[ int_set_add(fpool, v1.val.ad, ipa_to_u32(v2.val.ip)) ]]);
       else if ((v2.type == T_SET) && clist_set_type(v2.val.t, &dummy))
 	runtime("Can't add set");
       else if (v2.type == T_CLIST)
-	RESULT(T_CLIST, ad, [[ int_set_union(fpool, v1.val.ad, v2.val.ad) ]]);
+	RESULT_(T_CLIST, ad, [[ int_set_union(fpool, v1.val.ad, v2.val.ad) ]]);
       else
 	runtime("Can't add non-pair");
     }
@@ -987,11 +1062,11 @@
       if ((v2.type == T_SET) && eclist_set_type(v2.val.t))
 	runtime("Can't add set");
       else if (v2.type == T_ECLIST)
-	RESULT(T_ECLIST, ad, [[ ec_set_union(fpool, v1.val.ad, v2.val.ad) ]]);
+	RESULT_(T_ECLIST, ad, [[ ec_set_union(fpool, v1.val.ad, v2.val.ad) ]]);
       else if (v2.type != T_EC)
 	runtime("Can't add non-ec");
       else
-	RESULT(T_ECLIST, ad, [[ ec_set_add(fpool, v1.val.ad, v2.val.ec) ]]);
+	RESULT_(T_ECLIST, ad, [[ ec_set_add(fpool, v1.val.ad, v2.val.ec) ]]);
     }
 
     else if (v1.type == T_LCLIST)
@@ -1000,11 +1075,11 @@
       if ((v2.type == T_SET) && lclist_set_type(v2.val.t))
 	runtime("Can't add set");
       else if (v2.type == T_LCLIST)
-	RESULT(T_LCLIST, ad, [[ lc_set_union(fpool, v1.val.ad, v2.val.ad) ]]);
+	RESULT_(T_LCLIST, ad, [[ lc_set_union(fpool, v1.val.ad, v2.val.ad) ]]);
       else if (v2.type != T_LC)
 	runtime("Can't add non-lc");
       else
-	RESULT(T_LCLIST, ad, [[ lc_set_add(fpool, v1.val.ad, v2.val.lc) ]]);
+	RESULT_(T_LCLIST, ad, [[ lc_set_add(fpool, v1.val.ad, v2.val.lc) ]]);
 
     }
 
@@ -1015,6 +1090,8 @@
   INST(FI_CLIST_DEL, 2, 1) {	/* (Extended) Community list add or delete */
     ARG_ANY(1);
     ARG_ANY(2);
+    RESULT_TYPE(f1->type);
+
     if (v1.type == T_PATH)
     {
       const struct f_tree *set = NULL;
@@ -1027,7 +1104,7 @@
       else
 	runtime("Can't delete non-integer (set)");
 
-      RESULT(T_PATH, ad, [[ as_path_filter(fpool, v1.val.ad, set, key, 0) ]]);
+      RESULT_(T_PATH, ad, [[ as_path_filter(fpool, v1.val.ad, set, key, 0) ]]);
     }
 
     else if (v1.type == T_CLIST)
@@ -1036,12 +1113,12 @@
       struct f_val dummy;
 
       if ((v2.type == T_PAIR) || (v2.type == T_QUAD))
-	RESULT(T_CLIST, ad, [[ int_set_del(fpool, v1.val.ad, v2.val.i) ]]);
+	RESULT_(T_CLIST, ad, [[ int_set_del(fpool, v1.val.ad, v2.val.i) ]]);
       /* IP->Quad implicit conversion */
       else if (val_is_ip4(&v2))
-	RESULT(T_CLIST, ad, [[ int_set_del(fpool, v1.val.ad, ipa_to_u32(v2.val.ip)) ]]);
+	RESULT_(T_CLIST, ad, [[ int_set_del(fpool, v1.val.ad, ipa_to_u32(v2.val.ip)) ]]);
       else if ((v2.type == T_SET) && clist_set_type(v2.val.t, &dummy) || (v2.type == T_CLIST))
-	RESULT(T_CLIST, ad, [[ clist_filter(fpool, v1.val.ad, &v2, 0) ]]);
+	RESULT_(T_CLIST, ad, [[ clist_filter(fpool, v1.val.ad, &v2, 0) ]]);
       else
 	runtime("Can't delete non-pair");
     }
@@ -1050,22 +1127,22 @@
     {
       /* v2.val is either EC or EC-set */
       if ((v2.type == T_SET) && eclist_set_type(v2.val.t) || (v2.type == T_ECLIST))
-	RESULT(T_ECLIST, ad, [[ eclist_filter(fpool, v1.val.ad, &v2, 0) ]]);
+	RESULT_(T_ECLIST, ad, [[ eclist_filter(fpool, v1.val.ad, &v2, 0) ]]);
       else if (v2.type != T_EC)
 	runtime("Can't delete non-ec");
       else
-	RESULT(T_ECLIST, ad, [[ ec_set_del(fpool, v1.val.ad, v2.val.ec) ]]);
+	RESULT_(T_ECLIST, ad, [[ ec_set_del(fpool, v1.val.ad, v2.val.ec) ]]);
     }
 
     else if (v1.type == T_LCLIST)
     {
       /* v2.val is either LC or LC-set */
       if ((v2.type == T_SET) && lclist_set_type(v2.val.t) || (v2.type == T_LCLIST))
-	RESULT(T_LCLIST, ad, [[ lclist_filter(fpool, v1.val.ad, &v2, 0) ]]);
+	RESULT_(T_LCLIST, ad, [[ lclist_filter(fpool, v1.val.ad, &v2, 0) ]]);
       else if (v2.type != T_LC)
 	runtime("Can't delete non-lc");
       else
-	RESULT(T_LCLIST, ad, [[ lc_set_del(fpool, v1.val.ad, v2.val.lc) ]]);
+	RESULT_(T_LCLIST, ad, [[ lc_set_del(fpool, v1.val.ad, v2.val.lc) ]]);
     }
 
     else
@@ -1075,12 +1152,14 @@
   INST(FI_CLIST_FILTER, 2, 1) {	/* (Extended) Community list add or delete */
     ARG_ANY(1);
     ARG_ANY(2);
+    RESULT_TYPE(f1->type);
+
     if (v1.type == T_PATH)
     {
       u32 key = 0;
 
       if ((v2.type == T_SET) && (v2.val.t->from.type == T_INT))
-	RESULT(T_PATH, ad, [[ as_path_filter(fpool, v1.val.ad, v2.val.t, key, 1) ]]);
+	RESULT_(T_PATH, ad, [[ as_path_filter(fpool, v1.val.ad, v2.val.t, key, 1) ]]);
       else
 	runtime("Can't filter integer");
     }
@@ -1091,7 +1170,7 @@
       struct f_val dummy;
 
       if ((v2.type == T_SET) && clist_set_type(v2.val.t, &dummy) || (v2.type == T_CLIST))
-	RESULT(T_CLIST, ad, [[ clist_filter(fpool, v1.val.ad, &v2, 1) ]]);
+	RESULT_(T_CLIST, ad, [[ clist_filter(fpool, v1.val.ad, &v2, 1) ]]);
       else
 	runtime("Can't filter pair");
     }
@@ -1100,7 +1179,7 @@
     {
       /* v2.val is either EC or EC-set */
       if ((v2.type == T_SET) && eclist_set_type(v2.val.t) || (v2.type == T_ECLIST))
-	RESULT(T_ECLIST, ad, [[ eclist_filter(fpool, v1.val.ad, &v2, 1) ]]);
+	RESULT_(T_ECLIST, ad, [[ eclist_filter(fpool, v1.val.ad, &v2, 1) ]]);
       else
 	runtime("Can't filter ec");
     }
@@ -1109,7 +1188,7 @@
     {
       /* v2.val is either LC or LC-set */
       if ((v2.type == T_SET) && lclist_set_type(v2.val.t) || (v2.type == T_LCLIST))
-	RESULT(T_LCLIST, ad, [[ lclist_filter(fpool, v1.val.ad, &v2, 1) ]]);
+	RESULT_(T_LCLIST, ad, [[ lclist_filter(fpool, v1.val.ad, &v2, 1) ]]);
       else
 	runtime("Can't filter lc");
     }

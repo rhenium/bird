@@ -25,6 +25,49 @@
 #include "filter/f-inst.h"
 #include "filter/data.h"
 
+static const char * const f_type_str[] = {
+  [T_VOID]	= "void",
+
+  [T_INT]	= "int",
+  [T_BOOL]	= "bool",
+  [T_PAIR]	= "pair",
+  [T_QUAD]	= "quad",
+
+  [T_ENUM_RTS]	= "enum rts",
+  [T_ENUM_BGP_ORIGIN] = "enum bgp_origin",
+  [T_ENUM_SCOPE] = "enum scope",
+  [T_ENUM_RTC]	= "enum rtc",
+  [T_ENUM_RTD]	= "enum rtd",
+  [T_ENUM_ROA]	= "enum roa",
+  [T_ENUM_NETTYPE] = "enum nettype",
+  [T_ENUM_RA_PREFERENCE] = "enum ra_preference",
+  [T_ENUM_AF]	= "enum af",
+
+  [T_IP]	= "ip",
+  [T_NET]	= "prefix",
+  [T_STRING]	= "string",
+  [T_PATH_MASK]	= "bgpmask",
+  [T_PATH]	= "bgppath",
+  [T_CLIST]	= "clist",
+  [T_EC]	= "ec",
+  [T_ECLIST]	= "eclist",
+  [T_LC]	= "lc",
+  [T_LCLIST]	= "lclist",
+  [T_RD]	= "rd",
+};
+
+const char *
+f_type_name(enum f_type t)
+{
+  if (t < ARRAY_SIZE(f_type_str))
+    return f_type_str[t] ?: "?";
+
+  if ((t == T_SET) || (t == T_PREFIX_SET))
+    return "set";
+
+  return "?";
+}
+
 const struct f_val f_const_empty_path = {
   .type = T_PATH,
   .val.ad = &null_adata,
@@ -50,6 +93,8 @@ adata_empty(struct linpool *pool, int l)
 static void
 pm_format(const struct f_path_mask *p, buffer *buf)
 {
+  int loop = 0;
+
   buffer_puts(buf, "[= ");
 
   for (uint i=0; i<p->len; i++)
@@ -68,14 +113,28 @@ pm_format(const struct f_path_mask *p, buffer *buf)
       buffer_puts(buf, "* ");
       break;
 
+    case PM_LOOP:
+      loop = 1;
+      break;
+
     case PM_ASN_RANGE:
       buffer_print(buf, "%u..%u ", p->item[i].from, p->item[i].to);
+      break;
+
+    case PM_ASN_SET:
+      tree_format(p->item[i].set, buf);
+      buffer_puts(buf, " ");
       break;
 
     case PM_ASN_EXPR:
       ASSERT(0);
     }
 
+    if (loop && (p->item[i].kind != PM_LOOP))
+    {
+      buffer_puts(buf, "+ ");
+      loop = 0;
+    }
   }
 
   buffer_puts(buf, "=]");
@@ -167,6 +226,10 @@ pmi_same(const struct f_path_mask_item *mi1, const struct f_path_mask_item *mi2)
       if (mi1->to != mi2->to)
 	return 0;
       break;
+    case PM_ASN_SET:
+      if (!same_tree(mi1->set, mi2->set))
+	return 0;
+      break;
   }
 
   return 1;
@@ -176,6 +239,7 @@ static int
 pm_same(const struct f_path_mask *m1, const struct f_path_mask *m2)
 {
   if (m1->len != m2->len)
+    return 0;
 
   for (uint i=0; i<m1->len; i++)
     if (!pmi_same(&(m1->item[i]), &(m2->item[i])))

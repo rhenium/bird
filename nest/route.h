@@ -10,6 +10,7 @@
 #define _BIRD_ROUTE_H_
 
 #include "lib/lists.h"
+#include "lib/bitmap.h"
 #include "lib/resource.h"
 #include "lib/net.h"
 
@@ -18,6 +19,7 @@ struct protocol;
 struct proto;
 struct rte_src;
 struct symbol;
+struct timer;
 struct filter;
 struct cli;
 
@@ -36,7 +38,6 @@ struct cli;
 struct fib_node {
   struct fib_node *next;		/* Next in hash chain */
   struct fib_iterator *readers;		/* List of readers of this node */
-  byte flags;				/* User-defined, will be removed */
   net_addr addr[0];
 };
 
@@ -84,6 +85,8 @@ void fit_init(struct fib_iterator *, struct fib *); /* Internal functions, don't
 struct fib_node *fit_get(struct fib *, struct fib_iterator *);
 void fit_put(struct fib_iterator *, struct fib_node *);
 void fit_put_next(struct fib *f, struct fib_iterator *i, struct fib_node *n, uint hpos);
+void fit_put_end(struct fib_iterator *i);
+void fit_copy(struct fib *f, struct fib_iterator *dst, struct fib_iterator *src);
 
 
 #define FIB_WALK(fib, type, z) do {				\
@@ -118,7 +121,11 @@ void fit_put_next(struct fib *f, struct fib_iterator *i, struct fib_node *n, uin
 
 #define FIB_ITERATE_PUT_NEXT(it, fib) fit_put_next(fib, it, fn_, hpos_)
 
+#define FIB_ITERATE_PUT_END(it) fit_put_end(it)
+
 #define FIB_ITERATE_UNLINK(it, fib) fit_get(fib, it)
+
+#define FIB_ITERATE_COPY(dst, src, fib) fit_copy(fib, dst, src)
 
 
 /*
@@ -141,6 +148,8 @@ struct rtable_config {
   int gc_max_ops;			/* Maximum number of operations before GC is run */
   int gc_min_time;			/* Minimum time between two consecutive GC runs */
   byte sorted;				/* Routes of network are sorted according to rte_better() */
+  btime min_settle_time;		/* Minimum settle time for notifications */
+  btime max_settle_time;		/* Maximum settle time for notifications */
 };
 
 typedef struct rtable {
@@ -152,6 +161,7 @@ typedef struct rtable {
   int pipe_busy;			/* Pipe loop detection */
   int use_count;			/* Number of protocols using this table */
   u32 rt_count;				/* Number of routes in the table */
+  struct hmap id_map;
   struct hostcache *hostcache;
   struct rtable_config *config;		/* Configuration of this table */
   struct config *deleted;		/* Table doesn't exist in current configuration,
@@ -159,6 +169,8 @@ typedef struct rtable {
 					 * obstacle from this routing table.
 					 */
   struct event *rt_event;		/* Routing table event */
+  btime last_rt_change;			/* Last time when route changed */
+  btime base_settle_time;		/* Start time of rtable settling interval */
   btime gc_time;			/* Time of last GC */
   int gc_counter;			/* Number of operations since last GC */
   byte prune_state;			/* Table prune state, 1 -> scheduled, 2-> running */
@@ -166,7 +178,17 @@ typedef struct rtable {
   byte nhu_state;			/* Next Hop Update state */
   struct fib_iterator prune_fit;	/* Rtable prune FIB iterator */
   struct fib_iterator nhu_fit;		/* Next Hop Update FIB iterator */
+
+  list subscribers;			/* Subscribers for notifications */
+  struct timer *settle_timer;		/* Settle time for notifications */
 } rtable;
+
+struct rt_subscription {
+  node n;
+  rtable *tab;
+  void (*hook)(struct rt_subscription *b);
+  void *data;
+};
 
 #define NHU_CLEAN	0
 #define NHU_SCHEDULED	1
@@ -210,6 +232,7 @@ typedef struct rte {
   net *net;				/* Network this RTE belongs to */
   struct channel *sender;		/* Channel used to send the route to the routing table */
   struct rta *attrs;			/* Attributes of this route */
+  u32 id;				/* Table specific route id */
   byte flags;				/* Flags (REF_...) */
   byte pflags;				/* Protocol-specific flags */
   word pref;				/* Route preference */
@@ -286,6 +309,8 @@ void rt_preconfig(struct config *);
 void rt_commit(struct config *new, struct config *old);
 void rt_lock_table(rtable *);
 void rt_unlock_table(rtable *);
+void rt_subscribe(rtable *tab, struct rt_subscription *s);
+void rt_unsubscribe(struct rt_subscription *s);
 void rt_setup(pool *, rtable *, struct rtable_config *);
 static inline net *net_find(rtable *tab, const net_addr *addr) { return (net *) fib_find(&tab->fib, addr); }
 static inline net *net_find_valid(rtable *tab, const net_addr *addr)
@@ -345,6 +370,7 @@ struct rt_show_data {
   struct proto *export_protocol;
   struct channel *export_channel;
   struct config *running_on_config;
+  struct krt_proto *kernel;
   int export_mode, primary_only, filtered, stats, show_for;
 
   int table_open;			/* Iteration (fit) is open */
@@ -369,6 +395,7 @@ struct rt_show_data_rtable * rt_show_add_table(struct rt_show_data *d, rtable *t
 #define RSEM_PREEXPORT	1		/* Routes ready for export, before filtering */
 #define RSEM_EXPORT	2		/* Routes accepted by export filter */
 #define RSEM_NOEXPORT	3		/* Routes rejected by export filter */
+#define RSEM_EXPORTED	4		/* Routes marked in export map */
 
 /*
  *	Route Attributes
@@ -448,17 +475,13 @@ typedef struct rta {
 #define RTD_PROHIBIT 4			/* Administratively prohibited */
 #define RTD_MAX 5
 
-					/* Flags for net->n.flags, used by kernel syncer */
-#define KRF_INSTALLED 0x80		/* This route should be installed in the kernel */
-#define KRF_SYNC_ERROR 0x40		/* Error during kernel table synchronization */
-
 #define RTAF_CACHED 1			/* This is a cached rta */
 
 #define IGP_METRIC_UNKNOWN 0x80000000	/* Default igp_metric used when no other
 					   protocol-specific metric is availabe */
 
 
-const char * rta_dest_names[RTD_MAX];
+extern const char * rta_dest_names[RTD_MAX];
 
 static inline const char *rta_dest_name(uint n)
 { return (n < RTD_MAX) ? rta_dest_names[n] : "???"; }
@@ -571,7 +594,7 @@ void ea_merge(ea_list *from, ea_list *to); /* Merge sub-lists to allocated buffe
 int ea_same(ea_list *x, ea_list *y);	/* Test whether two ea_lists are identical */
 uint ea_hash(ea_list *e);	/* Calculate 16-bit hash value */
 ea_list *ea_append(ea_list *to, ea_list *what);
-void ea_format_bitfield(struct eattr *a, byte *buf, int bufsize, const char **names, int min, int max);
+void ea_format_bitfield(const struct eattr *a, byte *buf, int bufsize, const char **names, int min, int max);
 
 #define ea_normalize(ea) do { \
   if (ea->next) { \

@@ -88,6 +88,14 @@ sl_alloc(slab *s)
   return o->data;
 }
 
+void *
+sl_allocz(slab *s)
+{
+  void *obj = sl_alloc(s);
+  memset(obj, 0, s->size);
+  return obj;
+}
+
 void
 sl_free(slab *s, void *oo)
 {
@@ -216,8 +224,11 @@ sl_new_head(slab *s)
   struct sl_obj *no;
   uint n = s->objs_per_slab;
 
-  h->first_free = o;
-  h->num_full = 0;
+  *h = (struct sl_head) {
+    .first_free = o,
+    .num_full = 0,
+  };
+
   while (n--)
     {
       o->slab = h;
@@ -273,6 +284,22 @@ no_partial:
   h = sl_new_head(s);
   add_head(&s->partial_heads, &h->n);
   goto okay;
+}
+
+/**
+ * sl_allocz - allocate an object from Slab and zero it
+ * @s: slab
+ *
+ * sl_allocz() allocates space for a single object from the
+ * Slab and returns a pointer to the object after zeroing out
+ * the object memory.
+ */
+void *
+sl_allocz(slab *s)
+{
+  void *obj = sl_alloc(s);
+  memset(obj, 0, s->data_size);
+  return obj;
 }
 
 /**

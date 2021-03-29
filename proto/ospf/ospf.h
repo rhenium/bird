@@ -191,6 +191,7 @@ struct ospf_iface_patt
   u8 link_lsa_suppression;
   u8 real_bcast;		/* Not really used in OSPFv3 */
   u8 ptp_netmask;		/* bool + 2 for unspecified */
+  u8 ptp_address;		/* bool + 2 for unspecified */
   u8 ttl_security;		/* bool + 2 for TX only */
   u8 bfd;
   list *passwords;
@@ -348,6 +349,7 @@ struct ospf_iface
   u8 ecmp_weight;		/* Weight used for ECMP */
   u8 link_lsa_suppression;	/* Suppression of Link-LSA origination */
   u8 ptp_netmask;		/* Send real netmask for P2P */
+  u8 ptp_address;		/* Send IP address in data field for PtP */
   u8 check_ttl;			/* Check incoming packets for TTL 255 */
   u8 bfd;			/* Use BFD on iface */
 };
@@ -990,9 +992,9 @@ static inline int oa_is_nssa(struct ospf_area *oa)
 
 void ospf_stop_gr_recovery(struct ospf_proto *p);
 
-void ospf_sh_neigh(struct proto *P, char *iff);
+void ospf_sh_neigh(struct proto *P, const char *iff);
 void ospf_sh(struct proto *P);
-void ospf_sh_iface(struct proto *P, char *iff);
+void ospf_sh_iface(struct proto *P, const char *iff);
 void ospf_sh_state(struct proto *P, int verbose, int reachable);
 
 void ospf_sh_lsadb(struct lsadb_show_data *ld);
@@ -1017,6 +1019,20 @@ struct nbma_node *find_nbma_node_(list *nnl, ip_addr ip);
 
 static inline struct nbma_node * find_nbma_node(struct ospf_iface *ifa, ip_addr ip)
 { return find_nbma_node_(&ifa->nbma_list, ip); }
+
+static inline u32 ospf_iface_get_data(struct ospf_iface *ifa)
+{
+  /*
+   * Return expected value of the link data field in Rt-LSA for given iface.
+   * It should be ifa->iface_id for unnumbered PtP links, IP address otherwise
+   * (see RFC 2328 12.4.1.1). It is controlled by ifa->ptp_address field so it
+   * can be overriden for compatibility purposes.
+   */
+
+  return ((ifa->type == OSPF_IT_PTP) && !ifa->ptp_address) ?
+    ifa->iface_id :
+    ipa_to_u32(ifa->addr->ip);
+}
 
 /* neighbor.c */
 struct ospf_neighbor *ospf_neighbor_new(struct ospf_iface *ifa);

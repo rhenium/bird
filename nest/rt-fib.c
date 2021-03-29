@@ -327,7 +327,6 @@ fib_get(struct fib *f, const net_addr *a)
 
   struct fib_node *e = fib_user_to_node(f, b);
   e->readers = NULL;
-  e->flags = 0;
   fib_insert(f, a, e);
 
   memset(b, 0, f->node_offset);
@@ -584,6 +583,40 @@ fit_put_next(struct fib *f, struct fib_iterator *i, struct fib_node *n, uint hpo
 found:
   fit_put(i, n);
 }
+
+void
+fit_put_end(struct fib_iterator *i)
+{
+  i->prev = i->next = NULL;
+  i->node = NULL;
+  i->hash = ~0 - 1;
+}
+
+void
+fit_copy(struct fib *f, struct fib_iterator *dst, struct fib_iterator *src)
+{
+  struct fib_iterator *nxt = src->next;
+
+  fit_get(f, dst);
+
+  if (!src->prev)
+  {
+    /* We are at the end */
+    fit_put_end(dst);
+    return;
+  }
+
+  src->next = dst;
+  dst->prev = src;
+
+  dst->next = nxt;
+  if (nxt)
+    nxt->prev = dst;
+
+  dst->node = src->node;
+  dst->hash = src->hash;
+}
+
 
 #ifdef DEBUGGING
 

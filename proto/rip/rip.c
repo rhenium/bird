@@ -69,10 +69,11 @@
  * structure is finally freed.
  *
  * Supported standards:
- * - RFC 1058 - RIPv1
- * - RFC 2453 - RIPv2
- * - RFC 2080 - RIPng
- * - RFC 4822 - RIP cryptographic authentication
+ * RFC 1058 - RIPv1
+ * RFC 2453 - RIPv2
+ * RFC 2080 - RIPng
+ * RFC 2091 - Triggered RIP for demand circuits
+ * RFC 4822 - RIP cryptographic authentication
  */
 
 #include <stdlib.h>
@@ -167,7 +168,7 @@ rip_announce_rte(struct rip_proto *p, struct rip_entry *en)
 	struct nexthop *nh = allocz(sizeof(struct nexthop));
 
 	nh->gw = rt->next_hop;
-	nh->iface = rt->from->nbr->iface;
+	nh->iface = rt->from->ifa->iface;
 	nh->weight = rt->from->ifa->cf->ecmp_weight;
 
 	nexthop_insert(&nhs, nh);
@@ -184,7 +185,7 @@ rip_announce_rte(struct rip_proto *p, struct rip_entry *en)
       /* Unipath route */
       a0.from = rt->from->nbr->addr;
       a0.nh.gw = rt->next_hop;
-      a0.nh.iface = rt->from->nbr->iface;
+      a0.nh.iface = rt->from->ifa->iface;
     }
 
     rta *a = rta_lookup(&a0);
@@ -368,6 +369,20 @@ rip_rt_notify(struct proto *P, struct channel *ch UNUSED, struct network *net, s
   }
 }
 
+void
+rip_flush_table(struct rip_proto *p, struct rip_neighbor *n)
+{
+  btime expires = current_time() + n->ifa->cf->timeout_time;
+
+  FIB_WALK(&p->rtable, struct rip_entry, en)
+  {
+    for (struct rip_rte *e = en->routes; e; e = e->next)
+      if ((e->from == n) && (e->expires == TIME_INFINITY))
+	e->expires = expires;
+  }
+  FIB_WALK_END;
+}
+
 
 /*
  *	RIP neighbors
@@ -402,7 +417,7 @@ rip_remove_neighbor(struct rip_proto *p, struct rip_neighbor *n)
 {
   neighbor *nbr = n->nbr;
 
-  TRACE(D_EVENTS, "Removing neighbor %I on %s", nbr->addr, nbr->iface->name);
+  TRACE(D_EVENTS, "Removing neighbor %I on %s", nbr->addr, nbr->ifreq->name);
 
   rem_node(NODE n);
   n->ifa = NULL;
@@ -484,7 +499,7 @@ rip_update_bfd(struct rip_proto *p, struct rip_neighbor *n)
     ip_addr saddr = rip_is_v2(p) ? n->ifa->sk->saddr : n->nbr->ifa->ip;
     n->bfd_req = bfd_request_session(p->p.pool, n->nbr->addr, saddr,
 				     n->nbr->iface, p->p.vrf,
-				     rip_bfd_notify, n);
+				     rip_bfd_notify, n, NULL);
   }
 
   if (!use_bfd && n->bfd_req)
@@ -506,14 +521,23 @@ rip_iface_start(struct rip_iface *ifa)
 
   TRACE(D_EVENTS, "Starting interface %s", ifa->iface->name);
 
-  ifa->next_regular = current_time() + (random() % ifa->cf->update_time) + 100 MS;
-  ifa->next_triggered = current_time();	/* Available immediately */
-  ifa->want_triggered = 1;		/* All routes in triggered update */
-  tm_start(ifa->timer, 100 MS);
+  if (! ifa->cf->demand_circuit)
+  {
+    ifa->next_regular = current_time() + (random() % ifa->cf->update_time) + 100 MS;
+    tm_set(ifa->timer, ifa->next_regular);
+  }
+  else
+  {
+    ifa->next_regular = TIME_INFINITY;
+  }
+
   ifa->up = 1;
 
-  if (!ifa->cf->passive)
-    rip_send_request(ifa->rip, ifa);
+  if (ifa->cf->passive)
+    return;
+
+  rip_send_request(p, ifa);
+  rip_send_table(p, ifa, ifa->addr, 0);
 }
 
 static void
@@ -526,10 +550,24 @@ rip_iface_stop(struct rip_iface *ifa)
 
   rip_reset_tx_session(p, ifa);
 
+  ifa->next_regular = 0;
+  ifa->next_triggered = 0;
+  ifa->want_triggered = 0;
+
+  if (ifa->tx_pending)
+    ifa->tx_seqnum++;
+
+  ifa->tx_pending = 0;
+  ifa->req_pending = 0;
+
+  if (ifa->cf->demand_circuit && !ifa->cf->passive)
+    rip_send_flush(p, ifa);
+
   WALK_LIST_FIRST(n, ifa->neigh_list)
     rip_remove_neighbor(p, n);
 
   tm_stop(ifa->timer);
+  tm_stop(ifa->rxmt_timer);
   ifa->up = 0;
 }
 
@@ -643,6 +681,7 @@ rip_add_iface(struct rip_proto *p, struct iface *iface, struct rip_iface_config 
   add_tail(&p->iface_list, NODE ifa);
 
   ifa->timer = tm_new_init(p->p.pool, rip_iface_timer, ifa, 0, 0);
+  ifa->rxmt_timer = tm_new_init(p->p.pool, rip_rxmt_timeout, ifa, 0, 0);
 
   struct object_lock *lock = olock_new(p->p.pool);
   lock->type = OBJLOCK_UDP;
@@ -681,7 +720,8 @@ rip_reconfigure_iface(struct rip_proto *p, struct rip_iface *ifa, struct rip_ifa
       (new->port != old->port) ||
       (new->tx_tos != old->tx_tos) ||
       (new->tx_priority != old->tx_priority) ||
-      (new->ttl_security != old->ttl_security))
+      (new->ttl_security != old->ttl_security) ||
+      (new->demand_circuit != old->demand_circuit))
     return 0;
 
   TRACE(D_EVENTS, "Reconfiguring interface %s", ifa->iface->name);
@@ -690,8 +730,20 @@ rip_reconfigure_iface(struct rip_proto *p, struct rip_iface *ifa, struct rip_ifa
 
   rip_iface_update_buffers(ifa);
 
-  if (ifa->next_regular > (current_time() + new->update_time))
+  if ((! ifa->cf->demand_circuit) &&
+      (ifa->next_regular > (current_time() + new->update_time)))
     ifa->next_regular = current_time() + (random() % new->update_time) + 100 MS;
+
+  if (ifa->up && new->demand_circuit && (new->passive != old->passive))
+  {
+    if (new->passive)
+      rip_send_flush(p, ifa);
+    else
+    {
+      rip_send_request(p, ifa);
+      rip_send_table(p, ifa, ifa->addr, 0);
+    }
+  }
 
   if (new->check_link != old->check_link)
     rip_iface_update_state(ifa);
@@ -885,6 +937,11 @@ rip_timer(timer *t)
 
   /* Handling neighbor expiration */
   WALK_LIST(ifa, p->iface_list)
+  {
+    /* No expiration for demand circuit ifaces */
+    if (ifa->cf->demand_circuit)
+      continue;
+
     WALK_LIST_DELSAFE(n, nn, ifa->neigh_list)
       if (n->last_seen)
       {
@@ -895,6 +952,7 @@ rip_timer(timer *t)
 	else
 	  next = MIN(next, expires);
       }
+  }
 
   tm_start(p->timer, MAX(next - now_, 100 MS));
 }
@@ -902,7 +960,7 @@ rip_timer(timer *t)
 static inline void
 rip_kick_timer(struct rip_proto *p)
 {
-  if (p->timer->expires > (current_time() + 100 MS))
+  if ((p->timer->expires > (current_time() + 100 MS)))
     tm_start(p->timer, 100 MS);
 }
 
@@ -931,11 +989,8 @@ rip_iface_timer(timer *t)
 
   if (ifa->tx_active)
   {
-    if (now_ < (ifa->next_regular + period))
-    { tm_start(ifa->timer, 100 MS); return; }
-
-    /* We are too late, reset is done by rip_send_table() */
-    log(L_WARN "%s: Too slow update on %s, resetting", p->p.name, ifa->iface->name);
+    tm_start(ifa->timer, 100 MS);
+    return;
   }
 
   if (now_ >= ifa->next_regular)
@@ -957,13 +1012,17 @@ rip_iface_timer(timer *t)
     p->triggered = 0;
   }
 
-  tm_start(ifa->timer, ifa->want_triggered ? (1 S) : (ifa->next_regular - now_));
+  if (ifa->want_triggered && (ifa->next_triggered < ifa->next_regular))
+    tm_set(ifa->timer, ifa->next_triggered);
+  else if (ifa->next_regular != TIME_INFINITY)
+    tm_set(ifa->timer, ifa->next_regular);
 }
+
 
 static inline void
 rip_iface_kick_timer(struct rip_iface *ifa)
 {
-  if (ifa->timer->expires > (current_time() + 100 MS))
+  if ((! tm_active(ifa->timer)) || (ifa->timer->expires > (current_time() + 100 MS)))
     tm_start(ifa->timer, 100 MS);
 }
 
@@ -987,9 +1046,8 @@ rip_trigger_update(struct rip_proto *p)
     TRACE(D_EVENTS, "Scheduling triggered updates for %s", ifa->iface->name);
     ifa->want_triggered = current_time();
     rip_iface_kick_timer(ifa);
+    p->triggered = 1;
   }
-
-  p->triggered = 1;
 }
 
 
@@ -1096,6 +1154,20 @@ rip_start(struct proto *P)
 }
 
 static int
+rip_shutdown(struct proto *P)
+{
+  struct rip_proto *p = (void *) P;
+
+  TRACE(D_EVENTS, "Shutdown requested");
+
+  struct rip_iface *ifa;
+  WALK_LIST(ifa, p->iface_list)
+    rip_iface_stop(ifa);
+
+  return PS_DOWN;
+}
+
+static int
 rip_reconfigure(struct proto *P, struct proto_config *CF)
 {
   struct rip_proto *p = (void *) P;
@@ -1133,7 +1205,7 @@ rip_get_route_info(rte *rte, byte *buf)
 }
 
 static int
-rip_get_attr(eattr *a, byte *buf, int buflen UNUSED)
+rip_get_attr(const eattr *a, byte *buf, int buflen UNUSED)
 {
   switch (a->id)
   {
@@ -1151,7 +1223,7 @@ rip_get_attr(eattr *a, byte *buf, int buflen UNUSED)
 }
 
 void
-rip_show_interfaces(struct proto *P, char *iff)
+rip_show_interfaces(struct proto *P, const char *iff)
 {
   struct rip_proto *p = (void *) P;
   struct rip_iface *ifa = NULL;
@@ -1160,7 +1232,6 @@ rip_show_interfaces(struct proto *P, char *iff)
   if (p->p.proto_state != PS_UP)
   {
     cli_msg(-1021, "%s: is not up", p->p.name);
-    cli_msg(0, "");
     return;
   }
 
@@ -1179,16 +1250,15 @@ rip_show_interfaces(struct proto *P, char *iff)
 	nbrs++;
 
     btime now_ = current_time();
-    btime timer = (ifa->next_regular > now_) ? (ifa->next_regular - now_) : 0;
+    btime timer = ((ifa->next_regular < TIME_INFINITY) && (ifa->next_regular > now_)) ?
+      (ifa->next_regular - now_) : 0;
     cli_msg(-1021, "%-10s %-6s %6u %6u %7t",
 	    ifa->iface->name, (ifa->up ? "Up" : "Down"), ifa->cf->metric, nbrs, timer);
   }
-
-  cli_msg(0, "");
 }
 
 void
-rip_show_neighbors(struct proto *P, char *iff)
+rip_show_neighbors(struct proto *P, const char *iff)
 {
   struct rip_proto *p = (void *) P;
   struct rip_iface *ifa = NULL;
@@ -1197,7 +1267,6 @@ rip_show_neighbors(struct proto *P, char *iff)
   if (p->p.proto_state != PS_UP)
   {
     cli_msg(-1022, "%s: is not up", p->p.name);
-    cli_msg(0, "");
     return;
   }
 
@@ -1220,8 +1289,6 @@ rip_show_neighbors(struct proto *P, char *iff)
 	      n->nbr->addr, ifa->iface->name, ifa->cf->metric, n->uc, timer);
     }
   }
-
-  cli_msg(0, "");
 }
 
 static void
@@ -1235,8 +1302,12 @@ rip_dump(struct proto *P)
   FIB_WALK(&p->rtable, struct rip_entry, en)
   {
     debug("RIP: entry #%d: %N via %I dev %s valid %d metric %d age %t\n",
-	  i++, en->n.addr, en->next_hop, en->iface->name,
+	  i++, en->n.addr, en->next_hop, en->iface ? en->iface->name : "(null)",
 	  en->valid, en->metric, current_time() - en->changed);
+
+    for (struct rip_rte *e = en->routes; e; e = e->next)
+      debug("RIP:   via %I metric %d expires %t\n",
+	    e->next_hop, e->metric, e->expires - current_time());
   }
   FIB_WALK_END;
 
@@ -1262,6 +1333,7 @@ struct protocol proto_rip = {
   .init =		rip_init,
   .dump =		rip_dump,
   .start =		rip_start,
+  .shutdown =		rip_shutdown,
   .reconfigure =	rip_reconfigure,
   .get_route_info =	rip_get_route_info,
   .get_attr =		rip_get_attr

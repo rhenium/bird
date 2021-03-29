@@ -26,6 +26,7 @@ struct static_proto {
 
   struct event *event;			/* Event for announcing updated routes */
   BUFFER_(struct static_route *) marked; /* Routes marked for reannouncement */
+  int marked_all;			/* All routes are marked */
   rtable *igp_table_ip4;		/* Table for recursive IPv4 next hop lookups */
   rtable *igp_table_ip6;		/* Table for recursive IPv6 next hop lookups */
 };
@@ -40,6 +41,7 @@ struct static_route {
   struct static_route *mp_head;		/* First nexthop of this route */
   struct static_route *mp_next;		/* Nexthops for multipath routes */
   struct f_line *cmds;			/* List of commands for setting attributes */
+  uint index;				/* Distinguish different routes with same net */
   byte dest;				/* Destination type (RTD_*) */
   byte state;				/* State of route announcement (SRS_*) */
   byte active;				/* Next hop is active (nbr/iface/BFD available) */
