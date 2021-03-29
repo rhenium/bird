@@ -24,6 +24,12 @@ AC_ARG_ENABLE([debug-generated],
   [enable_debug_generated=no]
 )
 
+AC_ARG_ENABLE([debug-expensive],
+  [AS_HELP_STRING([--enable-debug-expensive], [enable expensive consistency checks (implies --enable-debug) @<:@no@:>@])],
+  [],
+  [enable_debug_expensive=no]
+)
+
 AC_ARG_ENABLE([memcheck],
   [AS_HELP_STRING([--enable-memcheck], [check memory allocations when debugging @<:@yes@:>@])],
   [],
@@ -37,7 +43,7 @@ AC_ARG_ENABLE([pthreads],
 )
 
 AC_ARG_ENABLE([libssh],
-  [AS_HELP_STRING([--enable-libssh], [enable LibSSH support together with RPKI @<:@try@:>@])],
+  [AS_HELP_STRING([--enable-libssh], [enable LibSSH support in RPKI @<:@try@:>@])],
   [],
   [enable_libssh=try]
 )
@@ -72,6 +78,9 @@ AC_ARG_VAR([FLEX], [location of the Flex program])
 AC_ARG_VAR([BISON], [location of the Bison program])
 AC_ARG_VAR([M4], [location of the M4 program])
 
+if test "$enable_debug_expensive" = yes; then
+  enable_debug=yes
+fi
 
 if test "$srcdir" = . ; then
   # Building in current directory => create obj directory holding all objects
@@ -271,7 +280,6 @@ if test "$enable_libssh" != no ; then
   if test "$fail" != yes ; then
     AC_DEFINE([HAVE_LIBSSH], [1], [Define to 1 if you have the `ssh' library (-lssh).])
     DAEMON_LIBS="-lssh $DAEMON_LIBS"
-    proto_rpki=rpki
     enable_libssh=yes
   else
     if test "$enable_libssh" = yes ; then
@@ -296,7 +304,7 @@ if test "$enable_mpls_kernel" != no ; then
   fi
 fi
 
-all_protocols="$proto_bfd babel bgp mrt ospf perf pipe radv rip $proto_rpki static"
+all_protocols="$proto_bfd babel bgp mrt ospf perf pipe radv rip rpki static"
 
 all_protocols=`echo $all_protocols | sed 's/ /,/g'`
 
@@ -389,6 +397,10 @@ if test "$enable_debug" = yes ; then
       AC_CHECK_LIB([efence], [malloc])
     fi
   fi
+
+  if test "enable_debug_expensive" = yes ; then
+    AC_DEFINE([ENABLE_EXPENSIVE_CHECKS], [1], [Define to 1 if you want to run expensive consistency checks.])
+  fi
 fi
 
 CLIENT=birdcl
@@ -453,6 +465,7 @@ AC_MSG_RESULT([        System configuration:	$sysdesc])
 AC_MSG_RESULT([        Debugging:		$enable_debug])
 AC_MSG_RESULT([        POSIX threads:		$enable_pthreads])
 AC_MSG_RESULT([        Routing protocols:	$protocols])
+AC_MSG_RESULT([        LibSSH support in RPKI:	$enable_libssh])
 AC_MSG_RESULT([        Kernel MPLS support:	$enable_mpls_kernel])
 AC_MSG_RESULT([        Client:			$enable_client])
 

@@ -72,7 +72,7 @@ struct bgp_attr_desc {
   void (*export)(struct bgp_export_state *s, eattr *a);
   int  (*encode)(struct bgp_write_state *s, eattr *a, byte *buf, uint size);
   void (*decode)(struct bgp_parse_state *s, uint code, uint flags, byte *data, uint len, ea_list **to);
-  void (*format)(eattr *ea, byte *buf, uint size);
+  void (*format)(const eattr *ea, byte *buf, uint size);
 };
 
 static const struct bgp_attr_desc bgp_attr_table[];
@@ -396,13 +396,22 @@ bgp_decode_origin(struct bgp_parse_state *s, uint code UNUSED, uint flags, byte 
 }
 
 static void
-bgp_format_origin(eattr *a, byte *buf, uint size UNUSED)
+bgp_format_origin(const eattr *a, byte *buf, uint size UNUSED)
 {
   static const char *bgp_origin_names[] = { "IGP", "EGP", "Incomplete" };
 
   bsprintf(buf, (a->u.data <= 2) ? bgp_origin_names[a->u.data] : "?");
 }
 
+
+static inline int
+bgp_as_path_first_as_equal(const byte *data, uint len, u32 asn)
+{
+  return (len >= 6) &&
+    ((data[0] == AS_PATH_SEQUENCE) || (data[0] == AS_PATH_CONFED_SEQUENCE)) &&
+    (data[1] > 0) &&
+    (get_u32(data+2) == asn);
+}
 
 static int
 bgp_encode_as_path(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
@@ -426,16 +435,12 @@ bgp_decode_as_path(struct bgp_parse_state *s, uint code UNUSED, uint flags, byte
 {
   struct bgp_proto *p = s->proto;
   int as_length = s->as4_session ? 4 : 2;
+  int as_sets = p->cf->allow_as_sets;
   int as_confed = p->cf->confederation && p->is_interior;
   char err[128];
 
-  if (!as_path_valid(data, len, as_length, as_confed, err, sizeof(err)))
+  if (!as_path_valid(data, len, as_length, as_sets, as_confed, err, sizeof(err)))
     WITHDRAW("Malformed AS_PATH attribute - %s", err);
-
-  /* In some circumstances check for initial AS_CONFED_SEQUENCE; RFC 5065 5.0 */
-  if (p->is_interior && !p->is_internal &&
-      ((len < 2) || (data[0] != AS_PATH_CONFED_SEQUENCE)))
-    WITHDRAW("Malformed AS_PATH attribute - %s", "missing initial AS_CONFED_SEQUENCE");
 
   if (!s->as4_session)
   {
@@ -444,6 +449,16 @@ bgp_decode_as_path(struct bgp_parse_state *s, uint code UNUSED, uint flags, byte
     data = alloca(2*len);
     len = as_path_16to32(data, src, len);
   }
+
+  /* In some circumstances check for initial AS_CONFED_SEQUENCE; RFC 5065 5.0 */
+  if (p->is_interior && !p->is_internal &&
+      ((len < 2) || (data[0] != AS_PATH_CONFED_SEQUENCE)))
+    WITHDRAW("Malformed AS_PATH attribute - %s", "missing initial AS_CONFED_SEQUENCE");
+
+  /* Reject routes with first AS in AS_PATH not matching neighbor AS; RFC 4271 6.3 */
+  if (!p->is_internal && p->cf->enforce_first_as &&
+      !bgp_as_path_first_as_equal(data, len, p->remote_as))
+    WITHDRAW("Malformed AS_PATH attribute - %s", "First AS differs from neigbor AS");
 
   bgp_set_attr_data(to, s->pool, BA_AS_PATH, flags, data, len);
 }
@@ -495,7 +510,7 @@ bgp_decode_next_hop(struct bgp_parse_state *s, uint code UNUSED, uint flags UNUS
 
 /* TODO: This function should use AF-specific hook */
 static void
-bgp_format_next_hop(eattr *a, byte *buf, uint size UNUSED)
+bgp_format_next_hop(const eattr *a, byte *buf, uint size UNUSED)
 {
   ip_addr *nh = (void *) a->u.ptr->data;
   uint len = a->u.ptr->length;
@@ -562,6 +577,7 @@ bgp_encode_aggregator(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
     /* Prepare 16-bit AGGREGATOR (from 32-bit one) in a temporary buffer */
     byte *dst = alloca(6);
     len = aggregator_32to16(dst, data);
+    data = dst;
   }
 
   return bgp_put_attr(buf, size, BA_AGGREGATOR, a->flags, data, len);
@@ -585,7 +601,7 @@ bgp_decode_aggregator(struct bgp_parse_state *s, uint code UNUSED, uint flags, b
 }
 
 static void
-bgp_format_aggregator(eattr *a, byte *buf, uint size UNUSED)
+bgp_format_aggregator(const eattr *a, byte *buf, uint size UNUSED)
 {
   const byte *data = a->u.ptr->data;
 
@@ -660,12 +676,43 @@ bgp_decode_cluster_list(struct bgp_parse_state *s, uint code UNUSED, uint flags,
 }
 
 static void
-bgp_format_cluster_list(eattr *a, byte *buf, uint size)
+bgp_format_cluster_list(const eattr *a, byte *buf, uint size)
 {
   /* Truncates cluster lists larger than buflen, probably not a problem */
   int_set_format(a->u.ptr, 0, -1, buf, size);
 }
 
+
+int
+bgp_encode_mp_reach_mrt(struct bgp_write_state *s UNUSED, eattr *a, byte *buf, uint size)
+{
+  /*
+   *	Limited version of MP_REACH_NLRI used for MRT table dumps (IPv6 only):
+   *
+   *	3 B	MP_REACH_NLRI header
+   *	1 B	MP_REACH_NLRI data - Length of Next Hop Network Address
+   *	var	MP_REACH_NLRI data - Network Address of Next Hop
+   */
+
+  ip_addr *nh = (void *) a->u.ptr->data;
+  uint len = a->u.ptr->length;
+
+  ASSERT((len == 16) || (len == 32));
+
+  if (size < (3+1+len))
+    return -1;
+
+  bgp_put_attr_hdr3(buf, BA_MP_REACH_NLRI, BAF_OPTIONAL, 1+len);
+  buf[3] = len;
+  buf += 4;
+
+  put_ip6(buf, ipa_to_ip6(nh[0]));
+
+  if (len == 32)
+    put_ip6(buf+16, ipa_to_ip6(nh[1]));
+
+  return 3+1+len;
+}
 
 static inline u32
 get_af3(byte *buf)
@@ -717,13 +764,23 @@ bgp_decode_mp_unreach_nlri(struct bgp_parse_state *s, uint code UNUSED, uint fla
 static void
 bgp_export_ext_community(struct bgp_export_state *s, eattr *a)
 {
-  struct adata *ad = ec_set_del_nontrans(s->pool, a->u.ptr);
+  if (!s->proto->is_interior)
+  {
+    struct adata *ad = ec_set_del_nontrans(s->pool, a->u.ptr);
 
-  if (ad->length == 0)
-    UNSET(a);
+    if (ad->length == 0)
+      UNSET(a);
 
-  ec_set_sort_x(ad);
-  a->u.ptr = ad;
+    ec_set_sort_x(ad);
+    a->u.ptr = ad;
+  }
+  else
+  {
+    if (a->u.ptr->length == 0)
+      UNSET(a);
+
+    a->u.ptr = ec_set_sort(s->pool, a->u.ptr);
+  }
 }
 
 static void
@@ -753,6 +810,9 @@ bgp_decode_as4_aggregator(struct bgp_parse_state *s, uint code UNUSED, uint flag
 static void
 bgp_decode_as4_path(struct bgp_parse_state *s, uint code UNUSED, uint flags, byte *data, uint len, ea_list **to)
 {
+  struct bgp_proto *p = s->proto;
+  int sets = p->cf->allow_as_sets;
+
   char err[128];
 
   if (s->as4_session)
@@ -761,7 +821,7 @@ bgp_decode_as4_path(struct bgp_parse_state *s, uint code UNUSED, uint flags, byt
   if (len < 6)
     DISCARD(BAD_LENGTH, "AS4_PATH", len);
 
-  if (!as_path_valid(data, len, 4, 1, err, sizeof(err)))
+  if (!as_path_valid(data, len, 4, sets, 1, err, sizeof(err)))
     DISCARD("Malformed AS4_PATH attribute - %s", err);
 
   struct adata *a = lp_alloc_adata(s->pool, len);
@@ -802,7 +862,7 @@ bgp_decode_aigp(struct bgp_parse_state *s, uint code UNUSED, uint flags, byte *d
 }
 
 static void
-bgp_format_aigp(eattr *a, byte *buf, uint size UNUSED)
+bgp_format_aigp(const eattr *a, byte *buf, uint size UNUSED)
 {
   const byte *b = bgp_aigp_get_tlv(a->u.ptr, BGP_AIGP_METRIC);
 
@@ -880,7 +940,7 @@ bgp_decode_mpls_label_stack(struct bgp_parse_state *s, uint code UNUSED, uint fl
 }
 
 static void
-bgp_format_mpls_label_stack(eattr *a, byte *buf, uint size)
+bgp_format_mpls_label_stack(const eattr *a, byte *buf, uint size)
 {
   u32 *labels = (u32 *) a->u.ptr->data;
   uint lnum = a->u.ptr->length / 4;
@@ -1448,6 +1508,7 @@ bgp_get_bucket(struct bgp_channel *c, ea_list *new)
 
   /* Create the bucket */
   b = mb_alloc(c->pool, size);
+  *b = (struct bgp_bucket) { };
   init_list(&b->prefixes);
   b->hash = hash;
 
@@ -1572,8 +1633,7 @@ bgp_get_prefix(struct bgp_channel *c, net_addr *net, u32 path_id)
   else
     px = mb_alloc(c->pool, sizeof(struct bgp_prefix) + net->length);
 
-  px->buck_node.next = NULL;
-  px->buck_node.prev = NULL;
+  *px = (struct bgp_prefix) { };
   px->hash = hash;
   px->path_id = path_id;
   net_copy(px->net, net);
@@ -2264,7 +2324,7 @@ bgp_process_as4_attrs(ea_list **attrs, struct linpool *pool)
 }
 
 int
-bgp_get_attr(eattr *a, byte *buf, int buflen)
+bgp_get_attr(const eattr *a, byte *buf, int buflen)
 {
   uint i = EA_ID(a->id);
   const struct bgp_attr_desc *d;

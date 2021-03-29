@@ -117,6 +117,7 @@ bt_init(int argc, char *argv[])
   }
 
   clock_gettime(CLOCK_MONOTONIC, &bt_begin);
+  bt_suite_case_begin = bt_suite_begin = bt_begin;
 
   return;
 
@@ -198,14 +199,13 @@ bt_log_result(int result, u64 time, const char *fmt, va_list argptr)
   static char msg_buf[BT_BUFFER_SIZE];
   char *pos;
 
-  snprintf(msg_buf, sizeof(msg_buf), "%s%s%s%s %" PRIu64 ".%09" PRIu64 "s",
+  snprintf(msg_buf, sizeof(msg_buf), "%s%s%s %" PRIu64 ".%09" PRIu64 "s%s",
 	   bt_filename,
 	   bt_test_id ? ": " : "",
 	   bt_test_id ? bt_test_id : "",
-	   (fmt && strlen(fmt) > 0) ? ": " : "",
 	   time / 1000000000,
-	   time % 1000000000
-	   );
+	   time % 1000000000,
+	   (fmt && strlen(fmt) > 0) ? ": " : "");
   pos = msg_buf + strlen(msg_buf);
 
   if (fmt)
@@ -339,6 +339,7 @@ bt_test_suite_base(int (*fn)(const void *), const char *id, const void *fn_arg, 
     bt_log("Starting");
 
   clock_gettime(CLOCK_MONOTONIC, &bt_suite_begin);
+  bt_suite_case_begin = bt_suite_begin;
 
   if (!forked)
   {
@@ -494,7 +495,10 @@ void
 bt_fmt_ipa(char *buf, size_t size, const void *data)
 {
   const ip_addr *ip = data;
-  bsnprintf(buf, size, "%I", *ip);
+  if (data)
+    bsnprintf(buf, size, "%I", *ip);
+  else
+    bsnprintf(buf, size, "(null)");
 }
 
 int
@@ -507,10 +511,12 @@ bt_is_char(byte c)
  * Mock-ups of all necessary public functions in main.c
  */
 
+int parse_and_exit;
 char *bird_name;
 void async_config(void) {}
 void async_dump(void) {}
 void async_shutdown(void) {}
+char *get_hostname(linpool *lp UNUSED) { return NULL; }
 void cmd_check_config(char *name UNUSED) {}
 void cmd_reconfig(char *name UNUSED, int type UNUSED, int timeout UNUSED) {}
 void cmd_reconfig_confirm(void) {}

@@ -620,7 +620,7 @@ ospf_get_route_info(rte * rte, byte * buf)
 }
 
 static int
-ospf_get_attr(eattr * a, byte * buf, int buflen UNUSED)
+ospf_get_attr(const eattr * a, byte * buf, int buflen UNUSED)
 {
   switch (a->id)
   {
@@ -791,7 +791,7 @@ ospf_reconfigure(struct proto *P, struct proto_config *CF)
 
 
 void
-ospf_sh_neigh(struct proto *P, char *iff)
+ospf_sh_neigh(struct proto *P, const char *iff)
 {
   struct ospf_proto *p = (struct ospf_proto *) P;
   struct ospf_iface *ifa = NULL;
@@ -800,7 +800,6 @@ ospf_sh_neigh(struct proto *P, char *iff)
   if (p->p.proto_state != PS_UP)
   {
     cli_msg(-1013, "%s: is not up", p->p.name);
-    cli_msg(0, "");
     return;
   }
 
@@ -811,7 +810,6 @@ ospf_sh_neigh(struct proto *P, char *iff)
     if ((iff == NULL) || patmatch(iff, ifa->ifname))
       WALK_LIST(n, ifa->neigh_list)
 	ospf_sh_neigh_info(n);
-  cli_msg(0, "");
 }
 
 void
@@ -826,7 +824,6 @@ ospf_sh(struct proto *P)
   if (p->p.proto_state != PS_UP)
   {
     cli_msg(-1014, "%s: is not up", p->p.name);
-    cli_msg(0, "");
     return;
   }
 
@@ -896,11 +893,10 @@ ospf_sh(struct proto *P)
     FIB_WALK_END;
 
   }
-  cli_msg(0, "");
 }
 
 void
-ospf_sh_iface(struct proto *P, char *iff)
+ospf_sh_iface(struct proto *P, const char *iff)
 {
   struct ospf_proto *p = (struct ospf_proto *) P;
   struct ospf_iface *ifa = NULL;
@@ -908,7 +904,6 @@ ospf_sh_iface(struct proto *P, char *iff)
   if (p->p.proto_state != PS_UP)
   {
     cli_msg(-1015, "%s: is not up", p->p.name);
-    cli_msg(0, "");
     return;
   }
 
@@ -916,7 +911,6 @@ ospf_sh_iface(struct proto *P, char *iff)
   WALK_LIST(ifa, p->iface_list)
     if ((iff == NULL) || patmatch(iff, ifa->ifname))
       ospf_iface_info(ifa);
-  cli_msg(0, "");
 }
 
 /* lsa_compare_for_state() - Compare function for 'show ospf state'
@@ -1244,7 +1238,7 @@ ospf_sh_state(struct proto *P, int verbose, int reachable)
 
   uint num = p->gr->hash_entries;
   struct top_hash_entry *hea[num];
-  struct top_hash_entry *hex[verbose ? num : 0];
+  struct top_hash_entry **hex = verbose ? alloca(num * sizeof(struct top_hash_entry *)) : NULL;
   struct top_hash_entry *he;
   struct top_hash_entry *cnode = NULL;
 
@@ -1289,7 +1283,9 @@ ospf_sh_state(struct proto *P, int verbose, int reachable)
 
   lsa_compare_ospf3 = !ospf2;
   qsort(hea, j1, sizeof(struct top_hash_entry *), lsa_compare_for_state);
-  qsort(hex, jx, sizeof(struct top_hash_entry *), ext_compare_for_state);
+
+  if (verbose)
+    qsort(hex, jx, sizeof(struct top_hash_entry *), ext_compare_for_state);
 
   /*
    * This code is a bit tricky, we have a primary LSAs (router and

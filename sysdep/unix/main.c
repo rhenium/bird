@@ -20,6 +20,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
 #include <libgen.h>
 
 #include "nest/bird.h"
@@ -89,17 +90,36 @@ drop_gid(gid_t gid)
 }
 
 /*
+ *	Hostname
+ */
+
+char *
+get_hostname(linpool *lp)
+{
+  struct utsname uts = {};
+
+  if (uname(&uts) < 0)
+      return NULL;
+
+  return lp_strdup(lp, uts.nodename);
+}
+
+/*
  *	Reading the Configuration
  */
 
 #ifdef PATH_IPROUTE_DIR
 
 static inline void
-add_num_const(char *name, int val)
+add_num_const(char *name, int val, const char *file, const uint line)
 {
   struct f_val *v = cfg_alloc(sizeof(struct f_val));
   *v = (struct f_val) { .type = T_INT, .val.i = val };
-  cf_define_symbol(cf_get_symbol(name), SYM_CONSTANT | T_INT, val, v);
+  struct symbol *sym = cf_get_symbol(name);
+  if (sym->class && (sym->scope == conf_this_scope))
+    cf_error("Error reading value for %s from %s:%d: already defined", name, file, line);
+
+  cf_define_symbol(sym, SYM_CONSTANT | T_INT, val, v);
 }
 
 /* the code of read_iproute_table() is based on
@@ -119,7 +139,7 @@ read_iproute_table(char *file, char *prefix, int max)
   if (!fp)
     return;
 
-  while (fgets(buf, sizeof(buf), fp))
+  for (uint line = 1; fgets(buf, sizeof(buf), fp); line++)
   {
     char *p = buf;
 
@@ -139,10 +159,10 @@ read_iproute_table(char *file, char *prefix, int max)
       continue;
 
     for(p = name; *p; p++)
-      if ((*p < 'a' || *p > 'z') && (*p < '0' || *p > '9') && (*p != '_'))
+      if ((*p < 'a' || *p > 'z') && (*p < 'A' || *p > 'Z') && (*p < '0' || *p > '9') && (*p != '_'))
 	*p = '_';
 
-    add_num_const(namebuf, val);
+    add_num_const(namebuf, val, file, line);
   }
 
   fclose(fp);
@@ -186,7 +206,7 @@ sysdep_commit(struct config *new, struct config *old UNUSED)
 }
 
 static int
-unix_read_config(struct config **cp, char *name)
+unix_read_config(struct config **cp, const char *name)
 {
   struct config *conf = config_alloc(name);
   int ret;
@@ -236,7 +256,7 @@ async_config(void)
 }
 
 static struct config *
-cmd_read_config(char *name)
+cmd_read_config(const char *name)
 {
   struct config *conf;
 
@@ -258,7 +278,7 @@ cmd_read_config(char *name)
 }
 
 void
-cmd_check_config(char *name)
+cmd_check_config(const char *name)
 {
   struct config *conf = cmd_read_config(name);
   if (!conf)
@@ -299,7 +319,7 @@ cmd_reconfig_undo_notify(void)
 }
 
 void
-cmd_reconfig(char *name, int type, uint timeout)
+cmd_reconfig(const char *name, int type, uint timeout)
 {
   if (cli_access_restricted())
     return;
@@ -654,7 +674,7 @@ signal_init(void)
  */
 
 static char *opt_list = "bc:dD:ps:P:u:g:flRh";
-static int parse_and_exit;
+int parse_and_exit;
 char *bird_name;
 static char *use_user;
 static char *use_group;

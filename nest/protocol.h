@@ -80,7 +80,7 @@ struct protocol {
   void (*cleanup)(struct proto *);		/* Called after shutdown when protocol became hungry/down */
   void (*get_status)(struct proto *, byte *buf); /* Get instance status (for `show protocols' command) */
   void (*get_route_info)(struct rte *, byte *buf); /* Get route information (for `show route' command) */
-  int (*get_attr)(struct eattr *, byte *buf, int buflen);	/* ASCIIfy dynamic attribute (returns GA_*) */
+  int (*get_attr)(const struct eattr *, byte *buf, int buflen);	/* ASCIIfy dynamic attribute (returns GA_*) */
   void (*show_proto_info)(struct proto *);	/* Show protocol info (for `show protocols all' command) */
   void (*copy_config)(struct proto_config *, struct proto_config *);	/* Copy config from given protocol instance */
 };
@@ -115,8 +115,8 @@ struct proto_config {
   struct protocol *protocol;		/* Protocol */
   struct proto *proto;			/* Instance we've created */
   struct proto_config *parent;		/* Parent proto_config for dynamic protocols */
-  char *name;
-  char *dsc;
+  const char *name;
+  const char *dsc;
   int class;				/* SYM_PROTO or SYM_TEMPLATE */
   u8 net_type;				/* Protocol network type (NET_*), 0 for undefined */
   u8 disabled;				/* Protocol enabled/disabled by default */
@@ -171,7 +171,7 @@ struct proto {
   struct rte_src *main_source;		/* Primary route source */
   struct iface *vrf;			/* Related VRF instance, NULL if global */
 
-  char *name;				/* Name of this instance (== cf->name) */
+  const char *name;				/* Name of this instance (== cf->name) */
   u32 debug;				/* Debugging flags */
   u32 mrtdump;				/* MRTDump flags */
   uint active_channels;			/* Number of active channels */
@@ -245,7 +245,7 @@ struct proto {
 };
 
 struct proto_spec {
-  void *ptr;
+  const void *ptr;
   int patt;
 };
 
@@ -281,6 +281,7 @@ void channel_graceful_restart_unlock(struct channel *c);
 
 void channel_show_limit(struct channel_limit *l, const char *dsc);
 void channel_show_info(struct channel *c);
+void channel_cmd_debug(struct channel *c, uint mask);
 
 void proto_cmd_show(struct proto *, uintptr_t, int);
 void proto_cmd_disable(struct proto *, uintptr_t, int);
@@ -292,6 +293,10 @@ void proto_cmd_mrtdump(struct proto *, uintptr_t, int);
 
 void proto_apply_cmd(struct proto_spec ps, void (* cmd)(struct proto *, uintptr_t, int), int restricted, uintptr_t arg);
 struct proto *proto_get_named(struct symbol *, struct protocol *);
+struct proto *proto_iterate_named(struct symbol *sym, struct protocol *proto, struct proto *old);
+
+#define PROTO_WALK_CMD(sym,pr,p) for(struct proto *p = NULL; p = proto_iterate_named(sym, pr, p); )
+
 
 #define CMD_RELOAD	0
 #define CMD_RELOAD_IN	1
@@ -492,8 +497,10 @@ struct channel_config {
   u8 net_type;				/* Routing table network type (NET_*), 0 for undefined */
   u8 ra_mode;				/* Mode of received route advertisements (RA_*) */
   u16 preference;			/* Default route preference */
+  u32 debug;				/* Debugging flags (D_*) */
   u8 merge_limit;			/* Maximal number of nexthops for RA_MERGED */
   u8 in_keep_filtered;			/* Routes rejected in import filter are kept */
+  u8 rpki_reload;			/* RPKI changes trigger channel reload */
 };
 
 struct channel {
@@ -507,6 +514,7 @@ struct channel {
   struct rtable *table;
   const struct filter *in_filter;	/* Input filter */
   const struct filter *out_filter;	/* Output filter */
+  struct bmap export_map;		/* Keeps track which routes passed export filter */
   struct channel_limit rx_limit;	/* Receive limit (for in_keep_filtered) */
   struct channel_limit in_limit;	/* Input limit */
   struct channel_limit out_limit;	/* Output limit */
@@ -514,10 +522,12 @@ struct channel {
   struct event *feed_event;		/* Event responsible for feeding */
   struct fib_iterator feed_fit;		/* Routing table iterator used during feeding */
   struct proto_stats stats;		/* Per-channel protocol statistics */
+  u32 refeed_count;			/* Number of routes exported during refeed regardless of out_limit */
 
   u8 net_type;				/* Routing table network type (NET_*), 0 for undefined */
   u8 ra_mode;				/* Mode of received route advertisements (RA_*) */
   u16 preference;			/* Default route preference */
+  u32 debug;				/* Debugging flags (D_*) */
   u8 merge_limit;			/* Maximal number of nexthops for RA_MERGED */
   u8 in_keep_filtered;			/* Routes rejected in import filter are kept */
   u8 disabled;
@@ -533,7 +543,6 @@ struct channel {
   u8 gr_wait;				/* Route export to channel is postponed until graceful restart */
 
   btime last_state_change;		/* Time of last state transition */
-  btime last_tx_filter_change;
 
   struct rtable *in_table;		/* Internal table for received routes */
   struct event *reload_event;		/* Event responsible for reloading from in_table */
@@ -541,7 +550,13 @@ struct channel {
   struct rte *reload_next_rte;		/* Route iterator in in_table used during reloading */
   u8 reload_active;			/* Iterator reload_fit is linked */
 
+  u8 reload_pending;			/* Reloading and another reload is scheduled */
+  u8 refeed_pending;			/* Refeeding and another refeed is scheduled */
+  u8 rpki_reload;			/* RPKI changes trigger channel reload */
+
   struct rtable *out_table;		/* Internal table for exported routes */
+
+  list roa_subscriptions;		/* List of active ROA table subscriptions based on filters roa_check() */
 };
 
 

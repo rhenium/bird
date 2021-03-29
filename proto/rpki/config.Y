@@ -32,7 +32,7 @@ rpki_check_unused_transport(void)
 CF_DECLS
 
 CF_KEYWORDS(RPKI, REMOTE, BIRD, PRIVATE, PUBLIC, KEY, TCP, SSH, TRANSPORT, USER,
-	    RETRY, REFRESH, EXPIRE, KEEP)
+	    RETRY, REFRESH, EXPIRE, KEEP, IGNORE, MAX, LENGTH)
 
 %type <i> rpki_keep_interval
 
@@ -79,6 +79,7 @@ rpki_proto_item:
      RPKI_CFG->expire_interval = $3;
      RPKI_CFG->keep_expire_interval = $2;
    }
+ | IGNORE MAX LENGTH bool { RPKI_CFG->ignore_max_length = $4; }
  ;
 
 rpki_keep_interval:
@@ -117,9 +118,13 @@ rpki_transport_tcp_init:
 
 rpki_transport_ssh_init:
 {
+#if HAVE_LIBSSH
   rpki_check_unused_transport();
   RPKI_CFG->tr_config.spec = cfg_allocz(sizeof(struct rpki_tr_ssh_config));
   RPKI_CFG->tr_config.type = RPKI_TR_SSH;
+#else
+  cf_error("This build doesn't support SSH");
+#endif
 };
 
 rpki_transport_ssh_opts:

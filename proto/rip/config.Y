@@ -33,10 +33,11 @@ rip_check_auth(void)
 CF_DECLS
 
 CF_KEYWORDS(RIP, NG, ECMP, LIMIT, WEIGHT, INFINITY, METRIC, UPDATE, TIMEOUT,
-	    GARBAGE, PORT, ADDRESS, MODE, BROADCAST, MULTICAST, PASSIVE,
-	    VERSION, SPLIT, HORIZON, POISON, REVERSE, CHECK, ZERO, TIME, BFD,
-	    AUTHENTICATION, NONE, PLAINTEXT, CRYPTOGRAPHIC, MD5, TTL, SECURITY,
-	    RX, TX, BUFFER, LENGTH, PRIORITY, ONLY, LINK, RIP_METRIC, RIP_TAG)
+	    GARBAGE, RETRANSMIT, PORT, ADDRESS, MODE, BROADCAST, MULTICAST,
+	    PASSIVE, VERSION, SPLIT, HORIZON, POISON, REVERSE, CHECK, ZERO,
+	    TIME, BFD, AUTHENTICATION, NONE, PLAINTEXT, CRYPTOGRAPHIC, MD5,
+	    TTL, SECURITY, RX, TX, BUFFER, LENGTH, PRIORITY, ONLY, LINK,
+	    DEMAND, CIRCUIT, RIP_METRIC, RIP_TAG)
 
 %type <i> rip_variant rip_auth
 
@@ -102,6 +103,7 @@ rip_iface_start:
   RIP_IFACE->update_time = RIP_DEFAULT_UPDATE_TIME;
   RIP_IFACE->timeout_time = RIP_DEFAULT_TIMEOUT_TIME;
   RIP_IFACE->garbage_time = RIP_DEFAULT_GARBAGE_TIME;
+  RIP_IFACE->rxmt_time = RIP_DEFAULT_RXMT_TIME;
 };
 
 rip_iface_finish:
@@ -149,9 +151,11 @@ rip_iface_item:
  | SPLIT HORIZON bool	{ RIP_IFACE->split_horizon = $3; }
  | POISON REVERSE bool	{ RIP_IFACE->poison_reverse = $3; }
  | CHECK ZERO bool	{ RIP_IFACE->check_zero = $3; }
+ | DEMAND CIRCUIT bool	{ RIP_IFACE->demand_circuit = $3; }
  | UPDATE TIME expr	{ RIP_IFACE->update_time = $3 S_; if ($3<=0) cf_error("Update time must be positive"); }
  | TIMEOUT TIME expr	{ RIP_IFACE->timeout_time = $3 S_; if ($3<=0) cf_error("Timeout time must be positive"); }
  | GARBAGE TIME expr	{ RIP_IFACE->garbage_time = $3 S_; if ($3<=0) cf_error("Garbage time must be positive"); }
+ | RETRANSMIT TIME expr_us { RIP_IFACE->rxmt_time = $3; if ($3<=0) cf_error("Retransmit time must be positive"); }
  | ECMP WEIGHT expr	{ RIP_IFACE->ecmp_weight = $3 - 1; if (($3<1) || ($3>256)) cf_error("ECMP weight must be in range 1-256"); }
  | RX BUFFER expr	{ RIP_IFACE->rx_buffer = $3; if (($3<256) || ($3>65535)) cf_error("RX length must be in range 256-65535"); }
  | TX LENGTH expr	{ RIP_IFACE->tx_length = $3; if (($3<256) || ($3>65535)) cf_error("TX length must be in range 256-65535"); }
@@ -192,10 +196,10 @@ dynamic_attr: RIP_TAG { $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_RIP_TAG)
 CF_CLI_HELP(SHOW RIP, ..., [[Show information about RIP protocol]]);
 
 CF_CLI(SHOW RIP INTERFACES, optproto opttext, [<name>] [\"<interface>\"], [[Show information about RIP interfaces]])
-{ rip_show_interfaces(proto_get_named($4, &proto_rip), $5); };
+{ PROTO_WALK_CMD($4, &proto_rip, p) rip_show_interfaces(p, $5); };
 
 CF_CLI(SHOW RIP NEIGHBORS, optproto opttext, [<name>] [\"<interface>\"], [[Show information about RIP neighbors]])
-{ rip_show_neighbors(proto_get_named($4, &proto_rip), $5); };
+{ PROTO_WALK_CMD($4, &proto_rip, p) rip_show_neighbors(p, $5); };
 
 
 CF_CODE

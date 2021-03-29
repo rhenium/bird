@@ -43,6 +43,10 @@ struct bfd_config
   list patt_list;		/* List of iface configs (struct bfd_iface_config) */
   list neigh_list;		/* List of configured neighbors (struct bfd_neighbor) */
   struct bfd_iface_config *multihop; /* Multihop pseudoiface config */
+  u8 accept_ipv4;
+  u8 accept_ipv6;
+  u8 accept_direct;
+  u8 accept_multihop;
 };
 
 struct bfd_iface_config
@@ -55,6 +59,15 @@ struct bfd_iface_config
   u8 passive;
   u8 auth_type;				/* Authentication type (BFD_AUTH_*) */
   list *passwords;			/* Passwords for authentication */
+};
+
+struct bfd_session_config
+{
+  u32 min_rx_int;
+  u32 min_tx_int;
+  u32 idle_tx_int;
+  u8 multiplier;
+  u8 passive;
 };
 
 struct bfd_neighbor
@@ -126,6 +139,9 @@ struct bfd_session
   u8 rem_diag;
   u32 loc_id;				/* Local session ID (local discriminator) */
   u32 rem_id;				/* Remote session ID (remote discriminator) */
+
+  struct bfd_session_config cf;		/* Static configuration parameters */
+
   u32 des_min_tx_int;			/* Desired min rx interval, local option */
   u32 des_min_tx_new;			/* Used for des_min_tx_int change */
   u32 req_min_rx_int;			/* Required min tx interval, local option */
@@ -137,6 +153,7 @@ struct bfd_session
   u8 detect_mult;			/* Announced detect_mult, local option */
   u8 rem_detect_mult;			/* Last received detect_mult */
 
+  uint ifindex;				/* Iface index, for hashing in bfd.session_hash_ip */
   btime last_tx;			/* Time of last sent periodic control packet */
   btime last_rx;			/* Time of last received valid control packet */
 
@@ -197,7 +214,7 @@ static inline void bfd_unlock_sessions(struct bfd_proto *p) { pthread_spin_unloc
 
 /* bfd.c */
 struct bfd_session * bfd_find_session_by_id(struct bfd_proto *p, u32 id);
-struct bfd_session * bfd_find_session_by_addr(struct bfd_proto *p, ip_addr addr);
+struct bfd_session * bfd_find_session_by_addr(struct bfd_proto *p, ip_addr addr, uint ifindex);
 void bfd_session_process_ctl(struct bfd_session *s, u8 flags, u32 old_tx_int, u32 old_rx_int);
 void bfd_show_sessions(struct proto *P);
 

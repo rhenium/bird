@@ -100,9 +100,10 @@
  * RFC 8092 - BGP Large Communities Attribute
  * RFC 8203 - BGP Administrative Shutdown Communication
  * RFC 8212 - Default EBGP Route Propagation Behavior without Policies
- * draft-ietf-idr-bgp-extended-messages-27
+ * RFC 8654 - Extended Message Support for BGP
  * draft-ietf-idr-ext-opt-param-07
  * draft-uttaro-idr-bgp-persistence-04
+ * draft-walton-bgp-hostname-capability-02
  */
 
 #undef LOCAL_DEBUG
@@ -134,7 +135,7 @@ static void bgp_active(struct bgp_proto *p);
 static void bgp_setup_conn(struct bgp_proto *p, struct bgp_conn *conn);
 static void bgp_setup_sk(struct bgp_conn *conn, sock *s);
 static void bgp_send_open(struct bgp_conn *conn);
-static void bgp_update_bfd(struct bgp_proto *p, int use_bfd);
+static void bgp_update_bfd(struct bgp_proto *p, const struct bfd_options *bfd);
 
 static int bgp_incoming_connection(sock *sk, uint dummy UNUSED);
 static void bgp_listen_sock_err(sock *sk UNUSED, int err);
@@ -247,8 +248,17 @@ bgp_setup_auth(struct bgp_proto *p, int enable)
 {
   if (p->cf->password)
   {
+    ip_addr prefix = p->cf->remote_ip;
+    int pxlen = -1;
+
+    if (p->cf->remote_range)
+    {
+      prefix = net_prefix(p->cf->remote_range);
+      pxlen = net_pxlen(p->cf->remote_range);
+    }
+
     int rv = sk_set_md5_auth(p->sock->sk,
-			     p->cf->local_ip, p->cf->remote_ip, p->cf->iface,
+			     p->cf->local_ip, prefix, pxlen, p->cf->iface,
 			     enable ? p->cf->password : NULL, p->cf->setkey);
 
     if (rv < 0)
@@ -545,6 +555,8 @@ bgp_conn_enter_established_state(struct bgp_conn *conn)
   struct bgp_channel *c;
 
   BGP_TRACE(D_EVENTS, "BGP session established");
+  p->last_established = current_time();
+  p->stats.fsm_established_transitions++;
 
   /* For multi-hop BGP sessions */
   if (ipa_zero(p->local_ip))
@@ -685,6 +697,7 @@ static void
 bgp_conn_leave_established_state(struct bgp_proto *p)
 {
   BGP_TRACE(D_EVENTS, "BGP session closed");
+  p->last_established = current_time();
   p->conn = NULL;
 
   if (p->p.proto_state == PS_UP)
@@ -1345,7 +1358,7 @@ bgp_bfd_notify(struct bfd_request *req)
     BGP_TRACE(D_EVENTS, "BFD session down");
     bgp_store_error(p, NULL, BE_MISC, BEM_BFD_DOWN);
 
-    if (p->cf->bfd == BGP_BFD_GRACEFUL)
+    if (req->opts.mode == BGP_BFD_GRACEFUL)
     {
       /* Trigger graceful restart */
       if (p->conn && (p->conn->state == BS_ESTABLISHED) && p->gr_ready)
@@ -1368,14 +1381,17 @@ bgp_bfd_notify(struct bfd_request *req)
 }
 
 static void
-bgp_update_bfd(struct bgp_proto *p, int use_bfd)
+bgp_update_bfd(struct bgp_proto *p, const struct bfd_options *bfd)
 {
-  if (use_bfd && !p->bfd_req && !bgp_is_dynamic(p))
+  if (bfd && p->bfd_req)
+    bfd_update_request(p->bfd_req, bfd);
+
+  if (bfd && !p->bfd_req && !bgp_is_dynamic(p))
     p->bfd_req = bfd_request_session(p->p.pool, p->remote_ip, p->local_ip,
 				     p->cf->multihop ? NULL : p->neigh->iface,
-				     p->p.vrf, bgp_bfd_notify, p);
+				     p->p.vrf, bgp_bfd_notify, p, bfd);
 
-  if (!use_bfd && p->bfd_req)
+  if (!bfd && p->bfd_req)
   {
     rfree(p->bfd_req);
     p->bfd_req = NULL;
@@ -1519,6 +1535,12 @@ bgp_start(struct proto *P)
   p->postponed_sk = NULL;
   p->gr_ready = 0;
   p->gr_active_num = 0;
+
+  /* Reset some stats */
+  p->stats.rx_messages = p->stats.tx_messages = 0;
+  p->stats.rx_updates = p->stats.tx_updates = 0;
+  p->stats.rx_bytes = p->stats.tx_bytes = 0;
+  p->last_rx_update = 0;
 
   p->event = ev_new_init(p->p.pool, bgp_decision, p);
   p->startup_timer = tm_new_init(p->p.pool, bgp_startup_timeout, p, 0, 0);
@@ -1936,6 +1958,9 @@ bgp_postconfig(struct proto_config *CF)
   if (!cf->gr_mode && cf->llgr_mode)
     cf_error("Long-lived graceful restart requires basic graceful restart");
 
+  if (internal && cf->enforce_first_as)
+    cf_error("Enforce first AS check is requires EBGP sessions");
+
 
   struct bgp_channel_config *cc;
   WALK_LIST(cc, CF->channels)
@@ -1961,10 +1986,6 @@ bgp_postconfig(struct proto_config *CF)
     /* Different default based on rr_client, rs_client */
     if (cc->next_hop_keep == 0xff)
       cc->next_hop_keep = cf->rr_client ? NH_IBGP : (cf->rs_client ? NH_ALL : NH_NO);
-
-    /* Different default based on rs_client */
-    if (!cc->missing_lladdr)
-      cc->missing_lladdr = cf->rs_client ? MLL_IGNORE : MLL_SELF;
 
     /* Different default for gw_mode */
     if (!cc->gw_mode)
@@ -2107,7 +2128,6 @@ bgp_channel_reconfigure(struct channel *C, struct channel_config *CC, int *impor
   if (!ipa_equal(new->next_hop_addr, old->next_hop_addr) ||
       (new->next_hop_self != old->next_hop_self) ||
       (new->next_hop_keep != old->next_hop_keep) ||
-      (new->missing_lladdr != old->missing_lladdr) ||
       (new->aigp != old->aigp) ||
       (new->aigp_originate != old->aigp_originate))
     *export_changed = 1;
@@ -2117,9 +2137,18 @@ bgp_channel_reconfigure(struct channel *C, struct channel_config *CC, int *impor
 }
 
 static void
-bgp_copy_config(struct proto_config *dest UNUSED, struct proto_config *src UNUSED)
+bgp_copy_config(struct proto_config *dest, struct proto_config *src)
 {
-  /* Just a shallow copy */
+  struct bgp_config *d = (void *) dest;
+  struct bgp_config *s = (void *) src;
+
+  /* Copy BFD options */
+  if (s->bfd)
+  {
+    struct bfd_options *opts = cfg_alloc(sizeof(struct bfd_options));
+    memcpy(opts, s->bfd, sizeof(struct bfd_options));
+    d->bfd = opts;
+  }
 }
 
 
@@ -2387,6 +2416,9 @@ bgp_show_capabilities(struct bgp_proto *p UNUSED, struct bgp_caps *caps)
     bgp_show_afis(-1006, "        AF supported:", afl1, afn1);
     bgp_show_afis(-1006, "        AF preserved:", afl2, afn2);
   }
+
+  if (caps->hostname)
+    cli_msg(-1006, "      Hostname: %s", caps->hostname);
 }
 
 static void
@@ -2444,6 +2476,18 @@ bgp_show_proto_info(struct proto *P)
     cli_msg(-1006, "    Keepalive timer:  %t/%u",
 	    tm_remains(p->conn->keepalive_timer), p->conn->keepalive_time);
   }
+
+#if 0
+  struct bgp_stats *s = &p->stats;
+  cli_msg(-1006, "    FSM established transitions: %u",
+	  s->fsm_established_transitions);
+  cli_msg(-1006, "    Rcvd messages:    %u total / %u updates / %lu bytes",
+	  s->rx_messages, s->rx_updates, s->rx_bytes);
+  cli_msg(-1006, "    Sent messages:    %u total / %u updates / %lu bytes",
+	  s->tx_messages, s->tx_updates, s->tx_bytes);
+  cli_msg(-1006, "    Last rcvd update elapsed time: %t s",
+	  p->last_rx_update ? (current_time() - p->last_rx_update) : 0);
+#endif
 
   if ((p->last_error_class != BE_NONE) &&
       (p->last_error_class != BE_MAN_DOWN))

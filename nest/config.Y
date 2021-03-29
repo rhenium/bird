@@ -25,6 +25,7 @@ static struct iface_patt_node *this_ipn;
 static list *this_p_list;
 static struct password_item *this_p_item;
 static int password_id;
+static struct bfd_options *this_bfd_opts;
 
 static void
 iface_patt_check(void)
@@ -51,6 +52,28 @@ get_passwords(void)
   return rv;
 }
 
+static inline void
+init_bfd_opts(struct bfd_options **opts)
+{
+  cf_check_bfd(1);
+
+  if (! *opts)
+    *opts = bfd_new_options();
+}
+
+static inline void
+open_bfd_opts(struct bfd_options **opts)
+{
+  init_bfd_opts(opts);
+  this_bfd_opts = *opts;
+}
+
+static inline void
+close_bfd_opts(void)
+{
+  this_bfd_opts = NULL;
+}
+
 static void
 proto_postconfig(void)
 {
@@ -64,17 +87,19 @@ proto_postconfig(void)
 
 CF_DECLS
 
-CF_KEYWORDS(ROUTER, ID, PROTOCOL, TEMPLATE, PREFERENCE, DISABLED, DEBUG, ALL, OFF, DIRECT)
+CF_KEYWORDS(ROUTER, ID, HOSTNAME, PROTOCOL, TEMPLATE, PREFERENCE, DISABLED, DEBUG, ALL, OFF, DIRECT)
 CF_KEYWORDS(INTERFACE, IMPORT, EXPORT, FILTER, NONE, VRF, DEFAULT, TABLE, STATES, ROUTES, FILTERS)
 CF_KEYWORDS(IPV4, IPV6, VPN4, VPN6, ROA4, ROA6, FLOW4, FLOW6, SADR, MPLS)
-CF_KEYWORDS(RECEIVE, LIMIT, ACTION, WARN, BLOCK, RESTART, DISABLE, KEEP, FILTERED)
-CF_KEYWORDS(PASSWORD, FROM, PASSIVE, TO, ID, EVENTS, PACKETS, PROTOCOLS, INTERFACES)
+CF_KEYWORDS(RECEIVE, LIMIT, ACTION, WARN, BLOCK, RESTART, DISABLE, KEEP, FILTERED, RPKI)
+CF_KEYWORDS(PASSWORD, FROM, PASSIVE, TO, ID, EVENTS, PACKETS, PROTOCOLS, CHANNELS, INTERFACES)
 CF_KEYWORDS(ALGORITHM, KEYED, HMAC, MD5, SHA1, SHA256, SHA384, SHA512)
-CF_KEYWORDS(PRIMARY, STATS, COUNT, BY, FOR, COMMANDS, PREEXPORT, NOEXPORT, GENERATE)
+CF_KEYWORDS(PRIMARY, STATS, COUNT, BY, FOR, COMMANDS, PREEXPORT, NOEXPORT, EXPORTED, GENERATE)
 CF_KEYWORDS(BGP, PASSWORDS, DESCRIPTION, SORTED)
 CF_KEYWORDS(RELOAD, IN, OUT, MRTDUMP, MESSAGES, RESTRICT, MEMORY, IGP_METRIC, CLASS, DSCP)
 CF_KEYWORDS(TIMEFORMAT, ISO, SHORT, LONG, ROUTE, PROTOCOL, BASE, LOG, S, MS, US)
 CF_KEYWORDS(GRACEFUL, RESTART, WAIT, MAX, FLUSH, AS)
+CF_KEYWORDS(MIN, IDLE, RX, TX, INTERVAL, MULTIPLIER, PASSIVE)
+CF_KEYWORDS(CHECK, LINK)
 
 /* For r_args_channel */
 CF_KEYWORDS(IPV4, IPV4_MC, IPV4_MPLS, IPV6, IPV6_MC, IPV6_MPLS, IPV6_SADR, VPN4, VPN4_MC, VPN4_MPLS, VPN6, VPN6_MC, VPN6_MPLS, ROA4, ROA6, FLOW4, FLOW6, MPLS, PRI, SEC)
@@ -84,6 +109,7 @@ CF_ENUM(T_ENUM_RTS, RTS_, DUMMY, STATIC, INHERIT, DEVICE, STATIC_DEVICE, REDIREC
 CF_ENUM(T_ENUM_SCOPE, SCOPE_, HOST, LINK, SITE, ORGANIZATION, UNIVERSE, UNDEFINED)
 CF_ENUM(T_ENUM_RTD, RTD_, UNICAST, BLACKHOLE, UNREACHABLE, PROHIBIT)
 CF_ENUM(T_ENUM_ROA, ROA_, UNKNOWN, VALID, INVALID)
+CF_ENUM_PX(T_ENUM_AF, AF_, AFI_, IPV4, IPV6)
 
 %type <i32> idval
 %type <f> imexport
@@ -97,7 +123,8 @@ CF_ENUM(T_ENUM_ROA, ROA_, UNKNOWN, VALID, INVALID)
 %type <cl> limit_spec
 %type <net> r_args_for_val
 %type <net_ptr> r_args_for
-%type <t> r_args_channel
+%type <t> channel_sym
+%type <c> channel_arg
 
 CF_GRAMMAR
 
@@ -123,6 +150,10 @@ idval:
        cf_error("Number or IPv4 address constant expected");
    }
  ;
+
+conf: hostname_override ;
+
+hostname_override: HOSTNAME text ';' { new_config->hostname = $2; } ;
 
 conf: gr_opts ;
 
@@ -221,7 +252,7 @@ channel_start: net_type
   $$ = this_channel = channel_config_get(NULL, net_label[$1], $1, this_proto);
 };
 
-channel_item:
+channel_item_:
    TABLE rtable {
      if (this_channel->net_type && ($2->addr_type != this_channel->net_type))
        cf_error("Incompatible table type");
@@ -234,6 +265,13 @@ channel_item:
  | EXPORT LIMIT limit_spec { this_channel->out_limit = $3; }
  | PREFERENCE expr { this_channel->preference = $2; check_u16($2); }
  | IMPORT KEEP FILTERED bool { this_channel->in_keep_filtered = $4; }
+ | RPKI RELOAD bool { this_channel->rpki_reload = $3; }
+ ;
+
+/* To avoid grammar collision in Pipe protocol */
+channel_item:
+   channel_item_
+ | DEBUG debug_mask { this_channel->debug = $2; }
  ;
 
 channel_opts:
@@ -284,6 +322,7 @@ conf: debug_default ;
 
 debug_default:
    DEBUG PROTOCOLS debug_mask { new_config->proto_default_debug = $3; }
+ | DEBUG CHANNELS debug_mask { new_config->channel_default_debug = $3; }
  | DEBUG COMMANDS expr { new_config->cli_debug = $3; }
  ;
 
@@ -453,11 +492,11 @@ password_item:
 password_item_begin:
    PASSWORD text {
      if (!this_p_list) {
-	this_p_list = cfg_alloc(sizeof(list));
+	this_p_list = cfg_allocz(sizeof(list));
 	init_list(this_p_list);
 	password_id = 1;
      }
-     this_p_item = cfg_alloc(sizeof (struct password_item));
+     this_p_item = cfg_allocz(sizeof(struct password_item));
      this_p_item->password = $2;
      this_p_item->length = strlen($2);
      this_p_item->genfrom = 0;
@@ -478,7 +517,7 @@ password_item_params:
  | ACCEPT TO time ';' password_item_params { this_p_item->accto = $3; }
  | FROM time ';' password_item_params { this_p_item->genfrom = this_p_item->accfrom = $2; }
  | TO time ';' password_item_params { this_p_item->gento = this_p_item->accto = $2; }
- | ID expr ';' password_item_params { this_p_item->id = $2; if ($2 <= 0) cf_error("Password ID has to be greated than zero."); }
+ | ID expr ';' password_item_params { this_p_item->id = $2; if ($2 > 255) cf_error("Password ID must be in range 0-255"); }
  | ALGORITHM password_algorithm ';' password_item_params { this_p_item->alg = $2; }
  ;
 
@@ -493,6 +532,28 @@ password_algorithm:
  | HMAC SHA256	{ $$ = ALG_HMAC_SHA256; }
  | HMAC SHA384	{ $$ = ALG_HMAC_SHA384; }
  | HMAC SHA512	{ $$ = ALG_HMAC_SHA512; }
+ ;
+
+
+/* BFD options */
+
+bfd_item:
+   INTERVAL expr_us { this_bfd_opts->min_rx_int = this_bfd_opts->min_tx_int = $2; }
+ | MIN RX INTERVAL expr_us { this_bfd_opts->min_rx_int = $4; }
+ | MIN TX INTERVAL expr_us { this_bfd_opts->min_tx_int = $4; }
+ | IDLE TX INTERVAL expr_us { this_bfd_opts->idle_tx_int = $4; }
+ | MULTIPLIER expr { this_bfd_opts->multiplier = $2; }
+ | PASSIVE bool { this_bfd_opts->passive = $2; this_bfd_opts->passive_set = 1; }
+ | GRACEFUL { this_bfd_opts->mode = BGP_BFD_GRACEFUL; }
+ ;
+
+bfd_items:
+   /* empty */
+ | bfd_items bfd_item ';'
+ ;
+
+bfd_opts:
+   '{' bfd_items '}'
  ;
 
 /* Core commands */
@@ -556,26 +617,14 @@ r_args:
        rt_show_add_table($$, t->table);
      $$->tables_defined_by = RSD_TDB_ALL;
    }
- | r_args IMPORT TABLE CF_SYM_KNOWN '.' r_args_channel {
-     cf_assert_symbol($4, SYM_PROTO);
-     $$ = $1;
-     struct proto_config *cf = $4->proto;
-     if (!cf->proto) cf_error("%s is not a protocol", $4->name);
-     struct channel *c = proto_find_channel_by_name(cf->proto, $6);
-     if (!c) cf_error("Channel %s.%s not found", $4->name, $6);
-     if (!c->in_table) cf_error("No import table in channel %s.%s", $4->name, $6);
-     rt_show_add_table($$, c->in_table);
+ | r_args IMPORT TABLE channel_arg {
+     if (!$4->in_table) cf_error("No import table in channel %s.%s", $4->proto->name, $4->name);
+     rt_show_add_table($$, $4->in_table);
      $$->tables_defined_by = RSD_TDB_DIRECT;
    }
- | r_args EXPORT TABLE CF_SYM_KNOWN '.' r_args_channel {
-     cf_assert_symbol($4, SYM_PROTO);
-     $$ = $1;
-     struct proto_config *cf = $4->proto;
-     if (!cf->proto) cf_error("%s is not a protocol", $4->name);
-     struct channel *c = proto_find_channel_by_name(cf->proto, $6);
-     if (!c) cf_error("Channel %s.%s not found", $4->name, $6);
-     if (!c->out_table) cf_error("No export table in channel %s.%s", $4->name, $6);
-     rt_show_add_table($$, c->out_table);
+ | r_args EXPORT TABLE channel_arg {
+     if (!$4->out_table) cf_error("No export table in channel %s.%s", $4->proto->name, $4->name);
+     rt_show_add_table($$, $4->out_table);
      $$->tables_defined_by = RSD_TDB_DIRECT;
    }
  | r_args FILTER filter {
@@ -610,15 +659,11 @@ r_args:
      $$->export_protocol = c->proto;
      $$->tables_defined_by = RSD_TDB_INDIRECT;
    }
- | r_args export_mode CF_SYM_KNOWN '.' r_args_channel {
-     cf_assert_symbol($3, SYM_PROTO);
-     struct proto_config *c = (struct proto_config *) $3->proto;
+ | r_args export_mode channel_arg {
      $$ = $1;
      if ($$->export_mode) cf_error("Export specified twice");
-     if (!c->proto) cf_error("%s is not a protocol", $3->name);
      $$->export_mode = $2;
-     $$->export_channel = proto_find_channel_by_name(c->proto, $5);
-     if (!$$->export_channel) cf_error("Export channel not found");
+     $$->export_channel = $3;
      $$->tables_defined_by = RSD_TDB_INDIRECT;
    }
  | r_args PROTOCOL CF_SYM_KNOWN {
@@ -683,10 +728,11 @@ export_mode:
    PREEXPORT	{ $$ = RSEM_PREEXPORT; }
  | EXPORT	{ $$ = RSEM_EXPORT; }
  | NOEXPORT	{ $$ = RSEM_NOEXPORT; }
+ | EXPORTED	{ $$ = RSEM_EXPORTED; }
  ;
 
 /* This is ugly hack */
-r_args_channel:
+channel_sym:
    IPV4		{ $$ = "ipv4"; }
  | IPV4_MC	{ $$ = "ipv4-mc"; }
  | IPV4_MPLS	{ $$ = "ipv4-mpls"; }
@@ -707,6 +753,16 @@ r_args_channel:
  | MPLS		{ $$ = "mpls"; }
  | PRI		{ $$ = "pri"; }
  | SEC		{ $$ = "sec"; }
+ ;
+
+channel_arg:
+   CF_SYM_KNOWN '.' channel_sym {
+     cf_assert_symbol($1, SYM_PROTO);
+     struct proto *p =  $1->proto->proto;
+     if (!p) cf_error("%s is not a protocol", $1->name);
+     $$ = proto_find_channel_by_name(p, $3);
+     if (!$$) cf_error("Channel %s.%s not found", $1->name, $3);
+   }
  ;
 
 CF_CLI_HELP(SHOW SYMBOLS, ..., [[Show all known symbolic names]])
@@ -783,8 +839,13 @@ CF_CLI(RELOAD OUT, proto_patt, <protocol> | \"<pattern>\" | all, [[Reload protoc
 { proto_apply_cmd($3, proto_cmd_reload, 1, CMD_RELOAD_OUT); } ;
 
 CF_CLI_HELP(DEBUG, ..., [[Control protocol debugging via BIRD logs]])
-CF_CLI(DEBUG, proto_patt debug_mask, (<protocol> | \"<pattern>\" | all) (all | off | { states|routes|filters|interfaces|events|packets [, ...] }), [[Control protocol debugging via BIRD logs]])
-{ proto_apply_cmd($2, proto_cmd_debug, 1, $3); } ;
+CF_CLI(DEBUG, debug_args, (<protocol> | <channel> | \"<pattern>\" | all) (all | off | { states|routes|filters|interfaces|events|packets [, ...] }), [[Control protocol debugging via BIRD logs]])
+{ /* Done in debug_args */  };
+
+debug_args:
+   proto_patt debug_mask { proto_apply_cmd($1, proto_cmd_debug, 1, $2);  }
+ | channel_arg debug_mask { channel_cmd_debug($1, $2); }
+ ;
 
 CF_CLI_HELP(MRTDUMP, ..., [[Control protocol debugging via MRTdump files]])
 CF_CLI(MRTDUMP, proto_patt mrtdump_mask, (<protocol> | \"<pattern>\" | all) (all | off | { states|messages [, ...] }), [[Control protocol debugging via MRTdump format]])

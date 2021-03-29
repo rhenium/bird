@@ -24,21 +24,18 @@
 #define BT_CONFIG_FILE "filter/test.conf"
 
 
-struct parse_config_file_arg {
-  struct config **cp;
-  const char *filename;
-};
-
 static int
-parse_config_file(const void *argv)
+t_reconfig(void)
 {
-  const struct parse_config_file_arg *arg = argv;
-  size_t fn_size = strlen(arg->filename) + 1;
-  char *filename = alloca(fn_size);
-  memcpy(filename, arg->filename, fn_size);
-  
-  *(arg->cp) = bt_config_file_parse(filename);
-  return !!*(arg->cp);
+  if (!bt_config_file_parse(BT_CONFIG_FILE))
+    return 0;
+
+  struct symbol *s;
+  WALK_LIST(s, config->symbols)
+    if ((s->class == SYM_FUNCTION) || (s->class == SYM_FILTER))
+      bt_assert_msg((s->flags & SYM_FLAG_SAME), "Symbol %s same check", s->name);
+
+  return 1;
 }
 
 static int
@@ -48,12 +45,6 @@ run_function(const void *arg)
 
   if (t->cmp)
     return t->result == f_same(t->fn, t->cmp);
-
-  if (!f_same(t->fn, t->fn)) {
-    bt_result = bt_suite_result = 0;
-    bt_log_suite_case_result(0, "The function doesn't compare to itself as the same");
-    return 0;
-  }
 
   linpool *tmp = lp_new_default(&root_pool);
   enum filter_return fret = f_eval(t->fn, tmp, NULL);
@@ -82,22 +73,19 @@ main(int argc, char *argv[])
 {
   bt_init(argc, argv);
   bt_bird_init();
-  
+
   bt_assert_hook = bt_assert_filter;
 
-  struct config *c = NULL;
-  struct parse_config_file_arg pcfa = { .cp = &c, .filename = BT_CONFIG_FILE };
-  bt_test_suite_base(parse_config_file, "conf", (const void *) &pcfa, 0, 0, "parse config file");
-  bt_test_suite_base(parse_config_file, "reconf", (const void *) &pcfa, 0, 0, "reconfigure with the same file");
+  /* Initial test.conf parsing, must be done here */
+  if (!bt_config_file_parse(BT_CONFIG_FILE))
+    abort();
+
+  bt_test_suite(t_reconfig, "Testing reconfiguration");
+
+  struct f_bt_test_suite *t;
+  WALK_LIST(t, config->tests)
+    bt_test_suite_base(run_function, t->fn_name, t, BT_FORKING, BT_TIMEOUT, "%s", t->dsc);
 
   bt_bird_cleanup();
-
-  if (c)
-  {
-    struct f_bt_test_suite *t;
-    WALK_LIST(t, c->tests)
-      bt_test_suite_base(run_function, t->fn_name, t, BT_FORKING, BT_TIMEOUT, "%s", t->dsc);
-  }
-
   return bt_exit_value();
 }

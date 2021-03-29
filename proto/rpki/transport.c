@@ -19,14 +19,14 @@
 /**
  * rpki_hostname_autoresolv - auto-resolve an IP address from a hostname
  * @host: domain name of host, e.g. "rpki-validator.realmv6.org"
+ * @err_msg: error message returned in case of errors
  *
  * This function resolves an IP address from a hostname.
  * Returns &ip_addr structure with IP address or |IPA_NONE|.
  */
 static ip_addr
-rpki_hostname_autoresolv(const char *host)
+rpki_hostname_autoresolv(const char *host, const char **err_msg)
 {
-  ip_addr addr = {};
   struct addrinfo *res;
   struct addrinfo hints = {
       .ai_family = AF_UNSPEC,
@@ -34,22 +34,22 @@ rpki_hostname_autoresolv(const char *host)
       .ai_flags = AI_ADDRCONFIG,
   };
 
+  *err_msg = NULL;
+
   if (!host)
     return IPA_NONE;
 
   int err_code = getaddrinfo(host, NULL, &hints, &res);
   if (err_code != 0)
   {
-    log(L_DEBUG "getaddrinfo failed: %s", gai_strerror(err_code));
+    *err_msg = gai_strerror(err_code);
     return IPA_NONE;
   }
 
-  sockaddr sa = {
-      .sa = *res->ai_addr,
-  };
-
+  ip_addr addr = IPA_NONE;
   uint unused;
-  sockaddr_read(&sa, res->ai_family, &addr, NULL, &unused);
+
+  sockaddr_read((sockaddr *) res->ai_addr, res->ai_family, &addr, NULL, &unused);
 
   freeaddrinfo(res);
   return addr;
@@ -86,12 +86,15 @@ rpki_tr_open(struct rpki_tr_sock *tr)
   sk->tbsize = RPKI_TX_BUFFER_SIZE;
   sk->tos = IP_PREC_INTERNET_CONTROL;
 
-  if (ipa_zero2(sk->daddr) && sk->host)
+  if (ipa_zero(sk->daddr) && sk->host)
   {
-    sk->daddr = rpki_hostname_autoresolv(sk->host);
+    const char *err_msg;
+
+    sk->daddr = rpki_hostname_autoresolv(sk->host, &err_msg);
     if (ipa_zero(sk->daddr))
     {
-      CACHE_TRACE(D_EVENTS, cache, "Cannot resolve the hostname '%s'", sk->host);
+      log(L_ERR "%s: Cannot resolve hostname '%s': %s",
+	  cache->p->p.name, sk->host, err_msg);
       return RPKI_TR_ERROR;
     }
   }

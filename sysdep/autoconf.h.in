@@ -42,6 +42,9 @@
 /* Define to 1 if debugging is enabled */
 #undef DEBUGGING
 
+/* Define to 1 if you want to run expensive consistency checks. */
+#undef ENABLE_EXPENSIVE_CHECKS
+
 /* Define to 1 if you have the <alloca.h> header file. */
 #undef HAVE_ALLOCA_H
 
@@ -63,9 +66,6 @@
 /* Define to 1 if you have the `ssh' library (-lssh). */
 #undef HAVE_LIBSSH
 
-/* Define to 1 if you have the <memory.h> header file. */
-#undef HAVE_MEMORY_H
-
 /* Define to 1 if kernel is MPLS capable */
 #undef HAVE_MPLS_KERNEL
 
@@ -84,13 +84,15 @@
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 
-/* Define to 1 if you have the <stdlib.h> header file. */
+/* Always define to 1, for backward compatibility. You can assume <stdlib.h>
+   exists. */
 #undef HAVE_STDLIB_H
 
 /* Define to 1 if you have the <strings.h> header file. */
 #undef HAVE_STRINGS_H
 
-/* Define to 1 if you have the <string.h> header file. */
+/* Always define to 1, for backward compatibility. You can assume <string.h>
+   exists. */
 #undef HAVE_STRING_H
 
 /* Define to 1 if `sa_len' is a member of `struct sockaddr'. */
@@ -129,7 +131,8 @@
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
 
-/* Define to 1 if you have the ANSI C header files. */
+/* Always define to 1, for backward compatibility. You can assume the C90
+   standard headers exist. */
 #undef STDC_HEADERS
 
 /* Which sysdep header to include */

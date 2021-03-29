@@ -91,7 +91,7 @@ static struct resclass rf_class = {
 };
 
 struct rfile *
-rf_open(pool *p, char *name, char *mode)
+rf_open(pool *p, const char *name, const char *mode)
 {
   FILE *f = fopen(name, mode);
 
@@ -1442,7 +1442,7 @@ sk_open(sock *s)
   }
 
   if (s->password)
-    if (sk_set_md5_auth(s, s->saddr, s->daddr, s->iface, s->password, 0) < 0)
+    if (sk_set_md5_auth(s, s->saddr, s->daddr, -1, s->iface, s->password, 0) < 0)
       goto err;
 
   switch (s->type)
@@ -1495,7 +1495,9 @@ sk_open_unix(sock *s, char *name)
   if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
     return -1;
 
-  /* Path length checked in test_old_bird() */
+  /* Path length checked in test_old_bird() but we may need unix sockets for other reasons in future */
+  ASSERT_DIE(strlen(name) < sizeof(sa.sun_path));
+
   sa.sun_family = AF_UNIX;
   strcpy(sa.sun_path, name);
 
@@ -2159,6 +2161,7 @@ io_init(void)
 {
   init_list(&sock_list);
   init_list(&global_event_list);
+  init_list(&global_work_list);
   krt_io_init();
   // XXX init_times();
   // XXX update_times();
@@ -2170,6 +2173,7 @@ io_init(void)
 
 static int short_loops = 0;
 #define SHORT_LOOP_MAX 10
+#define WORK_EVENTS_MAX 10
 
 void
 io_loop(void)
@@ -2187,6 +2191,7 @@ io_loop(void)
     {
       times_update(&main_timeloop);
       events = ev_run_list(&global_event_list);
+      events = ev_run_list_limited(&global_work_list, WORK_EVENTS_MAX) || events;
       timers_fire(&main_timeloop);
       io_close_event();
 

@@ -40,6 +40,7 @@ m4_divert(-1)m4_dnl
 #	106	comparator body
 #	107	struct f_line_item content
 #	108	interpreter body
+#	109	iterator body
 #
 #	Here are macros to allow you to _divert to the right directions.
 m4_define(FID_STRUCT_IN, `m4_divert(101)')
@@ -50,6 +51,7 @@ m4_define(FID_LINEARIZE_BODY, `m4_divert(105)')
 m4_define(FID_SAME_BODY, `m4_divert(106)')
 m4_define(FID_LINE_IN, `m4_divert(107)')
 m4_define(FID_INTERPRET_BODY, `m4_divert(108)')
+m4_define(FID_ITERATE_BODY, `m4_divert(109)')
 
 #	Sometimes you want slightly different code versions in different
 #	outputs.
@@ -104,7 +106,7 @@ FID_STRUCT_IN()m4_dnl
       struct f_inst * f$1;
 FID_NEW_ARGS()m4_dnl
   , struct f_inst * f$1
-FID_NEW_BODY
+FID_NEW_BODY()m4_dnl
 whati->f$1 = f$1;
 for (const struct f_inst *child = f$1; child; child = child->next) {
   what->size += child->size;
@@ -138,7 +140,7 @@ FID_IFCONST([[
 }
 FID_IFCONST([[
   const struct f_inst **items = NULL;
-  if (constargs) {
+  if (constargs && whati->varcount) {
     items = alloca(whati->varcount * sizeof(struct f_inst *));
     const struct f_inst *child = fvar;
     for (uint i=0; child; i++)
@@ -160,9 +162,28 @@ FID_HIC(,[[
 ')
 
 #	Some arguments need to check their type. After that, ARG_ANY is called.
-m4_define(ARG, `ARG_ANY($1)
+m4_define(ARG, `ARG_ANY($1) ARG_TYPE($1,$2)')
+m4_define(ARG_TYPE, `ARG_TYPE_STATIC($1,$2) ARG_TYPE_DYNAMIC($1,$2)')
+
+m4_define(ARG_TYPE_STATIC, `
+FID_NEW_BODY()m4_dnl
+if (f$1->type && (f$1->type != ($2)) && !f_const_promotion(f$1, ($2)))
+  cf_error("Argument $1 of %s must be of type %s, got type %s",
+	   f_instruction_name(what->fi_code), f_type_name($2), f_type_name(f$1->type));
+FID_INTERPRET_BODY()')
+
+m4_define(ARG_TYPE_DYNAMIC, `
 FID_INTERPRET_EXEC()m4_dnl
-if (v$1.type != $2) runtime("Argument $1 of instruction %s must be of type $2, got 0x%02x", f_instruction_name(what->fi_code), v$1.type)m4_dnl
+if (v$1.type != ($2))
+  runtime("Argument $1 of %s must be of type %s, got type %s",
+	   f_instruction_name(what->fi_code), f_type_name($2), f_type_name(v$1.type));
+FID_INTERPRET_BODY()')
+
+m4_define(ARG_SAME_TYPE, `
+FID_NEW_BODY()m4_dnl
+if (f$1->type && f$2->type && (f$1->type != f$2->type) &&
+   !f_const_promotion(f$2, f$1->type) && !f_const_promotion(f$1, f$2->type))
+  cf_error("Arguments $1 and $2 of %s must be of the same type", f_instruction_name(what->fi_code));
 FID_INTERPRET_BODY()')
 
 #	Executing another filter line. This replaces the recursion
@@ -192,6 +213,8 @@ FID_LINEARIZE_BODY()m4_dnl
 item->fl$1 = f_linearize(whati->f$1);
 FID_SAME_BODY()m4_dnl
 if (!f_same(f1->fl$1, f2->fl$1)) return 0;
+FID_ITERATE_BODY()m4_dnl
+if (whati->fl$1) BUFFER_PUSH(fit->lines) = whati->fl$1;
 FID_INTERPRET_EXEC()m4_dnl
 do { if (whati->fl$1) {
   LINEX_(whati->fl$1);
@@ -202,10 +225,26 @@ FID_INTERPRET_BODY()')
 
 #	Some of the instructions have a result. These constructions
 #	state the result and put it to the right place.
-m4_define(RESULT, `RESULT_VAL([[ (struct f_val) { .type = $1, .val.$2 = $3 } ]])')
+m4_define(RESULT, `RESULT_TYPE([[$1]]) RESULT_([[$1]],[[$2]],[[$3]])')
+m4_define(RESULT_, `RESULT_VAL([[ (struct f_val) { .type = $1, .val.$2 = $3 } ]])')
 m4_define(RESULT_VAL, `FID_HIC(, [[do { res = $1; fstk->vcnt++; } while (0)]],
 [[return fi_constant(what, $1)]])')
 m4_define(RESULT_VOID, `RESULT_VAL([[ (struct f_val) { .type = T_VOID } ]])')
+
+m4_define(ERROR,
+       `m4_errprint(m4___file__:m4___line__: $*
+       )m4_m4exit(1)')
+
+#	This macro specifies result type and makes there are no conflicting definitions
+m4_define(RESULT_TYPE,
+	`m4_ifdef([[INST_RESULT_TYPE]],
+		  [[m4_ifelse(INST_RESULT_TYPE,$1,,[[ERROR([[Multiple type definitons]])]])]],
+		  [[m4_define(INST_RESULT_TYPE,$1) RESULT_TYPE_($1)]])')
+
+m4_define(RESULT_TYPE_, `
+FID_NEW_BODY()m4_dnl
+what->type = $1;
+FID_INTERPRET_BODY()')
 
 #	Some common filter instruction members
 m4_define(SYMBOL, `FID_MEMBER(struct symbol *, sym, [[strcmp(f1->sym->name, f2->sym->name) || (f1->sym->class != f2->sym->class)]], "symbol %s", item->sym->name)')
@@ -230,6 +269,7 @@ m4_define(ACCESS_RTE, `FID_HIC(,[[do { if (!fs->rte) runtime("No route to access
 #	7	dump line item callers
 #	8	linearize
 #	9	same (filter comparator)
+#	10	iterate
 #	1	union in struct f_inst
 #	3	constructors + interpreter
 #
@@ -250,6 +290,7 @@ m4_define(FID_DUMP, `FID_ZONE(6, Dump line)')
 m4_define(FID_DUMP_CALLER, `FID_ZONE(7, Dump line caller)')
 m4_define(FID_LINEARIZE, `FID_ZONE(8, Linearize)')
 m4_define(FID_SAME, `FID_ZONE(9, Comparison)')
+m4_define(FID_ITERATE, `FID_ZONE(10, Iteration)')
 
 #	This macro does all the code wrapping. See inline comments.
 m4_define(INST_FLUSH, `m4_ifdef([[INST_NAME]], [[
@@ -337,14 +378,22 @@ m4_undivert(106)m4_dnl
 #undef f2
 break;
 
+FID_ITERATE()m4_dnl			The iterator
+case INST_NAME():
+#define whati (&(what->i_]]INST_NAME()[[))
+m4_undivert(109)m4_dnl
+#undef whati
+break;
+
 m4_divert(-1)FID_FLUSH(101,200)m4_dnl  And finally this flushes all the unused diversions
 ]])')
 
 m4_define(INST, `m4_dnl				This macro is called on beginning of each instruction.
 INST_FLUSH()m4_dnl				First, old data is flushed
 m4_define([[INST_NAME]], [[$1]])m4_dnl		Then we store instruction name,
-m4_define([[INST_INVAL]], [[$2]])m4_dnl		instruction input value count
-m4_undefine([[INST_NEVER_CONSTANT]])m4_dnl	and reset NEVER_CONSTANT trigger.
+m4_define([[INST_INVAL]], [[$2]])m4_dnl		instruction input value count,
+m4_undefine([[INST_NEVER_CONSTANT]])m4_dnl	reset NEVER_CONSTANT trigger,
+m4_undefine([[INST_RESULT_TYPE]])m4_dnl		and reset RESULT_TYPE value.
 FID_INTERPRET_BODY()m4_dnl 			By default, every code is interpreter code.
 ')
 
@@ -404,7 +453,7 @@ FID_WR_PUT(5)
 };
 
 const char *
-f_instruction_name(enum f_instruction_code fi)
+f_instruction_name_(enum f_instruction_code fi)
 {
   if (fi < (sizeof(f_instruction_name_str) / sizeof(f_instruction_name_str[0])))
     return f_instruction_name_str[fi];
@@ -428,6 +477,25 @@ fi_constant(struct f_inst *what, struct f_val val)
   what->fi_code = FI_CONSTANT;
   what->i_FI_CONSTANT.val = val;
   return what;
+}
+
+static int
+f_const_promotion(struct f_inst *arg, enum f_type want)
+{
+  if (arg->fi_code != FI_CONSTANT)
+    return 0;
+
+  struct f_val *c = &arg->i_FI_CONSTANT.val;
+
+  if ((c->type == T_IP) && ipa_is_ip4(c->val.ip) && (want == T_QUAD)) {
+    *c = (struct f_val) {
+      .type = T_QUAD,
+      .val.i = ipa_to_u32(c->val.ip),
+    };
+    return 1;
+  }
+
+  return 0;
 }
 
 #define v1 whati->f1->i_FI_CONSTANT.val
@@ -459,7 +527,7 @@ void f_dump_line(const struct f_line *dest, uint indent)
   debug("%sFilter line %p (len=%u)\n", INDENT, dest, dest->len);
   for (uint i=0; i<dest->len; i++) {
     const struct f_line_item *item = &dest->items[i];
-    debug("%sInstruction %s at line %u\n", INDENT, f_instruction_name(item->fi_code), item->lineno);
+    debug("%sInstruction %s at line %u\n", INDENT, f_instruction_name_(item->fi_code), item->lineno);
     switch (item->fi_code) {
 FID_WR_PUT(7)
       default: bug("Unknown instruction %x in f_dump_line", item->fi_code);
@@ -494,7 +562,7 @@ f_linearize_concat(const struct f_inst * const inst[], uint count)
   for (uint i=0; i<count; i++)
     out->len = linearize(out, inst[i], out->len);
 
-#if DEBUGGING
+#ifdef LOCAL_DEBUG
   f_dump_line(out, 0);
 #endif
   return out;
@@ -527,6 +595,27 @@ FID_WR_PUT(9)
   return 1;
 }
 
+
+/* Part of FI_SWITCH filter iterator */
+static void
+f_add_tree_lines(const struct f_tree *t, void *fit_)
+{
+  struct filter_iterator * fit = fit_;
+
+  if (t->data)
+    BUFFER_PUSH(fit->lines) = t->data;
+}
+
+/* Filter line iterator */
+void
+f_add_lines(const struct f_line_item *what, struct filter_iterator *fit)
+{
+  switch(what->fi_code) {
+FID_WR_PUT(10)
+  }
+}
+
+
 #if defined(__GNUC__) && __GNUC__ >= 6
 #pragma GCC diagnostic pop
 #endif
@@ -541,6 +630,7 @@ FID_WR_PUT(4)m4_dnl
 struct f_inst {
   struct f_inst *next;			/* Next instruction */
   enum f_instruction_code fi_code;	/* Instruction code */
+  enum f_type type;			/* Type of returned value, if known */
   int size;				/* How many instructions are underneath */
   int lineno;				/* Line number */
   union {

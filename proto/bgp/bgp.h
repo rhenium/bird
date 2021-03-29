@@ -98,6 +98,7 @@ struct bgp_config {
   int enable_refresh;			/* Enable local support for route refresh [RFC 2918] */
   int enable_as4;			/* Enable local support for 4B AS numbers [RFC 6793] */
   int enable_extended_messages;		/* Enable local support for extended messages [draft] */
+  int enable_hostname;			/* Enable local support for hostname [draft] */
   u32 rr_cluster_id;			/* Route reflector cluster ID, if different from local ID */
   int rr_client;			/* Whether neighbor is RR client of me */
   int rs_client;			/* Whether neighbor is RS client of me */
@@ -107,6 +108,8 @@ struct bgp_config {
   int interpret_communities;		/* Hardwired handling of well-known communities */
   int allow_local_as;			/* Allow that number of local ASNs in incoming AS_PATHs */
   int allow_local_pref;			/* Allow LOCAL_PREF in EBGP sessions */
+  int allow_as_sets;			/* Allow AS_SETs in incoming AS_PATHs */
+  int enforce_first_as;			/* Enable check for neighbor AS as first AS in AS_PATH */
   int gr_mode;				/* Graceful restart mode (BGP_GR_*) */
   int llgr_mode;			/* Long-lived graceful restart mode (BGP_LLGR_*) */
   int setkey;				/* Set MD5 password to system SA/SP database */
@@ -123,12 +126,12 @@ struct bgp_config {
   unsigned disable_after_error;		/* Disable the protocol when error is detected */
   u32 disable_after_cease;		/* Disable it when cease is received, bitfield */
 
-  char *password;			/* Password used for MD5 authentication */
+  const char *password;			/* Password used for MD5 authentication */
   net_addr *remote_range;		/* Allowed neighbor range for dynamic BGP */
-  char *dynamic_name;			/* Name pattern for dynamic BGP */
+  const char *dynamic_name;		/* Name pattern for dynamic BGP */
   int dynamic_name_digits;		/* Minimum number of digits for dynamic names */
   int check_link;			/* Use iface link state for liveness detection */
-  int bfd;				/* Use BFD for liveness detection */
+  struct bfd_options *bfd;		/* Use BFD for liveness detection */
 };
 
 struct bgp_channel_config {
@@ -141,7 +144,6 @@ struct bgp_channel_config {
   u8 next_hop_self;			/* Always set next hop to local IP address (NH_*) */
   u8 next_hop_keep;			/* Do not modify next hop attribute (NH_*) */
   u8 mandatory;				/* Channel is mandatory in capability negotiation */
-  u8 missing_lladdr;			/* What we will do when we don' know link-local addr, see MLL_* */
   u8 gw_mode;				/* How we compute route gateway from next_hop attr, see GW_* */
   u8 secondary;				/* Accept also non-best routes (i.e. RA_ACCEPTED) */
   u8 gr_able;				/* Allow full graceful restart for the channel */
@@ -227,6 +229,8 @@ struct bgp_caps {
   u8 any_ext_next_hop;			/* Bitwise OR of per-AF ext_next_hop */
   u8 any_add_path;			/* Bitwise OR of per-AF add_path */
 
+  const char *hostname;			/* Hostname, RFC draft */
+
   u16 af_count;				/* Number of af_data items */
   u16 length;				/* Length of capabilities in OPEN msg */
 
@@ -241,6 +245,14 @@ struct bgp_socket {
   node n;				/* Node in global bgp_sockets */
   sock *sk;				/* Real listening socket */
   u32 uc;				/* Use count */
+};
+
+struct bgp_stats {
+  uint rx_messages, tx_messages;
+  uint rx_updates, tx_updates;
+  u64  rx_bytes, tx_bytes;
+
+  uint fsm_established_transitions;
 };
 
 struct bgp_conn {
@@ -301,6 +313,9 @@ struct bgp_proto {
   struct bgp_socket *sock;		/* Shared listening socket */
   struct bfd_request *bfd_req;		/* BFD request, if BFD is used */
   struct birdsock *postponed_sk;	/* Postponed incoming socket for dynamic BGP */
+  struct bgp_stats stats;		/* BGP statistics */
+  btime last_established;		/* Last time of enter/leave of established state */
+  btime last_rx_update;			/* Last time of RX update */
   ip_addr link_addr;			/* Link-local version of local_ip */
   event *event;				/* Event for respawning and shutting process */
   timer *startup_timer;			/* Timer used to delay protocol startup due to previous errors (startup_delay) */
@@ -539,7 +554,7 @@ static inline void
 bgp_set_attr_data(ea_list **to, struct linpool *pool, uint code, uint flags, void *data, uint len)
 {
   struct adata *a = lp_alloc_adata(pool, len);
-  memcpy(a->data, data, len);
+  bmemcpy(a->data, data, len);
   bgp_set_attr(to, pool, code, flags, (uintptr_t) a);
 }
 
@@ -547,6 +562,7 @@ static inline void
 bgp_unset_attr(ea_list **to, struct linpool *pool, uint code)
 { eattr *e = bgp_set_attr(to, pool, code, 0, 0); e->type = EAF_TYPE_UNDEF; }
 
+int bgp_encode_mp_reach_mrt(struct bgp_write_state *s, eattr *a, byte *buf, uint size);
 
 int bgp_encode_attrs(struct bgp_write_state *s, ea_list *attrs, byte *buf, byte *end);
 ea_list * bgp_decode_attrs(struct bgp_parse_state *s, byte *data, uint len);
@@ -568,7 +584,7 @@ int bgp_rte_recalculate(rtable *table, net *net, rte *new, rte *old, rte *old_be
 struct rte *bgp_rte_modify_stale(struct rte *r, struct linpool *pool);
 void bgp_rt_notify(struct proto *P, struct channel *C, net *n, rte *new, rte *old);
 int bgp_preexport(struct proto *, struct rte **, struct linpool *);
-int bgp_get_attr(struct eattr *e, byte *buf, int buflen);
+int bgp_get_attr(const struct eattr *e, byte *buf, int buflen);
 void bgp_get_route_info(struct rte *, byte *buf);
 int bgp_total_aigp_metric_(rte *e, u64 *metric, const struct adata **ad);
 

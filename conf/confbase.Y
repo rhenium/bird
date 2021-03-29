@@ -19,6 +19,7 @@ CF_HDR
 #include "nest/protocol.h"
 #include "nest/iface.h"
 #include "nest/route.h"
+#include "nest/bfd.h"
 #include "nest/cli.h"
 #include "filter/filter.h"
 
@@ -60,9 +61,10 @@ CF_DECLS
   net_addr net;
   net_addr *net_ptr;
   struct symbol *s;
-  char *t;
+  const char *t;
   struct rtable_config *r;
   struct channel_config *cc;
+  struct channel *c;
   struct f_inst *x;
   struct {
     struct f_inst *begin, *end;
@@ -147,7 +149,7 @@ conf: definition ;
 
 definition:
    DEFINE symbol '=' term ';' {
-     struct f_val *val = cfg_alloc(sizeof(struct f_val));
+     struct f_val *val = cfg_allocz(sizeof(struct f_val));
      if (f_eval(f_linearize($4), cfg_mem, val) > F_RETURN) cf_error("Runtime error");
      cf_define_symbol($2, SYM_CONSTANT | val->type, val, val);
    }

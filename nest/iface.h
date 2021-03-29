@@ -115,15 +115,15 @@ void if_end_update(void);
 void if_flush_ifaces(struct proto *p);
 void if_feed_baby(struct proto *);
 struct iface *if_find_by_index(unsigned);
-struct iface *if_find_by_name(char *);
-struct iface *if_get_by_name(char *);
+struct iface *if_find_by_name(const char *);
+struct iface *if_get_by_name(const char *);
 void if_recalc_all_preferred_addresses(void);
 
 
 /* The Neighbor Cache */
 
 typedef struct neighbor {
-  node n;				/* Node in global neighbor list */
+  node n;				/* Node in neighbor hash table chain */
   node if_n;				/* Node in per-interface neighbor list */
   ip_addr addr;				/* Address of the neighbor */
   struct ifa *ifa;			/* Ifa on related iface */
@@ -150,7 +150,8 @@ void neigh_prune(void);
 void neigh_if_up(struct iface *);
 void neigh_if_down(struct iface *);
 void neigh_if_link(struct iface *);
-void neigh_ifa_update(struct ifa *);
+void neigh_ifa_up(struct ifa *a);
+void neigh_ifa_down(struct ifa *a);
 void neigh_init(struct pool *);
 
 /*
@@ -160,7 +161,7 @@ void neigh_init(struct pool *);
 struct iface_patt_node {
   node n;
   int positive;
-  byte *pattern;
+  const byte *pattern;
   net_addr prefix;
 };
 

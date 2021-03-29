@@ -32,8 +32,9 @@
 #include "lib/socket.h"
 #include "lib/string.h"
 #include "lib/unaligned.h"
-#include "lib/net.h"
 #include "lib/ip.h"
+#include "lib/net.h"
+#include "lib/flowspec.h"
 #include "nest/route.h"
 #include "nest/protocol.h"
 #include "nest/iface.h"
@@ -174,7 +175,7 @@ interpret(struct filter_state *fs, const struct f_line *line, struct f_val *val)
 
 #define curline fstk->estk[fstk->ecnt-1]
 
-#if DEBUGGING
+#ifdef LOCAL_DEBUG
   debug("Interpreting line.");
   f_dump_line(line, 1);
 #endif
