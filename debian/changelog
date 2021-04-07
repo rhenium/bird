@@ -1,3 +1,20 @@
+bird2 (2.0.8.16-20210407-1) unstable; urgency=medium
+
+  * Rebased 2.0.7.16-20210227-2 on top of fresh master.
+  * Based on 5caf32efa209 ("Doc: Fix flowspec example", 2021-04-03).
+  * Allow trailing comma in set literals in filter.
+  * Use route replace on IPv6.
+  * Introduce 'attach_mls([<label stack>])' filter function.
+  * Allow modification of AIGP metric values, at the expense of strict
+    compliance with RFC 7311.
+  * Partially fixed buffer overflow bug with kernel route installing.
+  * Better logging in BFD protocol.
+  * Probably strict check is performed on constant expression.
+  * Allow setting BGP AGGREGATOR attribute in filter.
+  * Fix jitter application to BGP filters as specified in RFC 4271 section 10.
+
+ -- Kazuki Yamaguchi <k@rhe.jp>  Wed, 07 Apr 2021 11:40:23 +0900
+
 bird2 (2.0.7-4.1) unstable; urgency=medium
 
   * Non-maintainer upload.
