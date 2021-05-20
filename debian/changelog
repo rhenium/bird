@@ -1,3 +1,23 @@
+bird2 (2.0.8.26+17-20210520-1) unstable; urgency=medium
+
+  * Based on v2.0.8-26-gc3c691e95cd4. Rebased 2.0.8.16-20210407-1 on top of it,
+    and merged ky/bgp-extended-hold-timer. Note that I changed the versioning
+    scheme.
+  * Allow trailing comma in set literals in filter.
+  * Use route replace on IPv6.
+  * Introduce 'attach_mls([<label stack>])' filter function.
+  * Allow modification of AIGP metric values, at the expense of strict
+    compliance with RFC 7311.
+  * Partially fixed buffer overflow bug with kernel route installing.
+  * Better logging in BFD protocol.
+  * Probably strict check is performed on constant expression.
+  * Allow setting BGP AGGREGATOR attribute in filter.
+  * Fix jitter application to BGP filters as specified in RFC 4271 section 10.
+  * Added "soft hold time on" configuration to BGP for debugging my other BGP
+    speaker.
+
+ -- Kazuki Yamaguchi <k@rhe.jp>  Thu, 20 May 2021 11:46:42 +0900
+
 bird2 (2.0.7-4.1) unstable; urgency=medium
 
   * Non-maintainer upload.
