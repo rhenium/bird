@@ -119,6 +119,7 @@ struct bgp_config {
   unsigned connect_delay_time;		/* Minimum delay between connect attempts */
   unsigned connect_retry_time;		/* Timeout for connect attempts */
   unsigned hold_time, initial_hold_time;
+  int soft_hold_time;
   unsigned keepalive_time;
   unsigned error_amnesia_time;		/* Errors are forgotten after */
   unsigned error_delay_time_min;	/* Time to wait after an error is detected */
