@@ -1,3 +1,16 @@
+bird2 (2.0.8-1) experimental; urgency=medium
+
+  * remove upstream .gitlab-ci.yml
+  * d/salsa-ci.yml: enable Debian Salsa CI
+  * d/watch: update uscan watch file
+  * d/patches: remove patch merged upstream
+  * d/control: make myself new Maintainer
+  * CI: remove upstream .gitlab-ci.yml
+  * CI: allow failures for blhc and reprotest
+  * set debian-release to experimental
+
+ -- Jakub Ružička <jakub.ruzicka@nic.cz>  Wed, 18 Aug 2021 13:10:55 +0000
+
 bird2 (2.0.7-4.1) unstable; urgency=medium
 
   * Non-maintainer upload.
