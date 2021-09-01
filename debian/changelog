@@ -1,3 +1,23 @@
+bird2 (2.0.8.59+17-20210901-1) unstable; urgency=medium
+
+  * Rebased 2.0.8.26+17-20210520-1 on top of v2.0.8-59-gf761be6b3063. There is
+    no significant changes with this release. This package is built on Debian
+    bullseye instead of buster to update libreadline dependency.
+  * Allow trailing comma in set literals in filter.
+  * Use route replace on IPv6.
+  * Introduce 'attach_mls([<label stack>])' filter function.
+  * Allow modification of AIGP metric values, at the expense of strict
+    compliance with RFC 7311.
+  * Partially fixed buffer overflow bug with kernel route installing.
+  * Better logging in BFD protocol.
+  * Probably strict check is performed on constant expression.
+  * Allow setting BGP AGGREGATOR attribute in filter.
+  * Fix jitter application to BGP filters as specified in RFC 4271 section 10.
+  * Added "soft hold time on" configuration to BGP for debugging my other BGP
+    speaker.
+
+ -- Kazuki Yamaguchi <k@rhe.jp>  Wed, 01 Sep 2021 16:12:46 +0900
+
 bird2 (2.0.7-4.1) unstable; urgency=medium
 
   * Non-maintainer upload.
