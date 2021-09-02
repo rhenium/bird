@@ -10,6 +10,3 @@ blhc:
 reprotest:
   # don't require reproducible build
   allow_failure: true
-
-variables:
-  RELEASE: 'experimental'
