@@ -11,6 +11,7 @@
  */
 
 #include "babel.h"
+#include "lib/mac.h"
 
 
 struct babel_pkt_header {
@@ -112,6 +113,31 @@ struct babel_subtlv_source_prefix {
   u8 addr[0];
 } PACKED;
 
+struct babel_tlv_mac {
+  u8 type;
+  u8 length;
+  u8 mac[0];
+} PACKED;
+
+struct babel_tlv_pc {
+  u8 type;
+  u8 length;
+  u32 pc;
+  u8 index[0];
+} PACKED;
+
+struct babel_tlv_challenge {
+  u8 type;
+  u8 length;
+  u8 nonce[0];
+} PACKED;
+
+struct babel_mac_pseudoheader {
+  u8 src_addr[16];
+  u16 src_port;
+  u8 dst_addr[16];
+  u16 dst_port;
+} PACKED;
 
 /* Hello flags */
 #define BABEL_HF_UNICAST	0x8000
@@ -120,8 +146,19 @@ struct babel_subtlv_source_prefix {
 #define BABEL_UF_DEF_PREFIX	0x80
 #define BABEL_UF_ROUTER_ID	0x40
 
+struct babel_parse_state;
+struct babel_write_state;
+
+struct babel_tlv_data {
+  u8 min_length;
+  int (*read_tlv)(struct babel_tlv *hdr, union babel_msg *m, struct babel_parse_state *state);
+  uint (*write_tlv)(struct babel_tlv *hdr, union babel_msg *m, struct babel_write_state *state, uint max_len);
+  void (*handle_tlv)(union babel_msg *m, struct babel_iface *ifa);
+};
 
 struct babel_parse_state {
+  const struct babel_tlv_data* (*get_tlv_data)(u8 type);
+  const struct babel_tlv_data* (*get_subtlv_data)(u8 type);
   struct babel_proto *proto;
   struct babel_iface *ifa;
   ip_addr saddr;
@@ -135,6 +172,9 @@ struct babel_parse_state {
   u8 def_ip4_prefix_seen;	/* def_ip4_prefix is valid */
   u8 current_tlv_endpos;	/* End of self-terminating TLVs (offset from start) */
   u8 sadr_enabled;
+  u8 is_unicast;
+
+  struct babel_msg_auth auth;
 };
 
 enum parse_result {
@@ -157,6 +197,10 @@ struct babel_write_state {
 #define DROP1(DSC) do { err_dsc = DSC; goto drop; } while(0)
 #define LOG_PKT(msg, args...) \
   log_rl(&p->log_pkt_tbf, L_REMOTE "%s: " msg, p->p.name, args)
+#define LOG_WARN(msg, args...) \
+  log_rl(&p->log_pkt_tbf, L_WARN "%s: " msg, p->p.name, args)
+#define LOG_PKT_AUTH(msg, args...) \
+  log_rl(&p->log_pkt_tbf, L_AUTH "%s: " msg, p->p.name, args)
 
 #define FIRST_TLV(p) ((struct babel_tlv *) (((struct babel_pkt_header *) p) + 1))
 #define NEXT_TLV(t) ((struct babel_tlv *) (((byte *) t) + TLV_LENGTH(t)))
@@ -166,6 +210,37 @@ struct babel_write_state {
 #define TLV_HDR0(tlv,t) TLV_HDR(tlv, t, tlv_data[t].min_length)
 
 #define NET_SIZE(n) BYTES(net_pxlen(n))
+
+
+/* Helper macros to loop over a series of TLVs.
+ * @start      pointer to first TLV (void * or struct babel_tlv *)
+ * @end        byte * pointer to TLV stream end
+ * @tlv        struct babel_tlv pointer used as iterator
+ * @frame_err  boolean (u8) that will be set to 1 if a frame error occurred
+ * @saddr      source addr for use in log output
+ * @ifname     ifname for use in log output
+ */
+#define WALK_TLVS(start, end, tlv, frame_err, saddr, ifname)    \
+  for (tlv = start;						\
+       (byte *)tlv < end;                                               \
+       tlv = NEXT_TLV(tlv))						\
+  {									\
+    byte *loop_pos;							\
+    /* Ugly special case */						\
+    if (tlv->type == BABEL_TLV_PAD1)					\
+      continue;                                                         \
+									\
+    /* The end of the common TLV header */				\
+    loop_pos = (byte *)tlv + sizeof(struct babel_tlv);			\
+    if ((loop_pos > end) || (loop_pos + tlv->length > end))             \
+    {                                                                   \
+      LOG_PKT("Bad TLV from %I via %s type %d pos %d - framing error",  \
+	      saddr, ifname, tlv->type, (int) ((byte *)tlv - (byte *)start)); \
+      frame_err = 1;                                                    \
+      break;                                                            \
+    }
+
+#define WALK_TLVS_END }
 
 static inline uint
 bytes_equal(u8 *b1, u8 *b2, uint maxlen)
@@ -234,6 +309,19 @@ put_ip6_ll(void *p, ip6_addr addr)
 
 
 /*
+ *      Authentication-related functions
+ */
+
+uint babel_auth_write_challenge(struct babel_tlv *hdr, union babel_msg *msg, struct babel_write_state *state, uint max_len);
+int babel_auth_add_tlvs(struct babel_iface *ifa, struct babel_tlv *tlv, uint max_len);
+int babel_auth_sign(struct babel_iface *ifa, ip_addr dest);
+int babel_auth_check(struct babel_iface *ifa,
+                     ip_addr saddr, u16 sport,
+                     ip_addr daddr, u16 dport,
+                     struct babel_pkt_header *pkt,
+                     byte *start, uint len);
+
+/*
  *	TLV read/write functions
  */
 
@@ -254,13 +342,6 @@ static uint babel_write_update(struct babel_tlv *hdr, union babel_msg *msg, stru
 static uint babel_write_route_request(struct babel_tlv *hdr, union babel_msg *msg, struct babel_write_state *state, uint max_len);
 static uint babel_write_seqno_request(struct babel_tlv *hdr, union babel_msg *msg, struct babel_write_state *state, uint max_len);
 static int babel_write_source_prefix(struct babel_tlv *hdr, net_addr *net, uint max_len);
-
-struct babel_tlv_data {
-  u8 min_length;
-  int (*read_tlv)(struct babel_tlv *hdr, union babel_msg *m, struct babel_parse_state *state);
-  uint (*write_tlv)(struct babel_tlv *hdr, union babel_msg *m, struct babel_write_state *state, uint max_len);
-  void (*handle_tlv)(union babel_msg *m, struct babel_iface *ifa);
-};
 
 static const struct babel_tlv_data tlv_data[BABEL_TLV_MAX] = {
   [BABEL_TLV_ACK_REQ] = {
@@ -317,7 +398,43 @@ static const struct babel_tlv_data tlv_data[BABEL_TLV_MAX] = {
     babel_write_seqno_request,
     babel_handle_seqno_request
   },
+  [BABEL_TLV_CHALLENGE_REQUEST] = {
+    sizeof(struct babel_tlv_challenge),
+    NULL,
+    babel_auth_write_challenge,
+    NULL
+  },
+  [BABEL_TLV_CHALLENGE_REPLY] = {
+    sizeof(struct babel_tlv_challenge),
+    NULL,
+    babel_auth_write_challenge,
+    NULL
+  },
 };
+
+static const struct babel_tlv_data *get_packet_tlv_data(u8 type)
+{
+  return type < sizeof(tlv_data) / sizeof(*tlv_data) ? &tlv_data[type] : NULL;
+}
+
+static const struct babel_tlv_data source_prefix_tlv_data = {
+  sizeof(struct babel_subtlv_source_prefix),
+  babel_read_source_prefix,
+  NULL,
+  NULL
+};
+
+static const struct babel_tlv_data *get_packet_subtlv_data(u8 type)
+{
+  switch (type)
+  {
+  case BABEL_SUBTLV_SOURCE_PREFIX:
+    return &source_prefix_tlv_data;
+
+  default:
+    return NULL;
+  }
+}
 
 static int
 babel_read_ack_req(struct babel_tlv *hdr, union babel_msg *m,
@@ -1016,7 +1133,7 @@ babel_read_source_prefix(struct babel_tlv *hdr, union babel_msg *msg,
   if (tlv->plen == 0)
     return PARSE_ERROR;
 
-  switch(msg->type)
+  switch (msg->type)
   {
   case BABEL_TLV_UPDATE:
     /* Wildcard updates with source prefix MUST be silently ignored */
@@ -1083,69 +1200,65 @@ babel_write_source_prefix(struct babel_tlv *hdr, net_addr *n, uint max_len)
   return len;
 }
 
-
 static inline int
 babel_read_subtlvs(struct babel_tlv *hdr,
 		   union babel_msg *msg,
 		   struct babel_parse_state *state)
 {
+  const struct babel_tlv_data *tlv_data;
+  struct babel_proto *p = state->proto;
   struct babel_tlv *tlv;
-  byte *pos, *end = (byte *) hdr + TLV_LENGTH(hdr);
+  byte *end = (byte *) hdr + TLV_LENGTH(hdr);
+  u8 frame_err = 0;
   int res;
 
-  for (tlv = (void *) hdr + state->current_tlv_endpos;
-       (byte *) tlv < end;
-       tlv = NEXT_TLV(tlv))
+  WALK_TLVS((void *)hdr + state->current_tlv_endpos, end, tlv, frame_err,
+            state->saddr, state->ifa->ifname)
   {
-    /* Ugly special case */
-    if (tlv->type == BABEL_TLV_PAD1)
+    if (tlv->type == BABEL_SUBTLV_PADN)
       continue;
 
-    /* The end of the common TLV header */
-    pos = (byte *)tlv + sizeof(struct babel_tlv);
-    if ((pos > end) || (pos + tlv->length > end))
-      return PARSE_ERROR;
-
-    /*
-     * The subtlv type space is non-contiguous (due to the mandatory bit), so
-     * use a switch for dispatch instead of the mapping array we use for TLVs
-     */
-    switch (tlv->type)
+    if (!state->get_subtlv_data ||
+        !(tlv_data = state->get_subtlv_data(tlv->type)) ||
+        !tlv_data->read_tlv)
     {
-    case BABEL_SUBTLV_SOURCE_PREFIX:
-      res = babel_read_source_prefix(tlv, msg, state);
-      if (res != PARSE_SUCCESS)
-	return res;
-      break;
-
-    case BABEL_SUBTLV_PADN:
-    default:
       /* Unknown mandatory subtlv; PARSE_IGNORE ignores the whole TLV */
       if (tlv->type >= 128)
-	return PARSE_IGNORE;
-      break;
+        return PARSE_IGNORE;
+      continue;
     }
-  }
 
-  return PARSE_SUCCESS;
+    res = tlv_data->read_tlv(tlv, msg, state);
+    if (res != PARSE_SUCCESS)
+      return res;
+  }
+  WALK_TLVS_END;
+
+  return frame_err ? PARSE_ERROR : PARSE_SUCCESS;
 }
 
-static inline int
+static int
 babel_read_tlv(struct babel_tlv *hdr,
                union babel_msg *msg,
                struct babel_parse_state *state)
 {
+  const struct babel_tlv_data *tlv_data;
+
   if ((hdr->type <= BABEL_TLV_PADN) ||
-      (hdr->type >= BABEL_TLV_MAX) ||
-      !tlv_data[hdr->type].read_tlv)
+      (hdr->type >= BABEL_TLV_MAX))
     return PARSE_IGNORE;
 
-  if (TLV_LENGTH(hdr) < tlv_data[hdr->type].min_length)
+  tlv_data = state->get_tlv_data(hdr->type);
+
+  if (!tlv_data || !tlv_data->read_tlv)
+    return PARSE_IGNORE;
+
+  if (TLV_LENGTH(hdr) < tlv_data->min_length)
     return PARSE_ERROR;
 
-  state->current_tlv_endpos = tlv_data[hdr->type].min_length;
+  state->current_tlv_endpos = tlv_data->min_length;
 
-  int res = tlv_data[hdr->type].read_tlv(hdr, msg, state);
+  int res = tlv_data->read_tlv(hdr, msg, state);
   if (res != PARSE_SUCCESS)
     return res;
 
@@ -1181,6 +1294,8 @@ babel_send_to(struct babel_iface *ifa, ip_addr dest)
   sock *sk = ifa->sk;
   struct babel_pkt_header *hdr = (void *) sk->tbuf;
   int len = get_u16(&hdr->length) + sizeof(struct babel_pkt_header);
+
+  len += babel_auth_sign(ifa, dest);
 
   DBG("Babel: Sending %d bytes to %I\n", len, dest);
   return sk_send_to(sk, len, dest, 0);
@@ -1233,6 +1348,8 @@ babel_write_queue(struct babel_iface *ifa, list *queue)
     rem_node(NODE msg);
     sl_free(p->msg_slab, msg);
   }
+
+  pos += babel_auth_add_tlvs(ifa, (struct babel_tlv *) pos, end - pos);
 
   uint plen = pos - (byte *) pkt;
   put_u16(&pkt->length, plen - sizeof(struct babel_pkt_header));
@@ -1312,10 +1429,13 @@ babel_enqueue(union babel_msg *msg, struct babel_iface *ifa)
 
 /**
  * babel_process_packet - process incoming data packet
+ * @ifa: Interface packet was received on
  * @pkt: Pointer to the packet data
  * @len: Length of received packet
  * @saddr: Address of packet sender
- * @ifa: Interface packet was received on.
+ * @sport: Packet source port
+ * @daddr: Destination address of packet
+ * @dport: Packet destination port
  *
  * This function is the main processing hook of incoming Babel packets. It
  * checks that the packet header is well-formed, then processes the TLVs
@@ -1327,9 +1447,12 @@ babel_enqueue(union babel_msg *msg, struct babel_iface *ifa)
  * order.
  */
 static void
-babel_process_packet(struct babel_pkt_header *pkt, int len,
-                     ip_addr saddr, struct babel_iface *ifa)
+babel_process_packet(struct babel_iface *ifa,
+		     struct babel_pkt_header *pkt, int len,
+                     ip_addr saddr, u16 sport,
+		     ip_addr daddr, u16 dport)
 {
+  u8 frame_err UNUSED = 0;
   struct babel_proto *p = ifa->proto;
   struct babel_tlv *tlv;
   struct babel_msg_node *msg;
@@ -1337,15 +1460,16 @@ babel_process_packet(struct babel_pkt_header *pkt, int len,
   int res;
 
   int plen = sizeof(struct babel_pkt_header) + get_u16(&pkt->length);
-  byte *pos;
   byte *end = (byte *)pkt + plen;
 
   struct babel_parse_state state = {
-    .proto	  = p,
-    .ifa	  = ifa,
-    .saddr	  = saddr,
-    .next_hop_ip6 = saddr,
-    .sadr_enabled = babel_sadr_enabled(p),
+    .get_tlv_data    = &get_packet_tlv_data,
+    .get_subtlv_data = &get_packet_subtlv_data,
+    .proto           = p,
+    .ifa             = ifa,
+    .saddr           = saddr,
+    .next_hop_ip6    = saddr,
+    .sadr_enabled    = babel_sadr_enabled(p),
   };
 
   if ((pkt->magic != BABEL_MAGIC) || (pkt->version != BABEL_VERSION))
@@ -1365,27 +1489,15 @@ babel_process_packet(struct babel_pkt_header *pkt, int len,
   TRACE(D_PACKETS, "Packet received from %I via %s",
         saddr, ifa->iface->name);
 
+  if (!babel_auth_check(ifa, saddr, sport, daddr, dport, pkt, end, len - plen))
+    return;
+
   init_list(&msgs);
 
   /* First pass through the packet TLV by TLV, parsing each into internal data
      structures. */
-  for (tlv = FIRST_TLV(pkt);
-       (byte *)tlv < end;
-       tlv = NEXT_TLV(tlv))
+  WALK_TLVS(FIRST_TLV(pkt), end, tlv, frame_err, saddr, ifa->iface->name)
   {
-    /* Ugly special case */
-    if (tlv->type == BABEL_TLV_PAD1)
-      continue;
-
-    /* The end of the common TLV header */
-    pos = (byte *)tlv + sizeof(struct babel_tlv);
-    if ((pos > end) || (pos + tlv->length > end))
-    {
-      LOG_PKT("Bad TLV from %I via %s type %d pos %d - framing error",
-	      saddr, ifa->iface->name, tlv->type, (byte *)tlv - (byte *)pkt);
-      break;
-    }
-
     msg = sl_allocz(p->msg_slab);
     res = babel_read_tlv(tlv, &msg->msg, &state);
     if (res == PARSE_SUCCESS)
@@ -1400,13 +1512,14 @@ babel_process_packet(struct babel_pkt_header *pkt, int len,
     else /* PARSE_ERROR */
     {
       LOG_PKT("Bad TLV from %I via %s type %d pos %d - parse error",
-	      saddr, ifa->iface->name, tlv->type, (byte *)tlv - (byte *)pkt);
+	      saddr, ifa->iface->name, tlv->type, (int) ((byte *)tlv - (byte *)pkt));
       sl_free(p->msg_slab, msg);
       break;
     }
   }
+  WALK_TLVS_END;
 
-  /* Parsing done, handle all parsed TLVs */
+  /* Parsing done, handle all parsed TLVs, regardless of any errors */
   WALK_LIST_FIRST(msg, msgs)
   {
     if (tlv_data[msg->msg.type].handle_tlv)
@@ -1469,7 +1582,10 @@ babel_rx_hook(sock *sk, uint len)
   if (sk->flags & SKF_TRUNCATED)
     DROP("truncated", len);
 
-  babel_process_packet((struct babel_pkt_header *) sk->rbuf, len, sk->faddr, ifa);
+  babel_process_packet(ifa,
+		       (struct babel_pkt_header *) sk->rbuf, len,
+		       sk->faddr, sk->fport,
+		       sk->laddr, sk->dport);
   return 1;
 
 drop:
@@ -1518,4 +1634,406 @@ err:
   sk_log_error(sk, p->p.name);
   rfree(sk);
   return 0;
+}
+
+
+/* Authentication checks */
+static int
+babel_read_pc(struct babel_tlv *hdr, union babel_msg *m UNUSED,
+              struct babel_parse_state *state)
+{
+  struct babel_tlv_pc *tlv = (void *) hdr;
+
+  /* RFC 8967 4.3 (3) - If multiple PCs are found, only the first one is used */
+  if (state->auth.pc_seen)
+    return PARSE_IGNORE;
+
+  uint index_len = TLV_OPT_LENGTH(tlv);
+  if (index_len > BABEL_AUTH_INDEX_LEN)
+    return PARSE_IGNORE;
+
+  state->auth.pc = get_u32(&tlv->pc);
+  state->auth.pc_seen = 1;
+  state->auth.index_len = index_len;
+  state->auth.index = tlv->index;
+  state->current_tlv_endpos += index_len;
+
+  return PARSE_SUCCESS;
+}
+
+static const struct babel_tlv_data pc_tlv_data = {
+  .min_length = sizeof(struct babel_tlv_pc),
+  .read_tlv = &babel_read_pc
+};
+
+static int
+babel_read_challenge_req(struct babel_tlv *hdr, union babel_msg *m UNUSED,
+			 struct babel_parse_state *state)
+{
+  struct babel_tlv_challenge *tlv = (void *) hdr;
+
+  if (!state->is_unicast)
+    return PARSE_IGNORE;
+
+  uint nonce_len = TLV_OPT_LENGTH(tlv);
+  if (nonce_len > BABEL_AUTH_MAX_NONCE_LEN)
+    return PARSE_IGNORE;
+
+  state->auth.challenge_len = nonce_len;
+  bmemcpy(state->auth.challenge, tlv->nonce, nonce_len);
+  state->auth.challenge_seen = 1;
+  state->current_tlv_endpos += nonce_len;
+
+  return PARSE_SUCCESS;
+}
+
+static const struct babel_tlv_data challenge_req_tlv_data = {
+  .min_length = sizeof(struct babel_tlv_challenge),
+  .read_tlv = &babel_read_challenge_req,
+};
+
+static int
+babel_read_challenge_reply(struct babel_tlv *hdr, union babel_msg *m UNUSED,
+                           struct babel_parse_state *state)
+{
+  struct babel_tlv_challenge *tlv = (void *) hdr;
+
+  if (state->auth.challenge_reply_seen)
+    return PARSE_IGNORE;
+
+  uint nonce_len = TLV_OPT_LENGTH(tlv);
+  if (nonce_len != BABEL_AUTH_NONCE_LEN)
+    return PARSE_IGNORE;
+
+  memcpy(state->auth.challenge_reply, tlv->nonce, BABEL_AUTH_NONCE_LEN);
+  state->auth.challenge_reply_seen = 1;
+  state->current_tlv_endpos += nonce_len;
+
+  return PARSE_SUCCESS;
+}
+
+static const struct babel_tlv_data challenge_reply_tlv_data = {
+  .min_length = sizeof(struct babel_tlv_challenge),
+  .read_tlv = &babel_read_challenge_reply,
+};
+
+static const struct babel_tlv_data *
+get_auth_tlv_data(u8 type)
+{
+  switch (type)
+  {
+  case BABEL_TLV_PC:
+    return &pc_tlv_data;
+  case BABEL_TLV_CHALLENGE_REQUEST:
+    return &challenge_req_tlv_data;
+  case BABEL_TLV_CHALLENGE_REPLY:
+    return &challenge_reply_tlv_data;
+  default:
+    return NULL;
+  }
+}
+
+uint
+babel_auth_write_challenge(struct babel_tlv *hdr, union babel_msg *m,
+                           struct babel_write_state *state UNUSED, uint max_len)
+{
+  struct babel_tlv_challenge *tlv = (void *) hdr;
+  struct babel_msg_challenge *msg = &m->challenge;
+
+  uint len = sizeof(struct babel_tlv_challenge) + msg->nonce_len;
+
+  if (len > max_len)
+    return 0;
+
+  TLV_HDR(tlv, msg->type, len);
+  bmemcpy(tlv->nonce, msg->nonce, msg->nonce_len);
+
+  return len;
+}
+
+static void
+babel_mac_fill(struct password_item *pass,
+	       struct babel_mac_pseudoheader *phdr,
+	       byte *pkt, uint pkt_len,
+	       byte *mac)
+{
+  struct mac_context ctx;
+
+  mac_init(&ctx, pass->alg, pass->password, pass->length);
+  mac_update(&ctx, (byte *)phdr, sizeof(*phdr));
+  mac_update(&ctx, (byte *)pkt, pkt_len);
+  memcpy(mac, mac_final(&ctx), mac_get_length(&ctx));
+  mac_cleanup(&ctx);
+}
+
+static void
+babel_mac_build_phdr(struct babel_mac_pseudoheader *phdr,
+                     ip_addr saddr, u16 sport,
+                     ip_addr daddr, u16 dport)
+{
+  memset(phdr, 0, sizeof(*phdr));
+  put_ip6(phdr->src_addr, saddr);
+  put_u16(&phdr->src_port, sport);
+  put_ip6(phdr->dst_addr, daddr);
+  put_u16(&phdr->dst_port, dport);
+  DBG("MAC pseudo-header: %I %d %I %d\n", saddr, sport, daddr, dport);
+}
+
+static int
+babel_auth_check_mac(struct babel_iface *ifa, byte *pkt,
+                     byte *trailer, uint trailer_len,
+                     ip_addr saddr, u16 sport,
+                     ip_addr daddr, u16 dport)
+{
+  struct babel_proto *p = ifa->proto;
+  uint pkt_len = (uint)(trailer - pkt);
+  byte *end = trailer + trailer_len;
+  btime now_ = current_real_time();
+
+  if (trailer_len < sizeof(struct babel_tlv))
+  {
+    LOG_PKT_AUTH("Authentication failed for %I on %s - no MAC signature",
+                 saddr, ifa->ifname);
+    return 0;
+  }
+
+  struct babel_mac_pseudoheader phdr;
+  babel_mac_build_phdr(&phdr, saddr, sport, daddr, dport);
+
+  struct password_item *pass;
+  WALK_LIST(pass, *ifa->cf->passwords)
+  {
+    byte mac[MAX_HASH_SIZE];
+    uint mac_len = mac_type_length(pass->alg);
+    uint frame_err = 0;
+
+    if (pass->accfrom > now_ || pass->accto < now_)
+      continue;
+
+    babel_mac_fill(pass, &phdr, pkt, pkt_len, mac);
+
+    struct babel_tlv *tlv0;
+    WALK_TLVS((void *)trailer, end, tlv0, frame_err, saddr, ifa->ifname)
+    {
+      struct babel_tlv_mac *tlv = (void *)tlv0;
+
+      if (tlv->type != BABEL_TLV_MAC)
+	continue;
+
+      if ((TLV_OPT_LENGTH(tlv) == mac_len) && !memcmp(tlv->mac, mac, mac_len))
+        return 1;
+
+      DBG("MAC mismatch key id %d pos %d len %d/%d\n",
+	  pass->id, (int) ((byte *)tlv - (byte *)pkt), mac_len, tlv->length);
+    }
+    WALK_TLVS_END;
+
+    if (frame_err)
+      return 0;
+  }
+
+  LOG_PKT_AUTH("Authentication failed for %I on %s - no matching key",
+               saddr, ifa->ifname);
+  return 0;
+}
+
+/**
+ * babel_auth_check - Check authentication for a packet
+ * @ifa: Interface holding the transmission buffer
+ * @saddr: Source address the packet was received from
+ * @sport: Source port the packet was received from
+ * @daddr: Destination address the packet was sent to
+ * @dport: Destination port the packet was sent to
+ * @pkt: Pointer to start of the packet data
+ * @trailer: Pointer to the packet trailer
+ * @trailer_len: Length of the packet trailer
+ *
+ * This function performs any necessary authentication checks on a packet and
+ * returns 0 if the packet should be accepted (either because it has been
+ * successfully authenticated or because authentication is disabled or
+ * configured in permissive mode), or 1 if the packet should be dropped without
+ * further processing.
+ */
+int
+babel_auth_check(struct babel_iface *ifa,
+                 ip_addr saddr, u16 sport,
+                 ip_addr daddr, u16 dport,
+                 struct babel_pkt_header *pkt,
+                 byte *trailer, uint trailer_len)
+{
+  uint frame_err UNUSED = 0;
+  struct babel_proto *p = ifa->proto;
+  struct babel_tlv *tlv;
+
+  struct babel_parse_state state = {
+    .get_tlv_data = &get_auth_tlv_data,
+    .proto        = p,
+    .ifa          = ifa,
+    .saddr        = saddr,
+    .is_unicast   = !(ipa_classify(daddr) & IADDR_MULTICAST),
+    .auth = {
+      .sender = saddr,
+    },
+  };
+
+  if (ifa->cf->auth_type == BABEL_AUTH_NONE)
+    return 1;
+
+  TRACE(D_PACKETS, "Checking packet authentication signature");
+
+  if (!babel_auth_check_mac(ifa, (byte *)pkt,
+                           trailer, trailer_len,
+                           saddr, sport,
+                           daddr, dport))
+    goto fail;
+
+  /* MAC verified; parse packet to check packet counter and challenge */
+  WALK_TLVS(FIRST_TLV(pkt), trailer, tlv, frame_err, saddr, ifa->ifname)
+  {
+    union babel_msg msg;
+    enum parse_result res;
+
+    res = babel_read_tlv(tlv, &msg, &state);
+    if (res == PARSE_ERROR)
+    {
+      LOG_PKT("Bad TLV from %I via %s type %d pos %d - parse error",
+	      saddr, ifa->ifname, tlv->type, (int) ((byte *)tlv - (byte *)pkt));
+      goto fail;
+    }
+  }
+  WALK_TLVS_END;
+
+  if (!babel_auth_check_pc(ifa, &state.auth))
+    goto fail;
+
+  TRACE(D_PACKETS, "Packet from %I via %s authenticated successfully",
+        saddr, ifa->ifname);
+  return 1;
+
+fail:
+  TRACE(D_PACKETS, "Packet from %I via %s failed authentication%s",
+               saddr, ifa->ifname,
+               ifa->cf->auth_permissive ? " but accepted in permissive mode" : "");
+
+  return ifa->cf->auth_permissive;
+}
+
+/**
+ * babel_auth_add_tlvs - Add authentication-related TLVs to a packet
+ * @ifa: Interface holding the transmission buffer
+ * @tlv: Pointer to the place where any new TLVs should be added
+ * @max_len: Maximum length available for adding new TLVs
+ *
+ * This function adds any new TLVs required by the authentication mode to a
+ * packet before it is shipped out. For MAC authentication, this is the packet
+ * counter TLV that must be included in every packet.
+ */
+int
+babel_auth_add_tlvs(struct babel_iface *ifa, struct babel_tlv *hdr, uint max_len)
+{
+  struct babel_proto *p = ifa->proto;
+  struct babel_tlv_pc *tlv;
+  uint len;
+
+  if (ifa->cf->auth_type == BABEL_AUTH_NONE)
+    return 0;
+
+  tlv = (void *) hdr;
+  len = sizeof(struct babel_tlv_pc) + BABEL_AUTH_INDEX_LEN;
+  max_len += ifa->auth_tx_overhead;
+
+  if (len > max_len)
+  {
+    LOG_WARN("Insufficient space to add MAC seqno TLV on iface %s: %d < %d",
+             ifa->ifname, max_len, len);
+    return 0;
+  }
+
+  TLV_HDR(tlv, BABEL_TLV_PC, len);
+  put_u32(&tlv->pc, ifa->auth_pc++);
+  memcpy(tlv->index, ifa->auth_index, BABEL_AUTH_INDEX_LEN);
+
+  /* Reset index on overflow to 0 */
+  if (!ifa->auth_pc)
+    babel_auth_reset_index(ifa);
+
+  return len;
+}
+
+/**
+ * babel_auth_sign - Sign an outgoing packet before transmission
+ * @ifa: Interface holding the transmission buffer
+ * @dest: Destination address of the packet
+ *
+ * This function adds authentication signature(s) to the packet trailer for each
+ * of the configured authentication keys on the interface.
+ */
+int
+babel_auth_sign(struct babel_iface *ifa, ip_addr dest)
+{
+  struct babel_proto *p = ifa->proto;
+  sock *sk = ifa->sk;
+
+  if (ifa->cf->auth_type == BABEL_AUTH_NONE)
+    return 0;
+
+  struct babel_pkt_header *hdr = (void *) sk->tbuf;
+  int len = get_u16(&hdr->length) + sizeof(struct babel_pkt_header);
+
+  byte *pkt = (byte *) hdr;
+  byte *pos = pkt + len;
+  byte *end = pkt + ifa->tx_length + ifa->auth_tx_overhead;
+  btime now_ = current_real_time();
+
+  struct babel_mac_pseudoheader phdr;
+  babel_mac_build_phdr(&phdr, sk->saddr, sk->sport, dest, sk->dport);
+
+  struct password_item *pass;
+  WALK_LIST(pass, *ifa->cf->passwords)
+  {
+    struct babel_tlv_mac *tlv = (void *) pos;
+    uint tlv_len = sizeof(struct babel_tlv_mac) + mac_type_length(pass->alg);
+
+    if (pass->genfrom > now_ || pass->gento < now_)
+      continue;
+
+    if (pos + tlv_len > end)
+    {
+      LOG_WARN("Insufficient space for MAC signatures on iface %s dst %I (%d/%d)",
+               ifa->ifname, dest, tlv_len, (int) (end-pos));
+      break;
+    }
+
+    TLV_HDR(tlv, BABEL_TLV_MAC, tlv_len);
+    babel_mac_fill(pass, &phdr, pkt, len, tlv->mac);
+
+    pos += tlv_len;
+  }
+
+  DBG("Added MAC signatures (%d bytes) on ifa %s for dest %I\n",
+      tot_len, ifa->ifname, dest);
+
+  return pos - (pkt + len);
+}
+
+/**
+ * babel_auth_set_tx_overhead - Set interface TX overhead for authentication
+ * @ifa: Interface to configure
+ *
+ * This function sets the TX overhead for an interface based on its
+ * authentication configuration.
+ */
+void
+babel_auth_set_tx_overhead(struct babel_iface *ifa)
+{
+  if (ifa->cf->auth_type == BABEL_AUTH_NONE)
+  {
+    ifa->auth_tx_overhead = 0;
+    return;
+  }
+
+  ifa->auth_tx_overhead = (sizeof(struct babel_tlv_pc) + BABEL_AUTH_INDEX_LEN +
+                           sizeof(struct babel_tlv_mac) * ifa->cf->mac_num_keys +
+                           ifa->cf->mac_total_len);
+  ifa->tx_length -= ifa->auth_tx_overhead;
 }

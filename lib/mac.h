@@ -12,6 +12,7 @@
 
 #include "nest/bird.h"
 #include "lib/sha512.h"
+#include "lib/blake2.h"
 
 
 #define ALG_UNDEFINED		0
@@ -21,6 +22,10 @@
 #define ALG_SHA256		0x04
 #define ALG_SHA384		0x05
 #define ALG_SHA512		0x06
+#define ALG_BLAKE2S_128		0x07
+#define ALG_BLAKE2S_256		0x08
+#define ALG_BLAKE2B_256		0x09
+#define ALG_BLAKE2B_512		0x0A
 #define ALG_HMAC		0x10
 #define ALG_HMAC_MD5		0x11
 #define ALG_HMAC_SHA1		0x12
@@ -71,6 +76,8 @@ union mac_context_union {
   struct mac_context mac;
   struct nrmh_context nrmh;
   struct hmac_context hmac;
+  struct blake2s_context blake2s;
+  struct blake2b_context blake2b;
 };
 
 
@@ -87,6 +94,8 @@ struct mac_desc {
   void (*hash_init)(struct hash_context *ctx);
   void (*hash_update)(struct hash_context *ctx, const byte *data, uint datalen);
   byte *(*hash_final)(struct hash_context *ctx);
+  uint min_key_length;			/* Minimum allowed key length */
+  uint max_key_length;			/* Maximum allowed key length */
 };
 
 extern const struct mac_desc mac_table[ALG_MAX];

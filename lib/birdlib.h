@@ -32,6 +32,9 @@ struct align_probe { char x; long int y; };
 #define MAX(a,b) MAX_(a,b)
 #endif
 
+#define ROUND_DOWN_POW2(a,b)  ((a) & ~((b)-1))
+#define ROUND_UP_POW2(a,b)  (((a)+((b)-1)) & ~((b)-1))
+
 #define U64(c) UINT64_C(c)
 #define ABS(a)   ((a)>=0 ? (a) : -(a))
 #define DELTA(a,b) (((a)>=(b))?(a)-(b):(b)-(a))
@@ -73,6 +76,9 @@ static inline int u64_cmp(u64 i1, u64 i2)
 #define UNUSED __attribute__((unused))
 #define PACKED __attribute__((packed))
 #define NONNULL(...) __attribute__((nonnull((__VA_ARGS__))))
+
+#define STATIC_ASSERT(EXP) _Static_assert(EXP, #EXP)
+#define STATIC_ASSERT_MSG(EXP,MSG) _Static_assert(EXP, MSG)
 
 #ifndef HAVE_THREAD_LOCAL
 #define _Thread_local
@@ -192,5 +198,7 @@ asm(
 /* Pseudorandom numbers */
 
 u32 random_u32(void);
+void random_init(void);
+void random_bytes(void *buf, size_t size);
 
 #endif

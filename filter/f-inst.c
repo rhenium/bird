@@ -533,6 +533,7 @@
       case SA_IFNAME:	RESULT(sa.f_type, s, rta->nh.iface ? rta->nh.iface->name : ""); break;
       case SA_IFINDEX:	RESULT(sa.f_type, i, rta->nh.iface ? rta->nh.iface->index : 0); break;
       case SA_WEIGHT:	RESULT(sa.f_type, i, rta->nh.weight + 1); break;
+      case SA_GW_MPLS:	RESULT(sa.f_type, i, rta->nh.labels ? rta->nh.label[0] : MPLS_NULL); break;
 
       default:
 	bug("Invalid static attribute access (%u/%u)", sa.f_type, sa.sa_code);
@@ -569,6 +570,7 @@
 	  rta->nh.iface = n->iface;
 	  rta->nh.next = NULL;
 	  rta->hostentry = NULL;
+	  rta->nh.labels = 0;
 	}
 	break;
 
@@ -587,6 +589,7 @@
 	  rta->nh.iface = NULL;
 	  rta->nh.next = NULL;
 	  rta->hostentry = NULL;
+	  rta->nh.labels = 0;
 	}
 	break;
 
@@ -601,6 +604,22 @@
 	  rta->nh.iface = ifa;
 	  rta->nh.next = NULL;
 	  rta->hostentry = NULL;
+	  rta->nh.labels = 0;
+	}
+	break;
+
+      case SA_GW_MPLS:
+	{
+	  if (v1.val.i >= 0x100000)
+	    runtime( "Invalid MPLS label" );
+
+	  if (v1.val.i != MPLS_NULL)
+	  {
+	    rta->nh.label[0] = v1.val.i;
+	    rta->nh.labels = 1;
+	  }
+	  else
+	    rta->nh.labels = 0;
 	}
 	break;
 
@@ -891,14 +910,31 @@
       ((net_addr_roa6 *) v1.val.net)->max_pxlen);
   }
 
-  INST(FI_ROA_ASN, 1, 1) { 	/* Get ROA ASN */
-    ARG(1, T_NET);
-    if (!net_is_roa(v1.val.net))
-      runtime( "ROA expected" );
+  INST(FI_ASN, 1, 1) { 	/* Get ROA ASN or community ASN part */
+    ARG_ANY(1);
+    RESULT_TYPE(T_INT);
+    switch(v1.type)
+    {
+      case T_NET:
+        if (!net_is_roa(v1.val.net))
+          runtime( "ROA expected" );
 
-    RESULT(T_INT, i, (v1.val.net->type == NET_ROA4) ?
-      ((net_addr_roa4 *) v1.val.net)->asn :
-      ((net_addr_roa6 *) v1.val.net)->asn);
+        RESULT_(T_INT, i, (v1.val.net->type == NET_ROA4) ?
+          ((net_addr_roa4 *) v1.val.net)->asn :
+          ((net_addr_roa6 *) v1.val.net)->asn);
+        break;
+
+      case T_PAIR:
+        RESULT_(T_INT, i, v1.val.i >> 16);
+        break;
+
+      case T_LC:
+        RESULT_(T_INT, i, v1.val.lc.asn);
+        break;
+
+      default:
+        runtime( "Net, pair or lc expected" );
+    }
   }
 
   INST(FI_IP, 1, 1) {	/* Convert prefix to ... */
@@ -930,6 +966,89 @@
   INST(FI_AS_PATH_LAST_NAG, 1, 1) {	/* Get last ASN from non-aggregated part of AS PATH */
     ARG(1, T_PATH);
     RESULT(T_INT, i, as_path_get_last_nonaggregated(v1.val.ad));
+  }
+
+  INST(FI_PAIR_DATA, 1, 1) {	/* Get data part from the standard community */
+    ARG(1, T_PAIR);
+    RESULT(T_INT, i, v1.val.i & 0xFFFF);
+  }
+
+  INST(FI_LC_DATA1, 1, 1) {	/* Get data1 part from the large community */
+    ARG(1, T_LC);
+    RESULT(T_INT, i, v1.val.lc.ldp1);
+  }
+
+  INST(FI_LC_DATA2, 1, 1) {	/* Get data2 part from the large community */
+    ARG(1, T_LC);
+    RESULT(T_INT, i, v1.val.lc.ldp2);
+  }
+
+  INST(FI_MIN, 1, 1) {	/* Get minimum element from set */
+    ARG_ANY(1);
+    RESULT_TYPE(f_type_element_type(v1.type));
+    switch(v1.type)
+    {
+      case T_CLIST:
+        {
+          u32 val = 0;
+          int_set_min(v1.val.ad, &val);
+          RESULT_(T_PAIR, i, val);
+        }
+        break;
+
+      case T_ECLIST:
+        {
+          u64 val = 0;
+          ec_set_min(v1.val.ad, &val);
+          RESULT_(T_EC, ec, val);
+        }
+        break;
+
+      case T_LCLIST:
+        {
+          lcomm val = { 0, 0, 0 };
+          lc_set_min(v1.val.ad, &val);
+          RESULT_(T_LC, lc, val);
+        }
+        break;
+
+      default:
+        runtime( "Clist or lclist expected" );
+    }
+  }
+
+  INST(FI_MAX, 1, 1) {	/* Get maximum element from set */
+    ARG_ANY(1);
+    RESULT_TYPE(f_type_element_type(v1.type));
+    switch(v1.type)
+    {
+      case T_CLIST:
+        {
+          u32 val = 0;
+          int_set_max(v1.val.ad, &val);
+          RESULT_(T_PAIR, i, val);
+        }
+        break;
+
+      case T_ECLIST:
+        {
+          u64 val = 0;
+          ec_set_max(v1.val.ad, &val);
+          RESULT_(T_EC, ec, val);
+        }
+        break;
+
+      case T_LCLIST:
+        {
+          lcomm val = { 0, 0, 0 };
+          lc_set_max(v1.val.ad, &val);
+          RESULT_(T_LC, lc, val);
+        }
+        break;
+
+      default:
+        runtime( "Clist or lclist expected" );
+    }
   }
 
   INST(FI_RETURN, 1, 1) {

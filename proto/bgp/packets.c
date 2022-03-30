@@ -932,11 +932,15 @@ bgp_rx_open(struct bgp_conn *conn, byte *pkt, uint len)
 #define WITHDRAW(msg, args...) \
   ({ REPORT(msg, ## args); s->err_withdraw = 1; return; })
 
+#define REJECT(msg, args...)						\
+  ({ log(L_ERR "%s: " msg, s->proto->p.name, ## args); s->err_reject = 1; return; })
+
 #define BAD_AFI		"Unexpected AF <%u/%u> in UPDATE"
 #define BAD_NEXT_HOP	"Invalid NEXT_HOP attribute"
 #define NO_NEXT_HOP	"Missing NEXT_HOP attribute"
 #define NO_LABEL_STACK	"Missing MPLS stack"
 
+#define MISMATCHED_AF	" - mismatched address family (%I for %s)"
 
 static void
 bgp_apply_next_hop(struct bgp_parse_state *s, rta *a, ip_addr gw, ip_addr ll)
@@ -949,13 +953,18 @@ bgp_apply_next_hop(struct bgp_parse_state *s, rta *a, ip_addr gw, ip_addr ll)
     neighbor *nbr = NULL;
 
     /* GW_DIRECT -> single_hop -> p->neigh != NULL */
-    if (ipa_nonzero(gw))
+    if (ipa_nonzero2(gw))
       nbr = neigh_find(&p->p, gw, NULL, 0);
     else if (ipa_nonzero(ll))
       nbr = neigh_find(&p->p, ll, p->neigh->iface, 0);
+    else
+      WITHDRAW(BAD_NEXT_HOP " - zero address");
 
-    if (!nbr || (nbr->scope == SCOPE_HOST))
-      WITHDRAW(BAD_NEXT_HOP);
+    if (!nbr)
+      WITHDRAW(BAD_NEXT_HOP " - address %I not directly reachable", ipa_nonzero(gw) ? gw : ll);
+
+    if (nbr->scope == SCOPE_HOST)
+      WITHDRAW(BAD_NEXT_HOP " - address %I is local", nbr->addr);
 
     a->dest = RTD_UNICAST;
     a->nh.gw = nbr->addr;
@@ -964,8 +973,8 @@ bgp_apply_next_hop(struct bgp_parse_state *s, rta *a, ip_addr gw, ip_addr ll)
   }
   else /* GW_RECURSIVE */
   {
-    if (ipa_zero(gw))
-      WITHDRAW(BAD_NEXT_HOP);
+    if (ipa_zero2(gw))
+      WITHDRAW(BAD_NEXT_HOP " - zero address");
 
     rtable *tab = ipa_is_ip4(gw) ? c->igp_table_ip4 : c->igp_table_ip6;
     s->hostentry = rt_get_hostentry(tab, gw, ll, c->c.table);
@@ -1009,6 +1018,23 @@ bgp_apply_mpls_labels(struct bgp_parse_state *s, rta *a, u32 *labels, uint lnum)
   }
 }
 
+static void
+bgp_apply_flow_validation(struct bgp_parse_state *s, const net_addr *n, rta *a)
+{
+  struct bgp_channel *c = s->channel;
+  int valid = rt_flowspec_check(c->base_table, c->c.table, n, a, s->proto->is_interior);
+  a->dest = valid ? RTD_NONE : RTD_UNREACHABLE;
+
+  /* Set rte.bgp.base_table later from this state variable */
+  s->base_table = c->base_table;
+
+  /* Invalidate cached rta if dest changes */
+  if (s->cached_rta && (s->cached_rta->dest != a->dest))
+  {
+    rta_free(s->cached_rta);
+    s->cached_rta = NULL;
+  }
+}
 
 static int
 bgp_match_src(struct bgp_export_state *s, int mode)
@@ -1051,7 +1077,8 @@ bgp_use_next_hop(struct bgp_export_state *s, eattr *a)
     return 1;
 
   /* Keep it when forwarded between single-hop BGPs on the same iface */
-  struct iface *ifa = (s->src && s->src->neigh) ? s->src->neigh->iface : NULL;
+  struct iface *ifa = (s->src && s->src->neigh && (s->src->p.proto_state != PS_DOWN)) ?
+    s->src->neigh->iface : NULL;
   return p->neigh && (p->neigh->iface == ifa);
 }
 
@@ -1119,28 +1146,28 @@ bgp_update_next_hop_ip(struct bgp_export_state *s, eattr *a, ea_list **to)
   /* Check if next hop is valid */
   a = bgp_find_attr(*to, BA_NEXT_HOP);
   if (!a)
-    WITHDRAW(NO_NEXT_HOP);
+    REJECT(NO_NEXT_HOP);
 
   ip_addr *nh = (void *) a->u.ptr->data;
   ip_addr peer = s->proto->remote_ip;
   uint len = a->u.ptr->length;
 
   /* Forbid zero next hop */
-  if (ipa_zero(nh[0]) && ((len != 32) || ipa_zero(nh[1])))
-    WITHDRAW(BAD_NEXT_HOP);
+  if (ipa_zero2(nh[0]) && ((len != 32) || ipa_zero(nh[1])))
+    REJECT(BAD_NEXT_HOP " - zero address");
 
   /* Forbid next hop equal to neighbor IP */
   if (ipa_equal(peer, nh[0]) || ((len == 32) && ipa_equal(peer, nh[1])))
-    WITHDRAW(BAD_NEXT_HOP);
+    REJECT(BAD_NEXT_HOP " - neighbor address %I", peer);
 
   /* Forbid next hop with non-matching AF */
   if ((ipa_is_ip4(nh[0]) != bgp_channel_is_ipv4(s->channel)) &&
       !s->channel->ext_next_hop)
-    WITHDRAW(BAD_NEXT_HOP);
+    REJECT(BAD_NEXT_HOP MISMATCHED_AF, nh[0], s->channel->desc->name);
 
   /* Just check if MPLS stack */
   if (s->mpls && !bgp_find_attr(*to, BA_MPLS_LABEL_STACK))
-    WITHDRAW(NO_LABEL_STACK);
+    REJECT(NO_LABEL_STACK);
 }
 
 static uint
@@ -1211,7 +1238,7 @@ bgp_decode_next_hop_ip(struct bgp_parse_state *s, byte *data, uint len, rta *a)
     ad->length = 16;
 
   if ((bgp_channel_is_ipv4(c) != ipa_is_ip4(nh[0])) && !c->ext_next_hop)
-    WITHDRAW(BAD_NEXT_HOP);
+    WITHDRAW(BAD_NEXT_HOP MISMATCHED_AF, nh[0], c->desc->name);
 
   // XXXX validate next hop
 
@@ -1292,7 +1319,7 @@ bgp_decode_next_hop_vpn(struct bgp_parse_state *s, byte *data, uint len, rta *a)
     bgp_parse_error(s, 9);
 
   if ((bgp_channel_is_ipv4(c) != ipa_is_ip4(nh[0])) && !c->ext_next_hop)
-    WITHDRAW(BAD_NEXT_HOP);
+    WITHDRAW(BAD_NEXT_HOP MISMATCHED_AF, nh[0], c->desc->name);
 
   // XXXX validate next hop
 
@@ -1334,7 +1361,7 @@ bgp_update_next_hop_none(struct bgp_export_state *s, eattr *a, ea_list **to)
  */
 
 static void
-bgp_rte_update(struct bgp_parse_state *s, net_addr *n, u32 path_id, rta *a0)
+bgp_rte_update(struct bgp_parse_state *s, const net_addr *n, u32 path_id, rta *a0)
 {
   if (path_id != s->last_id)
   {
@@ -1347,6 +1374,10 @@ bgp_rte_update(struct bgp_parse_state *s, net_addr *n, u32 path_id, rta *a0)
 
   if (!a0)
   {
+    /* Route update was changed to withdraw */
+    if (s->err_withdraw && s->reach_nlri_step)
+      REPORT("Invalid route %N withdrawn", n);
+
     /* Route withdraw */
     rte_update3(&s->channel->c, n, NULL, s->last_src);
     return;
@@ -1369,6 +1400,7 @@ bgp_rte_update(struct bgp_parse_state *s, net_addr *n, u32 path_id, rta *a0)
   e->pflags = 0;
   e->u.bgp.suppressed = 0;
   e->u.bgp.stale = -1;
+  e->u.bgp.base_table = s->base_table;
   rte_update3(&s->channel->c, n, e, s->last_src);
 }
 
@@ -1408,7 +1440,7 @@ bgp_decode_mpls_labels(struct bgp_parse_state *s, byte **pos, uint *len, uint *p
 
     /* RFC 8277 2.4 - withdraw does not have variable-size MPLS stack but
        fixed-size 24-bit Compatibility field, which MUST be ignored */
-    if (!a && !s->err_withdraw)
+    if (!s->reach_nlri_step)
       return;
   }
   while (!(label & BGP_MPLS_BOS));
@@ -1883,6 +1915,10 @@ bgp_decode_nlri_flow4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
     net_fill_flow4(n, px, pxlen, pos, flen);
     ADVANCE(pos, len, flen);
 
+    /* Apply validation procedure per RFC 8955 (6) */
+    if (a && s->channel->cf->validate)
+      bgp_apply_flow_validation(s, n, a);
+
     bgp_rte_update(s, n, path_id, a);
   }
 }
@@ -1970,6 +2006,10 @@ bgp_decode_nlri_flow6(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
     net_addr *n = alloca(sizeof(struct net_addr_flow6) + flen);
     net_fill_flow6(n, px, pxlen, pos, flen);
     ADVANCE(pos, len, flen);
+
+    /* Apply validation procedure per RFC 8955 (6) */
+    if (a && s->channel->cf->validate)
+      bgp_apply_flow_validation(s, n, a);
 
     bgp_rte_update(s, n, path_id, a);
   }
@@ -2424,6 +2464,8 @@ bgp_decode_nlri(struct bgp_parse_state *s, u32 afi, byte *nlri, uint len, ea_lis
   s->last_id = 0;
   s->last_src = s->proto->p.main_source;
 
+  s->base_table = NULL;
+
   /*
    * IPv4 BGP and MP-BGP may be used together in one update, therefore we do not
    * add BA_NEXT_HOP in bgp_decode_attrs(), but we add it here independently for
@@ -2541,6 +2583,8 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
 
   if (s.mp_unreach_len)
     bgp_decode_nlri(&s, s.mp_unreach_af, s.mp_unreach_nlri, s.mp_unreach_len, NULL, NULL, 0);
+
+  s.reach_nlri_step = 1;
 
   if (s.ip_reach_len)
     bgp_decode_nlri(&s, BGP_AF_IPV4, s.ip_reach_nlri, s.ip_reach_len,

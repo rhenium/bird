@@ -38,6 +38,8 @@
 #include <stdlib.h>
 #include "babel.h"
 
+#define LOG_PKT_AUTH(msg, args...) \
+  log_rl(&p->log_pkt_tbf, L_AUTH "%s: " msg, p->p.name, args)
 
 /*
  * Is one number greater or equal than another mod 2^16? This is based on the
@@ -56,19 +58,12 @@ static void babel_update_cost(struct babel_neighbor *n);
 static inline void babel_kick_timer(struct babel_proto *p);
 static inline void babel_iface_kick_timer(struct babel_iface *ifa);
 
-static inline void babel_lock_neighbor(struct babel_neighbor *nbr)
-{ if (nbr) nbr->uc++; }
-
-static inline void babel_unlock_neighbor(struct babel_neighbor *nbr)
-{ if (nbr && !--nbr->uc) mb_free(nbr); }
-
-
 /*
  *	Functions to maintain data structures
  */
 
 static void
-babel_init_entry(void *E)
+babel_init_entry(struct fib *f UNUSED, void *E)
 {
   struct babel_entry *e = E;
 
@@ -316,8 +311,9 @@ babel_add_seqno_request(struct babel_proto *p, struct babel_entry *e,
 	return;
 
       /* Found older */
-      babel_unlock_neighbor(sr->nbr);
       rem_node(NODE sr);
+      rem_node(&sr->nbr_node);
+
       goto found;
     }
 
@@ -330,7 +326,10 @@ found:
   sr->hop_count = hop_count;
   sr->count = 0;
   sr->expires = current_time() + BABEL_SEQNO_REQUEST_EXPIRY;
-  babel_lock_neighbor(sr->nbr = nbr);
+
+  if (sr->nbr = nbr)
+    add_tail(&nbr->requests, &sr->nbr_node);
+
   add_tail(&e->requests, NODE sr);
 
   babel_send_seqno_request(p, e, sr);
@@ -339,7 +338,9 @@ found:
 static void
 babel_remove_seqno_request(struct babel_proto *p, struct babel_seqno_request *sr)
 {
-  babel_unlock_neighbor(sr->nbr);
+  if (sr->nbr)
+    rem_node(&sr->nbr_node);
+
   rem_node(NODE sr);
   sl_free(p->seqno_slab, sr);
 }
@@ -426,8 +427,9 @@ babel_get_neighbor(struct babel_iface *ifa, ip_addr addr)
   nbr->rxcost = BABEL_INFINITY;
   nbr->txcost = BABEL_INFINITY;
   nbr->cost = BABEL_INFINITY;
+  nbr->init_expiry = current_time() + BABEL_INITIAL_NEIGHBOR_TIMEOUT;
   init_list(&nbr->routes);
-  babel_lock_neighbor(nbr);
+  init_list(&nbr->requests);
   add_tail(&ifa->neigh_list, NODE nbr);
 
   return nbr;
@@ -448,9 +450,16 @@ babel_flush_neighbor(struct babel_proto *p, struct babel_neighbor *nbr)
     babel_flush_route(p, r);
   }
 
+  struct babel_seqno_request *sr;
+  WALK_LIST_FIRST2(sr, nbr_node, nbr->requests)
+  {
+    sr->nbr = NULL;
+    rem_node(&sr->nbr_node);
+  }
+
   nbr->ifa = NULL;
   rem_node(NODE nbr);
-  babel_unlock_neighbor(nbr);
+  mb_free(nbr);
 }
 
 static void
@@ -501,12 +510,14 @@ babel_expire_neighbors(struct babel_proto *p)
       if (nbr->ihu_expiry && nbr->ihu_expiry <= now_)
         babel_expire_ihu(p, nbr);
 
+      if (nbr->init_expiry && nbr->init_expiry <= now_)
+      { babel_flush_neighbor(p, nbr); continue; }
+
       if (nbr->hello_expiry && nbr->hello_expiry <= now_)
-        babel_expire_hello(p, nbr, now_);
+      { babel_expire_hello(p, nbr, now_); continue; }
     }
   }
 }
-
 
 /*
  *	Best route selection
@@ -1103,6 +1114,9 @@ babel_update_hello_history(struct babel_neighbor *n, u16 seqno, uint interval)
   /* Update expiration */
   n->hello_expiry = current_time() + BABEL_HELLO_EXPIRY_FACTOR(interval);
   n->last_hello_int = interval;
+
+  /* Disable initial timeout */
+  n->init_expiry = 0;
 }
 
 
@@ -1382,6 +1396,130 @@ babel_handle_seqno_request(union babel_msg *m, struct babel_iface *ifa)
   }
 }
 
+/*
+ *      Authentication functions
+ */
+
+/**
+ * babel_auth_reset_index - Reset authentication index on interface
+ * @ifa: Interface to reset
+ *
+ * This function resets the authentication index and packet counter for an
+ * interface, and should be called on interface configuration, or when the
+ * packet counter overflows.
+ */
+void
+babel_auth_reset_index(struct babel_iface *ifa)
+{
+  random_bytes(ifa->auth_index, BABEL_AUTH_INDEX_LEN);
+  ifa->auth_pc = 1;
+}
+
+static void
+babel_auth_send_challenge_request(struct babel_iface *ifa, struct babel_neighbor *n)
+{
+  struct babel_proto *p = ifa->proto;
+  union babel_msg msg = {};
+
+  TRACE(D_PACKETS, "Sending challenge request to %I on %s",
+	n->addr, ifa->ifname);
+
+  random_bytes(n->auth_nonce, BABEL_AUTH_NONCE_LEN);
+  n->auth_nonce_expiry = current_time() + BABEL_AUTH_CHALLENGE_TIMEOUT;
+  n->auth_next_challenge = current_time() + BABEL_AUTH_CHALLENGE_INTERVAL;
+
+  msg.type = BABEL_TLV_CHALLENGE_REQUEST;
+  msg.challenge.nonce_len = BABEL_AUTH_NONCE_LEN;
+  msg.challenge.nonce = n->auth_nonce;
+
+  babel_send_unicast(&msg, ifa, n->addr);
+}
+
+static void
+babel_auth_send_challenge_reply(struct babel_iface *ifa, struct babel_neighbor *n, struct babel_msg_auth *rcv)
+{
+  struct babel_proto *p = ifa->proto;
+  union babel_msg msg = {};
+
+  TRACE(D_PACKETS, "Sending challenge reply to %I on %s",
+	n->addr, ifa->ifname);
+
+  n->auth_next_challenge_reply = current_time() + BABEL_AUTH_CHALLENGE_INTERVAL;
+
+  msg.type = BABEL_TLV_CHALLENGE_REPLY;
+  msg.challenge.nonce_len = rcv->challenge_len;
+  msg.challenge.nonce = rcv->challenge;
+
+  babel_send_unicast(&msg, ifa, n->addr);
+}
+
+int
+babel_auth_check_pc(struct babel_iface *ifa, struct babel_msg_auth *msg)
+{
+  struct babel_proto *p = ifa->proto;
+  struct babel_neighbor *n;
+
+  /*
+   * We create the neighbour entry at this point because it makes it easier to
+   * rate limit challenge replies; this is explicitly allowed by the spec (see
+   * Section 4.3).
+   */
+  n = babel_get_neighbor(ifa, msg->sender);
+
+  /* (3b) Handle challenge request */
+  if (msg->challenge_seen && (n->auth_next_challenge_reply <= current_time()))
+    babel_auth_send_challenge_reply(ifa, n, msg);
+
+  /* (4a) If PC TLV is missing, drop the packet */
+  if (!msg->pc_seen)
+  {
+    LOG_PKT_AUTH("Authentication failed for %I on %s - missing or invalid PC",
+                 msg->sender, ifa->ifname);
+    return 0;
+  }
+
+  /* (4b) On successful challenge, update PC and index to current values */
+  if (msg->challenge_reply_seen &&
+      (n->auth_nonce_expiry > current_time()) &&
+      !memcmp(msg->challenge_reply, n->auth_nonce, BABEL_AUTH_NONCE_LEN))
+  {
+    n->auth_index_len = msg->index_len;
+    memcpy(n->auth_index, msg->index, msg->index_len);
+
+    n->auth_pc = msg->pc;
+    n->auth_passed = 1;
+
+    return 1;
+  }
+
+  /* (5) If index differs, send challenge and drop the packet */
+  if ((n->auth_index_len != msg->index_len) ||
+      memcmp(n->auth_index, msg->index, msg->index_len))
+  {
+    TRACE(D_PACKETS, "Index mismatch for packet from %I via %s",
+	  msg->sender, ifa->ifname);
+
+    if (n->auth_next_challenge <= current_time())
+      babel_auth_send_challenge_request(ifa, n);
+
+    return 0;
+  }
+
+  /* (6) Index matches; only accept if PC is greater than last */
+  if (n->auth_pc >= msg->pc)
+  {
+    LOG_PKT_AUTH("Authentication failed for %I on %s - "
+		 "lower packet counter (rcv %u, old %u)",
+                 msg->sender, ifa->ifname, msg->pc, n->auth_pc);
+    return 0;
+  }
+
+  n->auth_pc = msg->pc;
+  n->auth_passed = 1;
+
+  return 1;
+}
+
 
 /*
  *	Babel interfaces
@@ -1550,6 +1688,8 @@ babel_iface_update_buffers(struct babel_iface *ifa)
   sk_set_tbsize(ifa->sk, tbsize);
 
   ifa->tx_length = tbsize - BABEL_OVERHEAD;
+
+  babel_auth_set_tx_overhead(ifa);
 }
 
 static struct babel_iface*
@@ -1609,6 +1749,9 @@ babel_add_iface(struct babel_proto *p, struct iface *new, struct babel_iface_con
   init_list(&ifa->neigh_list);
   ifa->hello_seqno = 1;
 
+  if (ic->auth_type != BABEL_AUTH_NONE)
+    babel_auth_reset_index(ifa);
+
   ifa->timer = tm_new_init(ifa->pool, babel_iface_timer, ifa, 0, 0);
 
   init_list(&ifa->msg_queue);
@@ -1639,6 +1782,20 @@ babel_remove_iface(struct babel_proto *p, struct babel_iface *ifa)
   rfree(ifa->pool); /* contains ifa itself, locks, socket, etc */
 }
 
+static int
+iface_is_valid(struct babel_proto *p, struct iface *iface)
+{
+  if (!(iface->flags & IF_MULTICAST))
+  {
+    log(L_ERR "%s: Interface %s does not support multicast",
+	p->p.name, iface->name);
+
+    return 0;
+  }
+
+  return 1;
+}
+
 static void
 babel_if_notify(struct proto *P, unsigned flags, struct iface *iface)
 {
@@ -1658,16 +1815,13 @@ babel_if_notify(struct proto *P, unsigned flags, struct iface *iface)
     if (!(iface->flags & IF_UP))
       return;
 
-    /* We only speak multicast */
-    if (!(iface->flags & IF_MULTICAST))
-      return;
-
     /* Ignore ifaces without link-local address */
     if (!iface->llv6)
       return;
 
     struct babel_iface_config *ic = (void *) iface_patt_find(&cf->iface_list, iface, NULL);
-    if (ic)
+
+    if (ic && iface_is_valid(p, iface))
       babel_add_iface(p, iface, ic);
 
     return;
@@ -1705,6 +1859,11 @@ babel_reconfigure_iface(struct babel_proto *p, struct babel_iface *ifa, struct b
   ifa->next_hop_ip4 = ipa_nonzero(new->next_hop_ip4) ? new->next_hop_ip4 : addr4;
   ifa->next_hop_ip6 = ipa_nonzero(new->next_hop_ip6) ? new->next_hop_ip6 : ifa->addr;
 
+  babel_iface_update_buffers(ifa);
+
+  if ((new->auth_type != BABEL_AUTH_NONE) && (new->auth_type != old->auth_type))
+    babel_auth_reset_index(ifa);
+
   if (ipa_zero(ifa->next_hop_ip4) && p->ip4_channel)
     log(L_WARN "%s: Missing IPv4 next hop address for %s", p->p.name, ifa->ifname);
 
@@ -1713,9 +1872,6 @@ babel_reconfigure_iface(struct babel_proto *p, struct babel_iface *ifa, struct b
 
   if (ifa->next_regular > (current_time() + new->update_interval))
     ifa->next_regular = current_time() + (random() % new->update_interval);
-
-  if ((new->tx_length != old->tx_length) || (new->rx_buffer != old->rx_buffer))
-    babel_iface_update_buffers(ifa);
 
   if (new->check_link != old->check_link)
     babel_iface_update_state(ifa);
@@ -1736,16 +1892,15 @@ babel_reconfigure_ifaces(struct babel_proto *p, struct babel_config *cf)
     if (!(iface->flags & IF_UP))
       continue;
 
-    /* Ignore non-multicast ifaces */
-    if (!(iface->flags & IF_MULTICAST))
-      continue;
-
     /* Ignore ifaces without link-local address */
     if (!iface->llv6)
       continue;
 
     struct babel_iface *ifa = babel_find_iface(p, iface);
     struct babel_iface_config *ic = (void *) iface_patt_find(&cf->iface_list, iface, NULL);
+
+    if (ic && iface_is_valid(p, iface))
+      ic = NULL;
 
     if (ifa && ic)
     {
@@ -1894,8 +2049,8 @@ babel_show_interfaces(struct proto *P, const char *iff)
   }
 
   cli_msg(-1023, "%s:", p->p.name);
-  cli_msg(-1023, "%-10s %-6s %7s %6s %7s %-15s %s",
-	  "Interface", "State", "RX cost", "Nbrs", "Timer",
+  cli_msg(-1023, "%-10s %-6s %-5s %7s %6s %7s %-15s %s",
+	  "Interface", "State", "Auth", "RX cost", "Nbrs", "Timer",
 	  "Next hop (v4)", "Next hop (v6)");
 
   WALK_LIST(ifa, p->interfaces)
@@ -1908,8 +2063,10 @@ babel_show_interfaces(struct proto *P, const char *iff)
 	nbrs++;
 
     btime timer = MIN(ifa->next_regular, ifa->next_hello) - current_time();
-    cli_msg(-1023, "%-10s %-6s %7u %6u %7t %-15I %I",
+    cli_msg(-1023, "%-10s %-6s %-5s %7u %6u %7t %-15I %I",
 	    ifa->iface->name, (ifa->up ? "Up" : "Down"),
+            (ifa->cf->auth_type == BABEL_AUTH_MAC ?
+             (ifa->cf->auth_permissive ? "Perm" : "Yes") : "No"),
 	    ifa->cf->rxcost, nbrs, MAX(timer, 0),
 	    ifa->next_hop_ip4, ifa->next_hop_ip6);
   }
@@ -1930,8 +2087,8 @@ babel_show_neighbors(struct proto *P, const char *iff)
   }
 
   cli_msg(-1024, "%s:", p->p.name);
-  cli_msg(-1024, "%-25s %-10s %6s %6s %6s %7s",
-	  "IP address", "Interface", "Metric", "Routes", "Hellos", "Expires");
+  cli_msg(-1024, "%-25s %-10s %6s %6s %6s %7s %4s",
+	  "IP address", "Interface", "Metric", "Routes", "Hellos", "Expires", "Auth");
 
   WALK_LIST(ifa, p->interfaces)
   {
@@ -1945,9 +2102,10 @@ babel_show_neighbors(struct proto *P, const char *iff)
         rts++;
 
       uint hellos = u32_popcount(n->hello_map);
-      btime timer = n->hello_expiry - current_time();
-      cli_msg(-1024, "%-25I %-10s %6u %6u %6u %7t",
-	      n->addr, ifa->iface->name, n->cost, rts, hellos, MAX(timer, 0));
+      btime timer = (n->hello_expiry ?: n->init_expiry) - current_time();
+      cli_msg(-1024, "%-25I %-10s %6u %6u %6u %7t %-4s",
+	      n->addr, ifa->iface->name, n->cost, rts, hellos, MAX(timer, 0),
+              n->auth_passed ? "Yes" : "No");
     }
   }
 }
