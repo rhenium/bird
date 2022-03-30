@@ -1,3 +1,11 @@
+bird2 (2.0.9-1) unstable; urgency=medium
+
+  * New upstream version 2.0.9
+  * d/patches: remove outdated patch
+  * d/control: update Standards-Version to 4.6.0
+
+ -- Jakub Ružička <jakub.ruzicka@nic.cz>  Wed, 30 Mar 2022 19:07:46 +0000
+
 bird2 (2.0.8-2) unstable; urgency=medium
 
   * Source-only upload to allow migration
