@@ -69,6 +69,10 @@
 #define RTA_ENCAP  22
 #endif
 
+#ifndef NETLINK_GET_STRICT_CHK
+#define NETLINK_GET_STRICT_CHK 12
+#endif
+
 #define krt_ipv4(p) ((p)->af == AF_INET)
 #define krt_ecmp6(p) ((p)->af == AF_INET6)
 
@@ -130,7 +134,7 @@ struct nl_sock
   uint last_size;
 };
 
-#define NL_RX_SIZE 8192
+#define NL_RX_SIZE 32768
 
 #define NL_OP_DELETE	0
 #define NL_OP_ADD	(NLM_F_CREATE|NLM_F_EXCL)
@@ -158,10 +162,46 @@ nl_open_sock(struct nl_sock *nl)
 }
 
 static void
+nl_set_strict_dump(struct nl_sock *nl UNUSED, int strict UNUSED)
+{
+  /*
+   * Strict checking is not necessary, it improves behavior on newer kernels.
+   * If it is not available (missing SOL_NETLINK compile-time, or ENOPROTOOPT
+   * run-time), we can just ignore it.
+   */
+#ifdef SOL_NETLINK
+  setsockopt(nl->fd, SOL_NETLINK, NETLINK_GET_STRICT_CHK, &strict, sizeof(strict));
+#endif
+}
+
+static void
+nl_set_rcvbuf(int fd, uint val)
+{
+  if (setsockopt(fd, SOL_SOCKET, SO_RCVBUFFORCE, &val, sizeof(val)) < 0)
+    log(L_WARN "KRT: Cannot set netlink rx buffer size to %u: %m", val);
+}
+
+static uint
+nl_cfg_rx_buffer_size(struct config *cfg)
+{
+  uint bufsize = 0;
+
+  struct proto_config *pc;
+  WALK_LIST(pc, cfg->protos)
+    if ((pc->protocol == &proto_unix_kernel) && !pc->disabled)
+      bufsize = MAX(bufsize, ((struct krt_config *) pc)->sys.netlink_rx_buffer);
+
+  return bufsize;
+}
+
+
+static void
 nl_open(void)
 {
   nl_open_sock(&nl_scan);
   nl_open_sock(&nl_req);
+
+  nl_set_strict_dump(&nl_scan, 1);
 }
 
 static void
@@ -180,19 +220,59 @@ nl_send(struct nl_sock *nl, struct nlmsghdr *nh)
 }
 
 static void
-nl_request_dump(int af, int cmd)
+nl_request_dump_link(void)
 {
   struct {
     struct nlmsghdr nh;
-    struct rtgenmsg g;
+    struct ifinfomsg ifi;
   } req = {
-    .nh.nlmsg_type = cmd,
-    .nh.nlmsg_len = sizeof(req),
+    .nh.nlmsg_type = RTM_GETLINK,
+    .nh.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg)),
     .nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP,
-    .g.rtgen_family = af
+    .nh.nlmsg_seq = ++(nl_scan.seq),
+    .ifi.ifi_family = AF_UNSPEC,
   };
-  nl_send(&nl_scan, &req.nh);
+
+  send(nl_scan.fd, &req, sizeof(req), 0);
+  nl_scan.last_hdr = NULL;
 }
+
+static void
+nl_request_dump_addr(int af)
+{
+  struct {
+    struct nlmsghdr nh;
+    struct ifaddrmsg ifa;
+  } req = {
+    .nh.nlmsg_type = RTM_GETADDR,
+    .nh.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifaddrmsg)),
+    .nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP,
+    .nh.nlmsg_seq = ++(nl_scan.seq),
+    .ifa.ifa_family = af,
+  };
+
+  send(nl_scan.fd, &req, sizeof(req), 0);
+  nl_scan.last_hdr = NULL;
+}
+
+static void
+nl_request_dump_route(int af)
+{
+  struct {
+    struct nlmsghdr nh;
+    struct rtmsg rtm;
+  } req = {
+    .nh.nlmsg_type = RTM_GETROUTE,
+    .nh.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg)),
+    .nh.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP,
+    .nh.nlmsg_seq = ++(nl_scan.seq),
+    .rtm.rtm_family = af,
+  };
+
+  send(nl_scan.fd, &req, sizeof(req), 0);
+  nl_scan.last_hdr = NULL;
+}
+
 
 static struct nlmsghdr *
 nl_get_reply(struct nl_sock *nl)
@@ -681,7 +761,7 @@ nl_add_multipath(struct nlmsghdr *h, uint bufsize, struct nexthop *nh, int af, e
 }
 
 static struct nexthop *
-nl_parse_multipath(struct nl_parse_state *s, struct krt_proto *p, struct rtattr *ra, int af)
+nl_parse_multipath(struct nl_parse_state *s, struct krt_proto *p, const net_addr *n, struct rtattr *ra, int af, int krt_src)
 {
   struct rtattr *a[BIRD_RTA_MAX];
   struct rtnexthop *nh = RTA_DATA(ra);
@@ -695,9 +775,9 @@ nl_parse_multipath(struct nl_parse_state *s, struct krt_proto *p, struct rtattr 
     {
       /* Use RTNH_OK(nh,len) ?? */
       if ((len < sizeof(*nh)) || (len < nh->rtnh_len))
-	return NULL;
+	goto err;
 
-      if (nh->rtnh_flags & RTNH_F_DEAD)
+      if ((nh->rtnh_flags & RTNH_F_DEAD) && (krt_src != KRT_SRC_BIRD))
 	goto next;
 
       *last = rv = lp_allocz(s->pool, NEXTHOP_MAX_SIZE);
@@ -706,7 +786,10 @@ nl_parse_multipath(struct nl_parse_state *s, struct krt_proto *p, struct rtattr 
       rv->weight = nh->rtnh_hops;
       rv->iface = if_find_by_index(nh->rtnh_ifindex);
       if (!rv->iface)
-	return NULL;
+	{
+	  log(L_ERR "KRT: Received route %N with unknown ifindex %u", n, nh->rtnh_ifindex);
+	  return NULL;
+	}
 
       /* Nonexistent RTNH_PAYLOAD ?? */
       nl_attr_len = nh->rtnh_len - RTNH_LENGTH(0);
@@ -714,18 +797,18 @@ nl_parse_multipath(struct nl_parse_state *s, struct krt_proto *p, struct rtattr 
         {
 	case AF_INET:
 	  if (!nl_parse_attrs(RTNH_DATA(nh), nexthop_attr_want4, a, sizeof(a)))
-	    return NULL;
+	    goto err;
 	  break;
 
 	case AF_INET6:
 	  if (!nl_parse_attrs(RTNH_DATA(nh), nexthop_attr_want6, a, sizeof(a)))
-	    return NULL;
+	    goto err;
 	  break;
 
 #ifdef HAVE_MPLS_KERNEL
 	case AF_MPLS:
 	  if (!nl_parse_attrs(RTNH_DATA(nh), nexthop_attr_want_mpls, a, sizeof(a)))
-	    return NULL;
+	    goto err;
 
 	  if (a[RTA_NEWDST])
 	    rv->labels = rta_get_mpls(a[RTA_NEWDST], rv->label);
@@ -734,7 +817,7 @@ nl_parse_multipath(struct nl_parse_state *s, struct krt_proto *p, struct rtattr 
 #endif
 
 	default:
-	  return NULL;
+	  goto err;
 	}
 
       if (a[RTA_GATEWAY])
@@ -757,14 +840,19 @@ nl_parse_multipath(struct nl_parse_state *s, struct krt_proto *p, struct rtattr 
 	  nbr = neigh_find(&p->p, rv->gw, rv->iface,
 			   (rv->flags & RNF_ONLINK) ? NEF_ONLINK : 0);
 	  if (!nbr || (nbr->scope == SCOPE_HOST))
-	    return NULL;
+	    {
+	        log(L_ERR "KRT: Received route %N with strange next-hop %I", n, rv->gw);
+	        return NULL;
+	    }
 	}
 
 #ifdef HAVE_MPLS_KERNEL
       if (a[RTA_ENCAP] && a[RTA_ENCAP_TYPE])
       {
-	if (rta_get_u16(a[RTA_ENCAP_TYPE]) != LWTUNNEL_ENCAP_MPLS) {
-	  log(L_WARN "KRT: Unknown encapsulation method %d in multipath", rta_get_u16(a[RTA_ENCAP_TYPE]));
+	if (rta_get_u16(a[RTA_ENCAP_TYPE]) != LWTUNNEL_ENCAP_MPLS)
+	{
+	  log(L_WARN "KRT: Received route %N with unknown encapsulation method %d",
+	      n, rta_get_u16(a[RTA_ENCAP_TYPE]));
 	  return NULL;
 	}
 
@@ -785,6 +873,10 @@ nl_parse_multipath(struct nl_parse_state *s, struct krt_proto *p, struct rtattr 
     first = nexthop_sort(first);
 
   return first;
+
+err:
+  log(L_ERR "KRT: Received strange multipath route %N", n);
+  return NULL;
 }
 
 static void
@@ -1139,7 +1231,7 @@ kif_do_scan(struct kif_proto *p UNUSED)
 
   if_start_update();
 
-  nl_request_dump(AF_UNSPEC, RTM_GETLINK);
+  nl_request_dump_link();
   while (h = nl_get_scan())
     if (h->nlmsg_type == RTM_NEWLINK || h->nlmsg_type == RTM_DELLINK)
       nl_parse_link(h, 1);
@@ -1166,14 +1258,14 @@ kif_do_scan(struct kif_proto *p UNUSED)
       }
     }
 
-  nl_request_dump(AF_INET, RTM_GETADDR);
+  nl_request_dump_addr(AF_INET);
   while (h = nl_get_scan())
     if (h->nlmsg_type == RTM_NEWADDR || h->nlmsg_type == RTM_DELADDR)
       nl_parse_addr(h, 1);
     else
       log(L_DEBUG "nl_scan_ifaces: Unknown packet received (type=%d)", h->nlmsg_type);
 
-  nl_request_dump(AF_INET6, RTM_GETADDR);
+  nl_request_dump_addr(AF_INET6);
   while (h = nl_get_scan())
     if (h->nlmsg_type == RTM_NEWADDR || h->nlmsg_type == RTM_DELADDR)
       nl_parse_addr(h, 1);
@@ -1523,7 +1615,8 @@ nl_parse_end(struct nl_parse_state *s)
 }
 
 
-#define SKIP(ARG...) do { DBG("KRT: Ignoring route - " ARG); return; } while(0)
+#define SKIP0(ARG, ...) do { DBG("KRT: Ignoring route - " ARG, ##__VA_ARGS__); return; } while(0)
+#define SKIP(ARG, ...)  do { DBG("KRT: Ignoring route %N - " ARG, &dst, ##__VA_ARGS__); return; } while(0)
 
 static void
 nl_parse_route(struct nl_parse_state *s, struct nlmsghdr *h)
@@ -1576,10 +1669,10 @@ nl_parse_route(struct nl_parse_state *s, struct nlmsghdr *h)
 	return;
 
       if (!a[RTA_DST])
-	SKIP("MPLS route without RTA_DST");
+	SKIP0("MPLS route without RTA_DST\n");
 
       if (rta_get_mpls(a[RTA_DST], rta_mpls_stack) != 1)
-	SKIP("MPLS route with multi-label RTA_DST");
+	SKIP0("MPLS route with multi-label RTA_DST\n");
 
       net_fill_mpls(&dst, rta_mpls_stack[0]);
       break;
@@ -1596,6 +1689,9 @@ nl_parse_route(struct nl_parse_state *s, struct nlmsghdr *h)
     table_id = rta_get_u32(a[RTA_TABLE]);
   else
     table_id = i->rtm_table;
+
+  if (i->rtm_flags & RTM_F_CLONED)
+    SKIP("cloned\n");
 
   /* Do we know this table? */
   p = HASH_FIND(nl_table_map, RTH, i->rtm_family, table_id);
@@ -1675,19 +1771,16 @@ nl_parse_route(struct nl_parse_state *s, struct nlmsghdr *h)
 
       if (a[RTA_MULTIPATH])
         {
-	  struct nexthop *nh = nl_parse_multipath(s, p, a[RTA_MULTIPATH], i->rtm_family);
+	  struct nexthop *nh = nl_parse_multipath(s, p, n, a[RTA_MULTIPATH], i->rtm_family, krt_src);
 	  if (!nh)
-	    {
-	      log(L_ERR "KRT: Received strange multipath route %N", net->n.addr);
-	      return;
-	    }
+	    SKIP("strange RTA_MULTIPATH\n");
 
 	  nexthop_link(ra, nh);
 	  break;
 	}
 
-      if (i->rtm_flags & RTNH_F_DEAD)
-	return;
+      if ((i->rtm_flags & RTNH_F_DEAD) && (krt_src != KRT_SRC_BIRD))
+	SKIP("ignore RTNH_F_DEAD\n");
 
       ra->nh.iface = if_find_by_index(oif);
       if (!ra->nh.iface)
@@ -1889,7 +1982,7 @@ krt_do_scan(struct krt_proto *p UNUSED)	/* CONFIG_ALL_TABLES_AT_ONCE => p is NUL
   struct nl_parse_state s;
 
   nl_parse_begin(&s, 1);
-  nl_request_dump(AF_UNSPEC, RTM_GETROUTE);
+  nl_request_dump_route(AF_UNSPEC);
   while (h = nl_get_scan())
     if (h->nlmsg_type == RTM_NEWROUTE || h->nlmsg_type == RTM_DELROUTE)
       nl_parse_route(&s, h);
@@ -1904,6 +1997,8 @@ krt_do_scan(struct krt_proto *p UNUSED)	/* CONFIG_ALL_TABLES_AT_ONCE => p is NUL
 
 static sock *nl_async_sk;		/* BIRD socket for asynchronous notifications */
 static byte *nl_async_rx_buffer;	/* Receive buffer */
+static uint nl_async_bufsize;		/* Kernel rx buffer size for the netlink socket */
+static struct config *nl_last_config;	/* For tracking changes to nl_async_bufsize */
 
 static void
 nl_async_msg(struct nlmsghdr *h)
@@ -2039,6 +2134,32 @@ nl_open_async(void)
     bug("Netlink: sk_open failed");
 }
 
+static void
+nl_update_async_bufsize(void)
+{
+  /* No async socket */
+  if (!nl_async_sk)
+    return;
+
+  /* Already reconfigured */
+  if (nl_last_config == config)
+    return;
+
+  /* Update netlink buffer size */
+  uint bufsize = nl_cfg_rx_buffer_size(config);
+  if (bufsize && (bufsize != nl_async_bufsize))
+  {
+    /* Log message for reconfigurations only */
+    if (nl_last_config)
+      log(L_INFO "KRT: Changing netlink rx buffer size to %u", bufsize);
+
+    nl_set_rcvbuf(nl_async_sk->fd, bufsize);
+    nl_async_bufsize = bufsize;
+  }
+
+  nl_last_config = config;
+}
+
 
 /*
  *	Interface to the UNIX krt module
@@ -2067,6 +2188,7 @@ krt_sys_start(struct krt_proto *p)
 
   nl_open();
   nl_open_async();
+  nl_update_async_bufsize();
 
   return 1;
 }
@@ -2074,12 +2196,16 @@ krt_sys_start(struct krt_proto *p)
 void
 krt_sys_shutdown(struct krt_proto *p)
 {
+  nl_update_async_bufsize();
+
   HASH_REMOVE2(nl_table_map, RTH, krt_pool, p);
 }
 
 int
 krt_sys_reconfigure(struct krt_proto *p UNUSED, struct krt_config *n, struct krt_config *o)
 {
+  nl_update_async_bufsize();
+
   return (n->sys.table_id == o->sys.table_id) && (n->sys.metric == o->sys.metric);
 }
 

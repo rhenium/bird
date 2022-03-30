@@ -403,7 +403,7 @@ ospf_rx_hook(sock *sk, uint len)
     return 1;
 
   int src_local, dst_local, dst_mcast;
-  src_local = ipa_in_netX(sk->faddr, &ifa->addr->prefix);
+  src_local = ospf_ipa_local(sk->faddr, ifa->addr);
   dst_local = ipa_equal(sk->laddr, ifa->addr->ip);
   dst_mcast = ipa_equal(sk->laddr, ifa->all_routers) || ipa_equal(sk->laddr, ifa->des_routers);
 
@@ -664,21 +664,54 @@ ospf_send_to(struct ospf_iface *ifa, ip_addr dst)
     log(L_WARN "OSPF: TX queue full on %s", ifa->ifname);
 }
 
-void
-ospf_send_to_agt(struct ospf_iface *ifa, u8 state)
+static void
+ospf_send_to_designated(struct ospf_iface *ifa)
+{
+  /* In case of real-broadcast mode */
+  if (ipa_zero(ifa->des_routers))
+  {
+    if (ipa_nonzero2(ifa->drip))
+      ospf_send_to(ifa, ifa->drip);
+
+    if (ipa_nonzero2(ifa->bdrip))
+      ospf_send_to(ifa, ifa->bdrip);
+
+    return;
+  }
+
+  ospf_send_to(ifa, ifa->des_routers);
+}
+
+static void
+ospf_send_to_adjacent(struct ospf_iface *ifa)
 {
   struct ospf_neighbor *n;
 
   WALK_LIST(n, ifa->neigh_list)
-    if (n->state >= state)
+    if (n->state >= NEIGHBOR_EXCHANGE)
       ospf_send_to(ifa, n->ip);
 }
 
 void
-ospf_send_to_bdr(struct ospf_iface *ifa)
+ospf_send_to_iface(struct ospf_iface *ifa)
 {
-  if (ipa_nonzero2(ifa->drip))
-    ospf_send_to(ifa, ifa->drip);
-  if (ipa_nonzero2(ifa->bdrip))
-    ospf_send_to(ifa, ifa->bdrip);
+  /*
+   * Send packet to (relevant) neighbors on iface
+   *
+   * On broadcast networks, destination is either AllSPFRouters, or AllDRouters.
+   * On PtP networks, destination is always AllSPFRouters. On non-broadcast
+   * networks, packets are sent as unicast to every adjacent neighbor.
+   */
+
+  if (ifa->type == OSPF_IT_BCAST)
+  {
+    if ((ifa->state == OSPF_IS_DR) || (ifa->state == OSPF_IS_BACKUP))
+      ospf_send_to_all(ifa);
+    else
+      ospf_send_to_designated(ifa);
+  }
+  else if (ifa->type == OSPF_IT_PTP)
+    ospf_send_to_all(ifa);
+  else /* Non-broadcast */
+    ospf_send_to_adjacent(ifa);
 }

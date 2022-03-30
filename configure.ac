@@ -351,6 +351,7 @@ case $sysdesc in
 esac
 
 AC_CHECK_HEADERS_ONCE([alloca.h syslog.h])
+AC_CHECK_HEADER([sys/mman.h], [AC_DEFINE([HAVE_MMAP], [1], [Define to 1 if mmap() is available.])])
 AC_CHECK_MEMBERS([struct sockaddr.sa_len], [], [], [#include <sys/socket.h>])
 
 AC_C_BIGENDIAN(
@@ -372,6 +373,9 @@ if test "$bird_cv_lib_log" = no ; then
 elif test "$bird_cv_lib_log" != yes ; then
   LIBS="$LIBS $bird_cv_lib_log"
 fi
+
+AC_CHECK_FUNCS(getrandom)
+AC_CHECK_FUNCS(getentropy)
 
 if test "$enable_debug" = yes ; then
   AC_DEFINE([DEBUGGING], [1], [Define to 1 if debugging is enabled])

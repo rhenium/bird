@@ -2,6 +2,7 @@
  *	BIRD Resource Manager
  *
  *	(c) 1998--1999 Martin Mares <mj@ucw.cz>
+ *	(c) 2021 Maria Matejka <mq@jmq.cz>
  *
  *	Can be freely distributed and used under the terms of the GNU GPL.
  */
@@ -10,6 +11,11 @@
 #define _BIRD_RESOURCE_H_
 
 #include "lib/lists.h"
+
+struct resmem {
+  size_t effective;			/* Memory actually used for data storage */
+  size_t overhead;			/* Overhead memory imposed by allocator strategies */
+};
 
 /* Resource */
 
@@ -26,11 +32,11 @@ struct resclass {
   void (*free)(resource *);		/* Freeing function */
   void (*dump)(resource *);		/* Dump to debug output */
   resource *(*lookup)(resource *, unsigned long);	/* Look up address (only for debugging) */
-  size_t (*memsize)(resource *);	/* Return size of memory used by the resource, may be NULL */
+  struct resmem (*memsize)(resource *);	/* Return size of memory used by the resource, may be NULL */
 };
 
 /* Estimate of system allocator overhead per item, for memory consumtion stats */
-#define ALLOC_OVERHEAD		8
+#define ALLOC_OVERHEAD		16
 
 /* Generic resource manipulation */
 
@@ -40,7 +46,7 @@ void resource_init(void);
 pool *rp_new(pool *, const char *);	/* Create new pool */
 void rfree(void *);			/* Free single resource */
 void rdump(void *);			/* Dump to debug output */
-size_t rmemsize(void *res);		/* Return size of memory used by the resource */
+struct resmem rmemsize(void *res);		/* Return size of memory used by the resource */
 void rlookup(unsigned long);		/* Look up address (only for debugging) */
 void rmove(void *, pool *);		/* Move to a different pool */
 
@@ -53,6 +59,7 @@ extern pool root_pool;
 void *mb_alloc(pool *, unsigned size);
 void *mb_allocz(pool *, unsigned size);
 void *mb_realloc(void *m, unsigned size);
+void mb_move(void *, pool *);
 void mb_free(void *);
 
 /* Memory pools with linear allocation */
@@ -93,6 +100,11 @@ void sl_free(slab *, void *);
 
 void buffer_realloc(void **buf, unsigned *size, unsigned need, unsigned item_size);
 
+/* Allocator of whole pages; for use in slabs and other high-level allocators. */
+u64 get_page_size(void);
+void *alloc_page(void);
+void free_page(void *);
+extern uint pages_kept;
 
 #ifdef HAVE_LIBDMALLOC
 /*

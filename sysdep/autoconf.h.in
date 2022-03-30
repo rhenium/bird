@@ -54,6 +54,12 @@
 /* Define to 1 if you have the <execinfo.h> header file. */
 #undef HAVE_EXECINFO_H
 
+/* Define to 1 if you have the `getentropy' function. */
+#undef HAVE_GETENTROPY
+
+/* Define to 1 if you have the `getrandom' function. */
+#undef HAVE_GETRANDOM
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
@@ -65,6 +71,12 @@
 
 /* Define to 1 if you have the `ssh' library (-lssh). */
 #undef HAVE_LIBSSH
+
+/* Define to 1 if you have the <memory.h> header file. */
+#undef HAVE_MEMORY_H
+
+/* Define to 1 if mmap() is available. */
+#undef HAVE_MMAP
 
 /* Define to 1 if kernel is MPLS capable */
 #undef HAVE_MPLS_KERNEL
@@ -84,15 +96,13 @@
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 
-/* Always define to 1, for backward compatibility. You can assume <stdlib.h>
-   exists. */
+/* Define to 1 if you have the <stdlib.h> header file. */
 #undef HAVE_STDLIB_H
 
 /* Define to 1 if you have the <strings.h> header file. */
 #undef HAVE_STRINGS_H
 
-/* Always define to 1, for backward compatibility. You can assume <string.h>
-   exists. */
+/* Define to 1 if you have the <string.h> header file. */
 #undef HAVE_STRING_H
 
 /* Define to 1 if `sa_len' is a member of `struct sockaddr'. */
@@ -131,8 +141,7 @@
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
 
-/* Always define to 1, for backward compatibility. You can assume the C90
-   standard headers exist. */
+/* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
 
 /* Which sysdep header to include */

@@ -45,9 +45,9 @@
  *
  * export - Hook that validates and normalizes attribute during export phase.
  * Receives eattr, may modify it (e.g., sort community lists for canonical
- * representation), UNSET() it (e.g., skip empty lists), or WITHDRAW() it if
- * necessary. May assume that eattr has value valid w.r.t. its type, but may be
- * invalid w.r.t. BGP constraints. Optional.
+ * representation), UNSET() it (e.g., skip empty lists), or REJECT() the route
+ * if necessary. May assume that eattr has value valid w.r.t. its type, but may
+ * be invalid w.r.t. BGP constraints. Optional.
  *
  * encode - Hook that converts internal representation to external one during
  * packet writing. Receives eattr and puts it in the buffer (including attribute
@@ -88,7 +88,7 @@ bgp_set_attr(ea_list **attrs, struct linpool *pool, uint code, uint flags, uintp
       attrs,
       pool,
       EA_CODE(PROTOCOL_BGP, code),
-      flags,
+      flags & ~BAF_EXT_LEN,
       bgp_attr_table[code].type,
       val
   );
@@ -108,6 +108,9 @@ bgp_set_attr(ea_list **attrs, struct linpool *pool, uint code, uint flags, uintp
 #define UNSET(a) \
   ({ a->type = EAF_TYPE_UNDEF; return; })
 
+#define REJECT(msg, args...) \
+  ({ log(L_ERR "%s: " msg, s->proto->p.name, ## args); s->err_reject = 1; return; })
+
 #define NEW_BGP		"Discarding %s attribute received from AS4-aware neighbor"
 #define BAD_EBGP	"Discarding %s attribute received from EBGP neighbor"
 #define BAD_LENGTH	"Malformed %s attribute - invalid length (%u)"
@@ -118,7 +121,7 @@ bgp_set_attr(ea_list **attrs, struct linpool *pool, uint code, uint flags, uintp
 static inline int
 bgp_put_attr_hdr3(byte *buf, uint code, uint flags, uint len)
 {
-  *buf++ = flags;
+  *buf++ = flags & ~BAF_EXT_LEN;
   *buf++ = code;
   *buf++ = len;
   return 3;
@@ -380,7 +383,7 @@ static void
 bgp_export_origin(struct bgp_export_state *s, eattr *a)
 {
   if (a->u.data > 2)
-    WITHDRAW(BAD_VALUE, "ORIGIN", a->u.data);
+    REJECT(BAD_VALUE, "ORIGIN", a->u.data);
 }
 
 static void
@@ -902,20 +905,20 @@ bgp_export_mpls_label_stack(struct bgp_export_state *s, eattr *a)
 
   /* Perhaps we should just ignore it? */
   if (!s->mpls)
-    WITHDRAW("Unexpected MPLS stack");
+    REJECT("Unexpected MPLS stack");
 
   /* Empty MPLS stack is not allowed */
   if (!lnum)
-    WITHDRAW("Malformed MPLS stack - empty");
+    REJECT("Malformed MPLS stack - empty");
 
   /* This is ugly, but we must ensure that labels fit into NLRI field */
   if ((24*lnum + (net_is_vpn(n) ? 64 : 0) + net_pxlen(n)) > 255)
-    WITHDRAW("Malformed MPLS stack - too many labels (%u)", lnum);
+    REJECT("Malformed MPLS stack - too many labels (%u)", lnum);
 
   for (uint i = 0; i < lnum; i++)
   {
     if (labels[i] > 0xfffff)
-      WITHDRAW("Malformed MPLS stack - invalid label (%u)", labels[i]);
+      REJECT("Malformed MPLS stack - invalid label (%u)", labels[i]);
 
     /* TODO: Check for special-purpose label values? */
   }
@@ -1196,7 +1199,7 @@ bgp_export_attrs(struct bgp_export_state *s, ea_list *attrs)
   for (i = 0; i < count; i++)
     bgp_export_attr(s, &new->attrs[i], new);
 
-  if (s->err_withdraw)
+  if (s->err_reject)
     return NULL;
 
   return new;
@@ -1394,19 +1397,19 @@ bgp_decode_attrs(struct bgp_parse_state *s, byte *data, uint len)
 
   /* Reject routes with our ASN in AS_PATH attribute */
   if (bgp_as_path_loopy(p, attrs, p->local_as))
-    goto withdraw;
+    goto loop;
 
   /* Reject routes with our Confederation ID in AS_PATH attribute; RFC 5065 4.0 */
   if ((p->public_as != p->local_as) && bgp_as_path_loopy(p, attrs, p->public_as))
-    goto withdraw;
+    goto loop;
 
   /* Reject routes with our Router ID in ORIGINATOR_ID attribute; RFC 4456 8 */
   if (p->is_internal && bgp_originator_id_loopy(p, attrs))
-    goto withdraw;
+    goto loop;
 
   /* Reject routes with our Cluster ID in CLUSTER_LIST attribute; RFC 4456 8 */
   if (p->rr_client && bgp_cluster_list_loopy(p, attrs))
-    goto withdraw;
+    goto loop;
 
   /* If there is no local preference, define one */
   if (!BIT32_TEST(s->attrs_seen, BA_LOCAL_PREF))
@@ -1426,6 +1429,10 @@ withdraw:
     bgp_parse_error(s, 1);
 
   s->err_withdraw = 1;
+  return NULL;
+
+loop:
+  /* Loops are handled as withdraws, but ignored silently. Do not set err_withdraw. */
   return NULL;
 }
 
@@ -1676,6 +1683,10 @@ bgp_preexport(struct proto *P, rte **new, struct linpool *pool UNUSED)
   if (src == NULL)
     return 0;
 
+  /* Reject flowspec that failed validation */
+  if ((e->attrs->dest == RTD_UNREACHABLE) && net_is_flow(e->net->n.addr))
+      return -1;
+
   /* IBGP route reflection, RFC 4456 */
   if (p->is_internal && src->is_internal && (p->local_as == src->local_as))
   {
@@ -1844,6 +1855,10 @@ bgp_rt_notify(struct proto *P, struct channel *C, net *n, rte *new, rte *old)
   if (new)
   {
     struct ea_list *attrs = bgp_update_attrs(p, c, new, new->attrs->eattrs, bgp_linpool2);
+
+    /* Error during attribute processing */
+    if (!attrs)
+      log(L_ERR "%s: Invalid route %N withdrawn", p->p.name, n->n.addr);
 
     /* If attributes are invalid, we fail back to withdraw */
     buck = attrs ? bgp_get_bucket(c, attrs) : bgp_get_withdraw_bucket(c);
