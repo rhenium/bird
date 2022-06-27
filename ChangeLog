@@ -1,8 +1,229 @@
-commit 34028fc9cfd44d9bfa5d87eadc9d819e7d1fb39b
-Author: Ondrej Filip <feela@network.cz>
-Date:   Sun Feb 20 15:47:07 2022 +0100
+commit b867c798c3e42c875311a79fe53a36d4a5bfd126
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 16 02:58:37 2022 +0200
 
-    Small bugfix in directory existence test
+    NEWS and version update
+
+commit 141fb51f1a3c22c45025426775c00f66c06406a7
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Jun 7 10:35:48 2022 +0200
+
+    IPv4 flowspec literals should reject IPv6 prefices in a well-behaved way
+    
+    When writing flow4 { dst 2001:db8::dead:beef/128; }, BIRD crashed on an
+    not-well-debuggable segfault as it tried to copy the whole 128-bit
+    prefix into an IPv4-sized memory.
+
+commit ad686c55c3fad13f39e44ee5732c38296caff782
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Jun 5 04:03:43 2022 +0200
+
+    Babel: Do not try to remove multicast seqno request objects from neighbour list
+    
+    The Babel seqno request code keeps track of which seqno requests are
+    outstanding for a neighbour by putting them onto a per-neighbour list. When
+    reusing a seqno request, it will try to remove this node, but if the seqno
+    request in question was a multicast request with no neighbour attached this
+    will result in a crash because it tries to remove a list node that wasn't
+    added to any list.
+    
+    Fix this by making the list remove conditional. Also fix neighbor removal
+    which were changing seqno requests to multicast ones instead of removing
+    them.
+    
+    Fixes: ebd5751cdeb4 ("Babel: Seqno requests are properly decoupled from
+    neighbors when the underlying interface disappears").
+    
+    Based on the patch from Toke Høiland-Jørgensen <toke@toke.dk>,
+    bug reported by Stefan Haller <stefan.haller@stha.de>, thanks.
+
+commit f39e9aa20363eccc38289958f23c789d037c269b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jun 4 17:54:08 2022 +0200
+
+    IO: Improve resolution of latency debugging messages
+
+commit a8a3d95be5db1a8a7d5a17e2eb8e233417b1d8c7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jun 4 17:34:57 2022 +0200
+
+    Nest: Improve GC strategy for rtables
+    
+    Use timer (configurable as 'gc period') to schedule routing table
+    GC/pruning to ensure that prune is done on time but not too often.
+    
+    Randomize GC timers to avoid concentration of GC events from different
+    tables in one loop cycle.
+    
+    Fix a bug that caused minimum inter-GC interval be 5 us instead of 5 s.
+    
+    Make default 'gc period' adaptive based on number of routing tables,
+    from 10 s for small setups to 600 s for large ones.
+    
+    In marge multi-table RS setup, the patch improved time of flushing
+    a downed peer from 20-30 min to <2 min and removed 40s latencies.
+
+commit 9e60b500c76945ccdea94d3a67e7acfde5e3f969
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 27 16:07:24 2022 +0200
+
+    CI: Remove broken FreeBSD builds
+    
+    We currently do not have FreeBSD CI workers.
+
+commit a9c19b923c886ddfaefd0fa5052d4799b80579e2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat May 21 16:21:34 2022 +0200
+
+    BGP: Display neighbor port on show protocol
+
+commit 7bb06b34a110bbf40e7308eb19f32202a66d58ba
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat May 21 16:03:08 2022 +0200
+
+    RPKI: Display cache server port on show protocol
+    
+    Thanks to Luiz Amaral for the idea.
+
+commit 9a9439d5e1d3b1372dadb25207d67d83a2e1e98c
+Author: Luiz Amaral <email@luiz.eng.br>
+Date:   Thu May 19 19:43:59 2022 +0200
+
+    RPKI: Implement VRF support
+
+commit ba2a076001be6e4140fbd2703cd134e5aa51450b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun May 15 15:05:13 2022 +0200
+
+    BGP: Improve tx performance during feed/flush
+    
+    The prefix hash table in BGP used the same hash function as the rtable.
+    When a batch of routes are exported during feed/flush to the BGP, they
+    all have similar hash values, so they are all crowded in a few slots in
+    the BGP prefix table (which is much smaller - around the size of the
+    batch - and uses higher bits from hash values), making it much slower due
+    to excessive collisions. Use a different hash function to avoid this.
+    
+    Also, increase the batch size to fill 4k BGP packets and increase minimum
+    BGP bucket and prefix hash sizes to avoid back and forth resizing during
+    flushes.
+    
+    This leads to order of magnitude faster flushes (on my test data).
+
+commit 207ac4853316ceffa6d56ff06f8904320d3bf45f
+Author: Vincent Bernat <vincent@bernat.ch>
+Date:   Fri Apr 22 17:06:27 2022 +0200
+
+    Doc: fix mating -> matching in flowspec section
+
+commit d8298001389f021f68ead1ed2b4809edb60ae416
+Author: Toke Høiland-Jørgensen <toke@toke.dk>
+Date:   Fri Apr 22 17:04:56 2022 +0200
+
+    Babel: Fix compilation when LOCAL_DEBUG is set in packets.c
+    
+    The debug output was not updated with the rest of the code, so packets.c
+    fails to compile if LOCAL_DEBUG is set.
+
+commit 4aef70136d8bae68e171fa7178889e6ad9fff9b8
+Author: Toke Høiland-Jørgensen <toke@toke.dk>
+Date:   Fri Apr 22 16:41:52 2022 +0200
+
+    Babel: Send out low-interval hello on shutdown
+    
+    When shutting down a Babel instance we send a wildcard retraction to make
+    sure all peers can quickly switch to other route origins. Add another small
+    optimisation borrowed from babeld: sending a Hello message (along with the
+    retraction) with a very low interval.
+    
+    This will cause neighbours to modify their expiry timers for the node's
+    state to quickly time it out, thus conserving resources in the network.
+
+commit 9eec503b251c3388579032b300d32640403d8612
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Apr 13 11:28:15 2022 +0200
+
+    Fixed a munmap abort bug
+    
+    When BIRD was munmapping too many pages, it sometimes aborted, saying
+    that munmap failed with "Not enough memory" as the address space was
+    getting more and more fragmented.
+    
+    There is a workaround in place, simply keeping that page for future use,
+    yet it has never been compiled in because I somehow forgot to include
+    errno.h. And because I also thought that somebody may have ENOMEM not
+    defined (why?!), there was a check which quietly omitted that
+    workaround.
+    
+    Anyway, ENOMEM is POSIX. It's an utter nonsense to check for its
+    existence. If it doesn't exist, something is broken.
+
+commit 692055e3df6cc9f0d428d3b0dd8cdd8e825eb6f4
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Apr 7 19:33:40 2022 +0200
+
+    BFD: Add 'strict bind' option
+    
+    Add BFD protocol option 'strict bind' to use separate listening socket
+    for each BFD interface bound to its address instead of using shared
+    listening sockets.
+
+commit 4b1aa37f931888febfd768309d5e2ef36f5e7194
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Mar 16 23:16:26 2022 +0100
+
+    Netlink: Remove superfluous sysdep/linux/netlink.c.orig
+    
+    Thanks to Vincent Bernat for notice.
+
+commit 269bfff9bf4b2349248bb48ff61009cf1c5a4aec
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Mar 16 19:50:16 2022 +0100
+
+    Lib: Allow use of 240.0.0.0/4 as a private range
+    
+    There were several requests to allow use of 240.0.0.0/4 as a private
+    range, and Linux kernel already allows such routes, so perhaps we can
+    allow that too.
+    
+    Thanks to Vincent Bernat and others for suggestion and patches.
+
+commit c3828879a395c84bd7aac089903c88bb3a9c149d
+Author: Vincent Bernat <vincent@bernat.ch>
+Date:   Fri Mar 11 15:47:00 2022 +0100
+
+    Pkg: Improve RPM package unit file
+    
+    Update the RPM package unit file to check configuration before start and
+    to use "birdc configure" instead of "kill -HUP".
+
+commit 9b0b2c0d410fd26e1b48d158a667e42f4bbec52c
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Fri Mar 11 03:40:03 2022 +0100
+
+    Client: Use exit status to report errors
+    
+    When birdc is called with a command as an argument, it should set exit
+    status to non-zero when BIRD replied with an error reply code.
+    
+    Thanks to Vincent Bernat and others for suggestion.
+
+commit 5ddf98f6bdfec213d64957a580e0425c3ed4d660
+Author: Ondrej Filip <feela@network.cz>
+Date:   Wed Mar 2 10:52:09 2022 +0100
+
+    Small improvement in directory test
+
+commit fcb4dd0c831339c4374ace17d8f2ae6ebfeed279
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Feb 27 03:10:38 2022 +0100
+
+    Babel: Fix bug in iface reconfiguration
+    
+    A recent change in Babel causes ifaces to disappear after
+    reconfiguration. The patch fixes that.
+    
+    Thanks to Johannes Kimmel for an insightful bugreport.
 
 commit eb859a3fb063b261fb76304e5b8eca206e7a162a
 Author: Ondrej Filip <feela@network.cz>

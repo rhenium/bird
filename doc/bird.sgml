@@ -684,6 +684,21 @@ to set options.
 	limit to the settle time from the initial ROA table change even if
 	there are consecutive updates gradually renewing the settle time.
 	Default: 20 s.
+
+	<tag><label id="rtable-gc-threshold">gc threshold <m/number/</tag>
+	Specify a minimum amount of removed networks that triggers a garbage
+	collection (GC) cycle. Default: 1000.
+
+	<tag><label id="rtable-gc-period">gc period <m/time/</tag>
+	Specify a period of time between consecutive GC cycles. When there is a
+	significant amount of route withdraws, GC cycles are executed repeatedly
+	with given period time (with some random factor). When there is just
+	small amount of changes, GC cycles are not executed. In extensive route
+	server setups, running GC on hundreds of full BGP routing tables can
+	take significant amount of time, therefore they should use higher GC
+	periods. Default: adaptive, based on number of routing tables in the
+	configuration. From 10 s (with <= 25 routing tables) up to 600 s (with
+	>= 1500 routing tables).
 </descrip>
 
 
@@ -2152,6 +2167,13 @@ protocol bfd [&lt;name&gt;] {
 	(and which listening sockets are opened). It can be used, for example,
 	to configure separate BFD protocol instances for IPv4 and for IPv6
 	sessions.
+
+	<tag><label id="bfd-strict-bind">strict bind <m/switch/</tag>
+	Specify whether each BFD interface should use a separate listening
+	socket bound to its local address, or just use a shared listening socket
+	accepting all addresses. Binding to a specific address could be useful
+	in cases like running multiple BIRD instances on a machine, each
+	handling a different set of interfaces. Default: disabled.
 
 	<tag><label id="bfd-iface">interface <m/pattern/ [, <m/.../] { <m/options/ }</tag>
 	Interface definitions allow to specify options for sessions associated
@@ -5244,7 +5266,7 @@ Note that for negated matches, value must be either zero or equal to bitmask
 	<cf>port 1..1023,1194,3306</cf>).
 
 	<tag><label id="flow-dport">dport <m/numbers-match/</tag>
-	Set a mating destination port numbers (e.g. <cf>dport 49151</cf>).
+	Set a matching destination port numbers (e.g. <cf>dport 49151</cf>).
 
 	<tag><label id="flow-sport">sport <m/numbers-match/</tag>
 	Set a matching source port numbers (e.g. <cf>sport = 0</cf>).
