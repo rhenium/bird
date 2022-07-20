@@ -1,3 +1,27 @@
+bird2 (2.0.10.17+18-20220720-1) unstable; urgency=medium
+
+  * Rebased 2.0.9.6+18-20220401-1 on top of 2.0.10-17-g971721c9b50d. RHE patch
+    version stays 18. (Rebase was necessary to fix merge conflict, but no
+    changes in functionality.)
+  * Allow trailing comma in set literals in filter.
+  * Use route replace on IPv6.
+  * Introduce 'attach_mls([<label stack>])' filter function.
+  * Allow modification of AIGP metric values, at the expense of strict
+    compliance with RFC 7311.
+  * Partially fixed buffer overflow bug with kernel route installing.
+  * Better logging in BFD protocol.
+  * Probably strict check is performed on constant expression.
+  * Allow setting BGP AGGREGATOR attribute in filter.
+  * Fix jitter application to BGP filters as specified in RFC 4271 section 10.
+  * Added "soft hold time on" configuration to BGP for debugging my other BGP
+    speaker.
+  * Temporarily disable direct use of mmap() to fix memory mapping
+    fragmentation. It might not crash anymore without this, as upstream ignores
+    ENOMEM returned by munmap(). However, it doesn't seem like a good practice
+    regardless. I also suspect third-party libraries can still encounter ENOMEM.
+
+ -- Kazuki Yamaguchi <k@rhe.jp>  Wed, 20 Jul 2022 18:00:53 +0900
+
 bird2 (2.0.10-2) unstable; urgency=medium
 
   * d/patches: add patch to increase tests timeout
