@@ -384,6 +384,7 @@ f_eval_int(const struct f_line *expr)
   filter_state = (struct filter_state) {
     .stack = &filter_stack,
     .pool = cfg_mem,
+    .flags = FF_CONSTANT,
   };
 
   struct f_val val;
