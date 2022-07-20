@@ -265,6 +265,14 @@ pm_same(const struct f_path_mask *m1, const struct f_path_mask *m2)
   return 1;
 }
 
+static int
+mpls_same(const mpls_label_stack *m1, const mpls_label_stack *m2)
+{
+  if (m1->len != m2->len)
+    return 0;
+  return !memcmp(m1->stack, m2->stack, m1->len * sizeof(u32));
+}
+
 /**
  * val_same - compare two values
  * @v1: first value
@@ -290,6 +298,8 @@ val_same(const struct f_val *v1, const struct f_val *v2)
     return pm_same(v1->val.path_mask, v2->val.path_mask);
   case T_PATH_MASK_ITEM:
     return pmi_same(&(v1->val.pmi), &(v2->val.pmi));
+  case T_MLS:
+    return mpls_same(v1->val.mls, v2->val.mls);
   case T_PATH:
   case T_CLIST:
   case T_ECLIST:
