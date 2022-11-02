@@ -2,7 +2,7 @@ Source: bird2
 Section: net
 Priority: optional
 Build-Depends: bison,
-               debhelper-compat (= 12),
+               debhelper-compat (= 13),
                docbook-xsl,
                flex,
                libncurses5-dev,
