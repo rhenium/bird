@@ -1,1 +1,1 @@
-bird2: binary-without-manpage usr/sbin/birdcl
+bird2: no-manual-page usr/sbin/birdcl
