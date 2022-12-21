@@ -123,6 +123,7 @@ struct bgp_config {
   unsigned hold_time;
   unsigned min_hold_time;		/* Minimum accepted hold time */
   unsigned initial_hold_time;
+  int soft_hold_time;
   unsigned keepalive_time;
   unsigned min_keepalive_time;		/* Minimum accepted keepalive time */
   unsigned error_amnesia_time;		/* Errors are forgotten after */
