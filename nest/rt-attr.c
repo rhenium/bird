@@ -87,8 +87,8 @@ const char * rta_dest_names[RTD_MAX] = {
 
 pool *rta_pool;
 
-static slab *rta_slab_[4];
-static slab *nexthop_slab_[4];
+static slab *rta_slab;
+static slab *nexthop_slab;
 static slab *rte_src_slab;
 
 static struct idm src_ids;
@@ -351,12 +351,6 @@ nexthop_is_sorted(struct nexthop *x)
   return 1;
 }
 
-static inline slab *
-nexthop_slab(struct nexthop *nh)
-{
-  return nexthop_slab_[MIN(nh->labels, 3)];
-}
-
 static struct nexthop *
 nexthop_copy(struct nexthop *o)
 {
@@ -365,7 +359,7 @@ nexthop_copy(struct nexthop *o)
 
   for (; o; o = o->next)
     {
-      struct nexthop *n = sl_allocz(nexthop_slab(o));
+      struct nexthop *n = sl_allocz(nexthop_slab);
       n->gw = o->gw;
       n->iface = o->iface;
       n->next = NULL;
@@ -1137,16 +1131,10 @@ rta_same(rta *x, rta *y)
 	  ea_same(x->eattrs, y->eattrs));
 }
 
-static inline slab *
-rta_slab(rta *a)
-{
-  return rta_slab_[a->nh.labels > 2 ? 3 : a->nh.labels];
-}
-
 static rta *
 rta_copy(rta *o)
 {
-  rta *r = sl_alloc(rta_slab(o));
+  rta *r = sl_alloc(rta_slab);
 
   memcpy(r, o, rta_size(o));
   r->uc = 1;
@@ -1339,15 +1327,8 @@ rta_init(void)
 {
   rta_pool = rp_new(&root_pool, "Attributes");
 
-  rta_slab_[0] = sl_new(rta_pool, sizeof(rta));
-  rta_slab_[1] = sl_new(rta_pool, sizeof(rta) + sizeof(u32));
-  rta_slab_[2] = sl_new(rta_pool, sizeof(rta) + sizeof(u32)*2);
-  rta_slab_[3] = sl_new(rta_pool, sizeof(rta) + sizeof(u32)*MPLS_MAX_LABEL_STACK);
-
-  nexthop_slab_[0] = sl_new(rta_pool, sizeof(struct nexthop));
-  nexthop_slab_[1] = sl_new(rta_pool, sizeof(struct nexthop) + sizeof(u32));
-  nexthop_slab_[2] = sl_new(rta_pool, sizeof(struct nexthop) + sizeof(u32)*2);
-  nexthop_slab_[3] = sl_new(rta_pool, sizeof(struct nexthop) + sizeof(u32)*MPLS_MAX_LABEL_STACK);
+  rta_slab = sl_new(rta_pool, sizeof(rta));
+  nexthop_slab = sl_new(rta_pool, sizeof(struct nexthop));
 
   rta_alloc_hash();
   rte_src_init();
