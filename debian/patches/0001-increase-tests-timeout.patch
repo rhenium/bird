@@ -1,0 +1,26 @@
+From 007bb2c4503baa194c0dfc4b88bd283e04b2b163 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Jakub=20Ru=C5=BEi=C4=8Dka?= <jakub.ruzicka@nic.cz>
+Date: Tue, 28 Jun 2022 16:32:46 +0200
+Subject: [PATCH] increase tests timeout
+
+Tests may take longer than 5 s to complete on slow/virtual machines.
+---
+ test/birdtest.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/test/birdtest.h b/test/birdtest.h
+index ad5f8f9..cfeebb9 100644
+--- a/test/birdtest.h
++++ b/test/birdtest.h
+@@ -40,7 +40,7 @@ static inline u64 bt_random(void)
+ void bt_log_suite_result(int result, const char *fmt, ...);
+ void bt_log_suite_case_result(int result, const char *fmt, ...);
+ 
+-#define BT_TIMEOUT 			5	/* Default timeout in seconds */
++#define BT_TIMEOUT 			60	/* Default timeout in seconds */
+ #define BT_FORKING 			1	/* Forking is enabled in default */
+ 
+ #define BT_RANDOM_SEED 			0x5097d2bb
+-- 
+2.36.1
+
