@@ -1,3 +1,22 @@
+bird2 (2.0.11.4+19-20221221-1) unstable; urgency=medium
+
+  * Rebased 2.0.10.17+18-20220720-1 on top of v2.0.11-4-g2b7643e1f8ec. RHE
+    patches has been rebased to drop two branches: ky/netlink-ecmp-ipv6 and
+    ky/fix-mmap-fragmentation.
+  * Allow trailing comma in set literals in filter.
+  * Introduce 'attach_mls([<label stack>])' filter function.
+  * Allow modification of AIGP metric values, at the expense of strict
+    compliance with RFC 7311.
+  * Partially fixed buffer overflow bug with kernel route installing.
+  * Better logging in BFD protocol.
+  * Probably strict check is performed on constant expression.
+  * Allow setting BGP AGGREGATOR attribute in filter.
+  * Fix jitter application to BGP filters as specified in RFC 4271 section 10.
+  * Added "soft hold time on" configuration to BGP for debugging my other BGP
+    speaker.
+
+ -- Kazuki Yamaguchi <k@rhe.jp>  Wed, 21 Dec 2022 21:30:02 +0900
+
 bird2 (2.0.10-2) unstable; urgency=medium
 
   * d/patches: add patch to increase tests timeout
