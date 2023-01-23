@@ -1,3 +1,18 @@
+bird2 (2.0.12-1) unstable; urgency=medium
+
+  [ Debian Janitor ]
+  * debian/copyright: use spaces rather than tabs to start continuation lines.
+  * Bump debhelper from old 12 to 13. + debian/rules: Drop --fail-missing argument to dh_missing, which is now the default.
+  * Update renamed lintian tag names in lintian overrides.
+  * Update standards version to 4.6.1, no changes needed.
+
+  [ Jakub Ružička ]
+  * Extend manpage for birdcl
+  * Remove patch included upstream
+  * Bump Standards-Version to 4.6.2 (no changes)
+
+ -- Jakub Ružička <jakub.ruzicka@nic.cz>  Mon, 23 Jan 2023 17:46:56 +0100
+
 bird2 (2.0.10-2) unstable; urgency=medium
 
   * d/patches: add patch to increase tests timeout
