@@ -26,7 +26,6 @@ Architecture: kfreebsd-any linux-any
 Pre-Depends: init-system-helpers (>= 1.56~),
              ${misc:Pre-Depends}
 Depends: adduser,
-         lsb-base,
          ucf,
          ${misc:Depends},
          ${shlibs:Depends}
