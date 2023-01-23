@@ -2,7 +2,8 @@ bird2 (2.0.12-1) unstable; urgency=medium
 
   [ Debian Janitor ]
   * debian/copyright: use spaces rather than tabs to start continuation lines.
-  * Bump debhelper from old 12 to 13. + debian/rules: Drop --fail-missing argument to dh_missing, which is now the default.
+  * Bump debhelper from old 12 to 13. + debian/rules:
+    Drop --fail-missing argument to dh_missing, which is now the default.
   * Update renamed lintian tag names in lintian overrides.
   * Update standards version to 4.6.1, no changes needed.
 
