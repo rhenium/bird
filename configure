@@ -730,6 +730,7 @@ enable_debug
 enable_debug_generated
 enable_debug_expensive
 enable_memcheck
+enable_compact_tries
 enable_pthreads
 enable_libssh
 enable_mpls_kernel
@@ -1378,6 +1379,7 @@ Optional Features:
                           enable expensive consistency checks (implies
                           --enable-debug) [no]
   --enable-memcheck       check memory allocations when debugging [yes]
+  --enable-compact-tries  use 4-way tries instead of 16-way ones [no]
   --enable-pthreads       enable POSIX threads support [try]
   --enable-libssh         enable LibSSH support in RPKI [try]
   --enable-mpls-kernel    enable MPLS support in kernel protocol [try]
@@ -2636,6 +2638,16 @@ then :
   enableval=$enable_memcheck;
 else $as_nop
   enable_memcheck=yes
+
+fi
+
+
+# Check whether --enable-compact-tries was given.
+if test ${enable_compact_tries+y}
+then :
+  enableval=$enable_compact_tries;
+else $as_nop
+  enable_compact_tries=no
 
 fi
 
@@ -5433,6 +5445,8 @@ else
       ;;
     openbsd*)
       sysdesc=bsd
+      CPPFLAGS="$CPPFLAGS -I/usr/local/include"
+      LDFLAGS="$LDFLAGS -L/usr/local/lib"
       ;;
     dragonfly*)
       sysdesc=bsd
@@ -6324,11 +6338,17 @@ fi
     fi
   fi
 
-  if test "enable_debug_expensive" = yes ; then
+  if test "$enable_debug_expensive" = yes ; then
 
 printf "%s\n" "#define ENABLE_EXPENSIVE_CHECKS 1" >>confdefs.h
 
   fi
+fi
+
+if test "$enable_compact_tries" = yes ; then
+
+printf "%s\n" "#define ENABLE_COMPACT_TRIES 1" >>confdefs.h
+
 fi
 
 CLIENT=birdcl
@@ -7884,6 +7904,8 @@ printf "%s\n" "        Iproute2 directory:	$iproutedir" >&6; }
 printf "%s\n" "        System configuration:	$sysdesc" >&6; }
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result:         Debugging:		$enable_debug" >&5
 printf "%s\n" "        Debugging:		$enable_debug" >&6; }
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result:         Compact tries:		$enable_compact_tries" >&5
+printf "%s\n" "        Compact tries:		$enable_compact_tries" >&6; }
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result:         POSIX threads:		$enable_pthreads" >&5
 printf "%s\n" "        POSIX threads:		$enable_pthreads" >&6; }
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result:         Routing protocols:	$protocols" >&5

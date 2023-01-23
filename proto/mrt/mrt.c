@@ -113,13 +113,13 @@ mrt_buffer_flush(buffer *b)
 }
 
 #define MRT_DEFINE_TYPE(S, T)						\
-  static inline void mrt_put_##S##_(buffer *b, T x)			\
+  static inline void UNUSED mrt_put_##S##_(buffer *b, T x)		\
   {									\
     put_##S(b->pos, x);							\
     b->pos += sizeof(T);						\
   }									\
 									\
-  static inline void mrt_put_##S(buffer *b, T x)			\
+  static inline void UNUSED mrt_put_##S(buffer *b, T x)			\
   {									\
     mrt_buffer_need(b, sizeof(T));					\
     put_##S(b->pos, x);							\
@@ -472,9 +472,9 @@ mrt_rib_table_entry(struct mrt_table_dump_state *s, rte *r)
 
 #ifdef CONFIG_BGP
   /* Find peer index */
-  if (r->attrs->src->proto->proto == &proto_bgp)
+  if (r->src->proto->proto == &proto_bgp)
   {
-    struct bgp_proto *p = (void *) r->attrs->src->proto;
+    struct bgp_proto *p = (void *) r->src->proto;
     struct mrt_peer_entry *n =
       HASH_FIND(s->peer_hash, PEER, p->remote_id, p->remote_as, p->remote_ip);
 
@@ -488,7 +488,7 @@ mrt_rib_table_entry(struct mrt_table_dump_state *s, rte *r)
 
   /* Path Identifier */
   if (s->add_path)
-    mrt_put_u32(b, r->attrs->src->private_id);
+    mrt_put_u32(b, r->src->private_id);
 
   /* Route Attributes */
   mrt_put_u16(b, 0);
@@ -519,13 +519,11 @@ mrt_rib_table_dump(struct mrt_table_dump_state *s, net *n, int add_path)
       continue;
 
     /* Skip routes that should be reported in the other phase */
-    if (!s->always_add_path && (!rt->attrs->src->private_id != !s->add_path))
+    if (!s->always_add_path && (!rt->src->private_id != !s->add_path))
     {
       s->want_add_path = 1;
       continue;
     }
-
-    rte_make_tmp_attrs(&rt, s->linpool, NULL);
 
     if (f_run(s->filter, &rt, s->linpool, 0) <= F_ACCEPT)
       mrt_rib_table_entry(s, rt);
@@ -562,8 +560,8 @@ mrt_table_dump_init(pool *pp)
   struct mrt_table_dump_state *s = mb_allocz(pool, sizeof(struct mrt_table_dump_state));
 
   s->pool = pool;
-  s->linpool = lp_new(pool, 4080);
-  s->peer_lp = lp_new(pool, 4080);
+  s->linpool = lp_new(pool);
+  s->peer_lp = lp_new(pool);
   mrt_buffer_init(&s->buf, pool, 2 * MRT_ATTR_BUFFER_SIZE);
 
   /* We lock the current config as we may reference it indirectly by filter */
@@ -918,3 +916,9 @@ struct protocol proto_mrt = {
   .reconfigure =	mrt_reconfigure,
   .copy_config =	mrt_copy_config,
 };
+
+void
+mrt_build(void)
+{
+  proto_build(&proto_mrt);
+}

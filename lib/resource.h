@@ -44,6 +44,7 @@ typedef struct pool pool;
 
 void resource_init(void);
 pool *rp_new(pool *, const char *);	/* Create new pool */
+pool *rp_newf(pool *, const char *, ...);	/* Create a new pool with a formatted string as its name */
 void rfree(void *);			/* Free single resource */
 void rdump(void *);			/* Dump to debug output */
 struct resmem rmemsize(void *res);		/* Return size of memory used by the resource */
@@ -59,7 +60,6 @@ extern pool root_pool;
 void *mb_alloc(pool *, unsigned size);
 void *mb_allocz(pool *, unsigned size);
 void *mb_realloc(void *m, unsigned size);
-void mb_move(void *, pool *);
 void mb_free(void *);
 
 /* Memory pools with linear allocation */
@@ -69,9 +69,10 @@ typedef struct linpool linpool;
 typedef struct lp_state {
   void *current, *large;
   byte *ptr;
+  uint total_large;
 } lp_state;
 
-linpool *lp_new(pool *, unsigned blk);
+linpool *lp_new(pool *);
 void *lp_alloc(linpool *, unsigned size);	/* Aligned */
 void *lp_allocu(linpool *, unsigned size);	/* Unaligned */
 void *lp_allocz(linpool *, unsigned size);	/* With clear */
@@ -79,10 +80,16 @@ void lp_flush(linpool *);			/* Free everything, but leave linpool */
 void lp_save(linpool *m, lp_state *p);		/* Save state */
 void lp_restore(linpool *m, lp_state *p);	/* Restore state */
 
-extern const int lp_chunk_size;
-#define LP_GAS		    1024
-#define LP_GOOD_SIZE(x)	    (((x + LP_GAS - 1) & (~(LP_GAS - 1))) - lp_chunk_size)
-#define lp_new_default(p)   lp_new(p, LP_GOOD_SIZE(LP_GAS*4))
+extern _Thread_local linpool *tmp_linpool;	/* Temporary linpool autoflushed regularily */
+
+#define tmp_alloc(sz)	lp_alloc(tmp_linpool, sz)
+#define tmp_allocu(sz)	lp_allocu(tmp_linpool, sz)
+#define tmp_allocz(sz)	lp_allocz(tmp_linpool, sz)
+
+#define tmp_init(p)	tmp_linpool = lp_new_default(p)
+#define tmp_flush()	lp_flush(tmp_linpool)
+
+#define lp_new_default	lp_new
 
 /* Slabs */
 
@@ -91,7 +98,7 @@ typedef struct slab slab;
 slab *sl_new(pool *, unsigned size);
 void *sl_alloc(slab *);
 void *sl_allocz(slab *);
-void sl_free(slab *, void *);
+void sl_free(void *);
 
 /*
  * Low-level memory allocation functions, please don't use
@@ -101,10 +108,11 @@ void sl_free(slab *, void *);
 void buffer_realloc(void **buf, unsigned *size, unsigned need, unsigned item_size);
 
 /* Allocator of whole pages; for use in slabs and other high-level allocators. */
-u64 get_page_size(void);
+extern long page_size;
 void *alloc_page(void);
 void free_page(void *);
-extern uint pages_kept;
+
+void resource_sys_init(void);
 
 #ifdef HAVE_LIBDMALLOC
 /*

@@ -36,6 +36,12 @@ AC_ARG_ENABLE([memcheck],
   [enable_memcheck=yes]
 )
 
+AC_ARG_ENABLE([compact-tries],
+  [AS_HELP_STRING([--enable-compact-tries], [use 4-way tries instead of 16-way ones @<:@no@:>@])],
+  [],
+  [enable_compact_tries=no]
+)
+
 AC_ARG_ENABLE([pthreads],
   [AS_HELP_STRING([--enable-pthreads], [enable POSIX threads support @<:@try@:>@])],
   [],
@@ -238,6 +244,8 @@ else
       ;;
     openbsd*)
       sysdesc=bsd
+      CPPFLAGS="$CPPFLAGS -I/usr/local/include"
+      LDFLAGS="$LDFLAGS -L/usr/local/lib"
       ;;
     dragonfly*)
       sysdesc=bsd
@@ -402,9 +410,13 @@ if test "$enable_debug" = yes ; then
     fi
   fi
 
-  if test "enable_debug_expensive" = yes ; then
+  if test "$enable_debug_expensive" = yes ; then
     AC_DEFINE([ENABLE_EXPENSIVE_CHECKS], [1], [Define to 1 if you want to run expensive consistency checks.])
   fi
+fi
+
+if test "$enable_compact_tries" = yes ; then
+  AC_DEFINE([ENABLE_COMPACT_TRIES], [1], [Define to 1 if you want 4-way tries instead of 16-way ones.])
 fi
 
 CLIENT=birdcl
@@ -467,6 +479,7 @@ AC_MSG_RESULT([        Object directory:	$objdir])
 AC_MSG_RESULT([        Iproute2 directory:	$iproutedir])
 AC_MSG_RESULT([        System configuration:	$sysdesc])
 AC_MSG_RESULT([        Debugging:		$enable_debug])
+AC_MSG_RESULT([        Compact tries:		$enable_compact_tries])
 AC_MSG_RESULT([        POSIX threads:		$enable_pthreads])
 AC_MSG_RESULT([        Routing protocols:	$protocols])
 AC_MSG_RESULT([        LibSSH support in RPKI:	$enable_libssh])

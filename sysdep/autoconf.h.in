@@ -42,6 +42,9 @@
 /* Define to 1 if debugging is enabled */
 #undef DEBUGGING
 
+/* Define to 1 if you want 4-way tries instead of 16-way ones. */
+#undef ENABLE_COMPACT_TRIES
+
 /* Define to 1 if you want to run expensive consistency checks. */
 #undef ENABLE_EXPENSIVE_CHECKS
 

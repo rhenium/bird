@@ -1854,8 +1854,8 @@ sk_read_ssh(sock *s)
 
  /* sk_read() and sk_write() are called from BFD's event loop */
 
-int
-sk_read(sock *s, int revents)
+static inline int
+sk_read_noflush(sock *s, int revents)
 {
   switch (s->type)
   {
@@ -1918,7 +1918,15 @@ sk_read(sock *s, int revents)
 }
 
 int
-sk_write(sock *s)
+sk_read(sock *s, int revents)
+{
+  int e = sk_read_noflush(s, revents);
+  tmp_flush();
+  return e;
+}
+
+static inline int
+sk_write_noflush(sock *s)
 {
   switch (s->type)
   {
@@ -1966,6 +1974,14 @@ sk_write(sock *s)
   }
 }
 
+int
+sk_write(sock *s)
+{
+  int e = sk_write_noflush(s);
+  tmp_flush();
+  return e;
+}
+
 int sk_is_ipv4(sock *s)
 { return s->af == AF_INET; }
 
@@ -1984,6 +2000,7 @@ sk_err(sock *s, int revents)
     }
 
   s->err_hook(s, se);
+  tmp_flush();
 }
 
 void
@@ -2110,6 +2127,8 @@ watchdog_sigalrm(int sig UNUSED)
   /* Update last_time and duration, but skip latency check */
   config->latency_limit = 0xffffffff;
   io_update_time();
+
+  debug_safe("Watchdog timer timed out\n");
 
   /* We want core dump */
   abort();

@@ -60,7 +60,6 @@ bt_bird_init(void)
     log_init_debug("");
   log_switch(bt_verbose != 0, NULL, NULL);
 
-  resource_init();
   olock_init();
   timer_init();
   io_init();
@@ -69,8 +68,6 @@ bt_bird_init(void)
   config_init();
 
   protos_build();
-  proto_build(&proto_unix_kernel);
-  proto_build(&proto_unix_iface);
 }
 
 void bt_bird_cleanup(void)

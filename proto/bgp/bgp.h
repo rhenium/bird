@@ -20,7 +20,6 @@
 #include "lib/hash.h"
 #include "lib/socket.h"
 
-struct linpool;
 struct eattr;
 
 
@@ -114,13 +113,18 @@ struct bgp_config {
   int gr_mode;				/* Graceful restart mode (BGP_GR_*) */
   int llgr_mode;			/* Long-lived graceful restart mode (BGP_LLGR_*) */
   int setkey;				/* Set MD5 password to system SA/SP database */
+  u8  local_role;			/* Set peering role with neighbor [RFC 9234] */
+  int require_roles;			/* Require configured roles on both sides */
   /* Times below are in seconds */
   unsigned gr_time;			/* Graceful restart timeout */
   unsigned llgr_time;			/* Long-lived graceful restart stale time */
   unsigned connect_delay_time;		/* Minimum delay between connect attempts */
   unsigned connect_retry_time;		/* Timeout for connect attempts */
-  unsigned hold_time, initial_hold_time;
+  unsigned hold_time;
+  unsigned min_hold_time;		/* Minimum accepted hold time */
+  unsigned initial_hold_time;
   unsigned keepalive_time;
+  unsigned min_keepalive_time;		/* Minimum accepted keepalive time */
   unsigned error_amnesia_time;		/* Errors are forgotten after */
   unsigned error_delay_time_min;	/* Time to wait after an error is detected */
   unsigned error_delay_time_max;
@@ -144,6 +148,7 @@ struct bgp_channel_config {
   ip_addr next_hop_addr;		/* Local address for NEXT_HOP attribute */
   u8 next_hop_self;			/* Always set next hop to local IP address (NH_*) */
   u8 next_hop_keep;			/* Do not modify next hop attribute (NH_*) */
+  u8 next_hop_prefer;			/* Prefer global or link-local next hop (NHP_*) */
   u8 mandatory;				/* Channel is mandatory in capability negotiation */
   u8 gw_mode;				/* How we compute route gateway from next_hop attr, see GW_* */
   u8 secondary;				/* Accept also non-best routes (i.e. RA_ACCEPTED) */
@@ -167,6 +172,13 @@ struct bgp_channel_config {
 #define BGP_PT_INTERNAL		1
 #define BGP_PT_EXTERNAL		2
 
+#define BGP_ROLE_UNDEFINED 	255
+#define BGP_ROLE_PROVIDER 	0
+#define BGP_ROLE_RS_SERVER 	1
+#define BGP_ROLE_RS_CLIENT 	2
+#define BGP_ROLE_CUSTOMER 	3
+#define BGP_ROLE_PEER 		4
+
 #define NH_NO			0
 #define NH_ALL			1
 #define NH_IBGP			2
@@ -178,6 +190,9 @@ struct bgp_channel_config {
 
 #define GW_DIRECT		1
 #define GW_RECURSIVE		2
+
+#define NHP_GLOBAL		1
+#define NHP_LOCAL		2
 
 #define BGP_ADD_PATH_RX		1
 #define BGP_ADD_PATH_TX		2
@@ -203,6 +218,10 @@ struct bgp_channel_config {
 
 #define BGP_BFD_GRACEFUL	2	/* BFD down triggers graceful restart */
 
+/* rte->pflags */
+#define BGP_REF_SUPPRESSED	0x1	/* Used for deterministic MED comparison */
+#define BGP_REF_STALE		0x2	/* Route is LLGR_STATE */
+#define BGP_REF_NOT_STALE	0x4	/* Route is NOT LLGR_STATE */
 
 struct bgp_af_caps {
   u32 afi;
@@ -223,6 +242,7 @@ struct bgp_caps {
   u8 ext_messages;			/* Extended message length,  RFC draft */
   u8 route_refresh;			/* Route refresh capability, RFC 2918 */
   u8 enhanced_refresh;			/* Enhanced route refresh,   RFC 7313 */
+  u8 role;				/* BGP role capability,      RFC 9234 */
 
   u8 gr_aware;				/* Graceful restart capability, RFC 4724 */
   u8 gr_flags;				/* Graceful restart flags */
@@ -454,7 +474,6 @@ struct bgp_parse_state {
   jmp_buf err_jmpbuf;
 
   struct hostentry *hostentry;
-  struct rtable *base_table;
   adata *mpls_labels;
 
   /* Cached state for bgp_rte_update() */
@@ -473,6 +492,9 @@ struct bgp_parse_state {
 #define BGP_RX_BUFFER_EXT_SIZE	65535
 #define BGP_TX_BUFFER_EXT_SIZE	65535
 
+#define BGP_CF_WALK_CHANNELS(P,C) WALK_LIST(C, P->c.channels) if (C->c.channel == &channel_bgp)
+#define BGP_WALK_CHANNELS(P,C) WALK_LIST(C, P->p.channels) if (C->c.channel == &channel_bgp)
+
 static inline int bgp_channel_is_ipv4(struct bgp_channel *c)
 { return BGP_AFI(c->afi) == BGP_AFI_IPV4; }
 
@@ -485,6 +507,12 @@ static inline int bgp_cc_is_ipv4(struct bgp_channel_config *c)
 static inline int bgp_cc_is_ipv6(struct bgp_channel_config *c)
 { return BGP_AFI(c->afi) == BGP_AFI_IPV6; }
 
+static inline int bgp_channel_is_role_applicable(struct bgp_channel *c)
+{ return (c->afi == BGP_AF_IPV4 || c->afi == BGP_AF_IPV6); }
+
+static inline int bgp_cc_is_role_applicable(struct bgp_channel_config *c)
+{ return (c->afi == BGP_AF_IPV4 || c->afi == BGP_AF_IPV6); }
+
 static inline uint bgp_max_packet_length(struct bgp_conn *conn)
 { return conn->ext_messages ? BGP_MAX_EXT_MSG_LENGTH : BGP_MAX_MESSAGE_LENGTH; }
 
@@ -494,9 +522,6 @@ bgp_parse_error(struct bgp_parse_state *s, uint subcode)
   s->err_subcode = subcode;
   longjmp(s->err_jmpbuf, 1);
 }
-
-extern struct linpool *bgp_linpool;
-extern struct linpool *bgp_linpool2;
 
 
 void bgp_start_timer(timer *t, uint value);
@@ -514,9 +539,7 @@ void bgp_refresh_begin(struct bgp_channel *c);
 void bgp_refresh_end(struct bgp_channel *c);
 void bgp_store_error(struct bgp_proto *p, struct bgp_conn *c, u8 class, u32 code);
 void bgp_stop(struct bgp_proto *p, int subcode, byte *data, uint len);
-
-struct rte_source *bgp_find_source(struct bgp_proto *p, u32 path_id);
-struct rte_source *bgp_get_source(struct bgp_proto *p, u32 path_id);
+const char *bgp_format_role_name(u8 role);
 
 static inline int
 rte_resolvable(rte *rt)
@@ -564,9 +587,7 @@ bgp_set_attr_data(ea_list **to, struct linpool *pool, uint code, uint flags, voi
   bgp_set_attr(to, pool, code, flags, (uintptr_t) a);
 }
 
-static inline void
-bgp_unset_attr(ea_list **to, struct linpool *pool, uint code)
-{ eattr *e = bgp_set_attr(to, pool, code, 0, 0); e->type = EAF_TYPE_UNDEF; }
+#define bgp_unset_attr(to, pool, code) ea_unset_attr(to, pool, 0, code)
 
 int bgp_encode_mp_reach_mrt(struct bgp_write_state *s, eattr *a, byte *buf, uint size);
 
@@ -588,8 +609,9 @@ int bgp_rte_better(struct rte *, struct rte *);
 int bgp_rte_mergable(rte *pri, rte *sec);
 int bgp_rte_recalculate(rtable *table, net *net, rte *new, rte *old, rte *old_best);
 struct rte *bgp_rte_modify_stale(struct rte *r, struct linpool *pool);
+u32 bgp_rte_igp_metric(struct rte *);
 void bgp_rt_notify(struct proto *P, struct channel *C, net *n, rte *new, rte *old);
-int bgp_preexport(struct proto *, struct rte **, struct linpool *);
+int bgp_preexport(struct channel *, struct rte *);
 int bgp_get_attr(const struct eattr *e, byte *buf, int buflen);
 void bgp_get_route_info(struct rte *, byte *buf);
 int bgp_total_aigp_metric_(rte *e, u64 *metric, const struct adata **ad);
@@ -660,6 +682,7 @@ void bgp_update_next_hop(struct bgp_export_state *s, eattr *a, ea_list **to);
 #define BA_AS4_AGGREGATOR       0x12	/* RFC 6793 */
 #define BA_AIGP			0x1a	/* RFC 7311 */
 #define BA_LARGE_COMMUNITY	0x20	/* RFC 8092 */
+#define BA_ONLY_TO_CUSTOMER	0x23	/* RFC 9234 */
 
 /* Bird's private internal BGP attributes */
 #define BA_MPLS_LABEL_STACK	0xfe	/* MPLS label stack transfer attribute */

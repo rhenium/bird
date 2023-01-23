@@ -1,3 +1,976 @@
+commit 5437104afad90f2a74ce52946f06da607d021e2b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jan 23 02:23:19 2023 +0100
+
+    NEWS and version update
+
+commit 99872676df45f1a490d3d63f43081afb41477040
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Jan 22 23:42:08 2023 +0100
+
+    BFD: Improve incoming packet matching
+    
+    For active sessions, ignore received packets with zero local id and
+    mismatched remote id. That forces a session timeout instead of an
+    immediate session restart. It makes BFD sessions more resilient to
+    packet spoofing.
+    
+    Thanks to André Grüneberg for the suggestion.
+
+commit a82683694da23799f247b3392a00efdd342afdfc
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Jan 22 18:12:04 2023 +0100
+
+    VRF: Fix issues with reconfiguration
+    
+    Protocols receive if_notify() announcements that are filtered according
+    to their VRF setting, but during reconfiguration, they access iface_list
+    directly and forgot to check VRF setting here, which leads to all
+    interfaces be addedd.
+    
+    Fix this issue for Babel, OSPF, RAdv and RIP protocols.
+    
+    Thanks to Marcel Menzel for the bugreport.
+
+commit 3186ffe79714a48542d5ad61a94c81216b522fd0
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Sun Jan 22 12:55:31 2023 +0100
+
+    Added test case for switch bug fixed in e20bef69ccc4a85ef62359ee539c9db2dbe09127
+
+commit af611f93aa5040acc606ed289a873bf1136831c2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Jan 20 15:55:47 2023 +0100
+
+    BGP: Add received role value to role mismatch log message
+
+commit 804916daa91834a4740edba96a43c7f0a43744b3
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jan 18 13:40:21 2023 +0100
+
+    Alloc: Minor cleanups
+    
+     - Fix THP disable on old systems
+     - Failed syscalls should use die() instead of bug()
+     - Our printf uses %ld for s64 instead of long
+
+commit 6bb992cb04926895be57dc97e7d569ea15a07db1
+Merge: 973aa37e 7144c9ca
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Jan 18 12:33:06 2023 +0100
+
+    Merge branch 'master' of https://gitlab.nic.cz/labs/bird
+
+commit 973aa37e1e28a9c508fe09c008196f64cd3966fd
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Jan 18 09:39:45 2023 +0100
+
+    Fix memory pre-allocation
+    
+    When BIRD has no free memory mapped, it allocates several pages in
+    advance just to be sure that there is some memory available if needed.
+    This hysteresis tactics works quite well to reduce memory ping-ping with
+    kernel.
+    
+    Yet it had a subtle bug: this pre-allocation didn't take a memory
+    coldlist into account, therefore requesting new pages from kernel even
+    in cases when there were other pages available. This led to slow memory
+    bloating.
+    
+    To demonstrate this behavior fast enough to be seen well, you may:
+      * temporarily set the values in sysdep/unix/alloc.c as follows to
+        exacerbate the issue:
+          #define KEEP_PAGES_MAIN_MAX    4096
+          #define KEEP_PAGES_MAIN_MIN    1000
+          #define CLEANUP_PAGES_BULK     4096
+      * create a config file with several millions of static routes
+      * periodically disable all static protocols and then reload config
+      * log memory consumption
+    
+    This should give you a steady growth rate of about 16kB per cycle. If
+    you don't set the values this high, the issue happens much more slowly,
+    yet after 14 days of running, you are going to see an OOM kill.
+    
+    After this fix, pre-allocation uses the memory coldlist to get some hot
+    pages and the same test as described here gets you a perfectly stable
+    constant memory consumption (after some initial wobbling).
+    
+    Thanks to NIX-CZ for reporting and helping to investigate this issue.
+    Thanks to Santiago for finding the cause in the code.
+
+commit 7144c9ca46f092da33a4e051bbce8f973a3bd8c4
+Author: Radu Carpa <radu.carpa@cern.ch>
+Date:   Tue Jan 17 18:13:37 2023 +0100
+
+    Filter: Allow setting the 'onlink' route attribute in filters
+    
+    Add static route attribute to set onlink flag for route next hop. Can be
+    used to build a dynamically routed IP-in-IP overlay network. Usage:
+    
+         ifname = "tunl0";
+         onlink = true;
+         gw = bgp_next_hop;
+
+commit 928a1cb034e6f9e8edcdd1dc07264cd703e00827
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jan 17 17:13:50 2023 +0100
+
+    Alloc: Disable transparent huge pages
+    
+    The usage pattern implemented in allocator seems to be incompatible with
+    transparent huge pages, as memory released using madvise(MADV_DONTNEED)
+    with regular page size and alignment does not seem to trigger demotion
+    of huge pages back to regular pages, even when significant number of
+    pages is released. Even if demotion is triggered when system memory
+    is low, it still breaks memory accounting.
+
+commit 54234c9eae978463a2518446da399470ff916252
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Jan 13 16:44:42 2023 +0100
+
+    Build: Fix cleanup of nest/proto-build.c
+
+commit f8276812e6bf3aaefe22cdf9135b06e344298273
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Jan 13 13:32:29 2023 +0100
+
+    Minor cleanups
+
+commit 7fb23041a52d01754c53ba963e2282e524813364
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Jan 13 13:17:46 2023 +0100
+
+    BSD: Add support for kernel route metric
+    
+    Add support for kernel route metric/priority, exported as krt_metric
+    attribute, like in Linux. This should also fix issues with overwriting
+    or removing system routes.
+
+commit 64a2b7aaa303be0b407508747bfc96c1c656f1e2
+Author: Mike Crute <mike@crute.us>
+Date:   Thu Jan 12 17:40:53 2023 +0100
+
+    Log message before aborting
+    
+    Log message before aborting due to watchdog timeout. We have to use
+    async-safe write to debug log, as it is done in signal handler.
+    
+    Minor changes from committer.
+
+commit e20bef69ccc4a85ef62359ee539c9db2dbe09127
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jan 7 20:18:44 2023 +0100
+
+    Filter: Change linearization of branches in switch instruction
+    
+    Most branching instructions (FI_CONDITION, FI_AND, FI_OR) linearize its
+    branches in a recursive way, while FI_SWITCH branches are linearized
+    from parser even before the switch instruction is allocated.
+    
+    Change linearization of FI_SWITCH branches to make it similar to other
+    branching instructions. This also fixes an issue with constant
+    switch evaluation, where linearized branch is mistaken for
+    non-linearized during switch construction.
+    
+    Thanks to Jiten Kumar Pathy for the bugreport.
+
+commit d1cd5e5a63b2256eb71661f7438537e4ded7b01a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jan 3 19:09:51 2023 +0100
+
+    BGP: Allow role specific keywords to be used as symbols
+    
+    Some of these new BGP role keywords use generic names that collides with
+    user-defined symbols. Allow them to be redefined. Also remove duplicit
+    keyword definition for 'prefer'.
+
+commit 309c874f9c8b217dbed1569c73b4a3035f5cb170
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jan 3 17:14:48 2023 +0100
+
+    Configure: Expensive check option was broken, never worked
+
+commit b28431e557c4f63923476094a919a0630001275e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jan 3 17:01:54 2023 +0100
+
+    Nest: Fix leaking internal attributes in RIP and Babel
+    
+    During backporting attribute changes from 3.0-branch, some internal
+    attributes (RIP iface and Babel seqno) leaked to 'show route all' output.
+    Allow protocols to hide specific attributes with GA_HIDDEN value.
+    
+    Thanks to Nigel Kukard for the bugreport.
+
+commit d3f50ede127df338f575e188566035b2a46cf6c6
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jan 2 15:55:55 2023 +0100
+
+    Add compile-time option to enable 4-way tries instead of 16-way ones
+    
+    In some cases 16-way tries are too memory-heavy, while 4-way are
+    almost as efficient as the original 2-way ones.
+
+commit 6d1ae197d189d50e60279796441c6e74272ddc54
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Jan 1 20:10:23 2023 +0100
+
+    Nest: Fix several issues with pflags
+    
+    There were some confusion about validity and usage of pflags, which
+    caused incorrect usage after some flags from (now removed) protocol-
+    specific area were moved to pflags.
+    
+    We state that pflags:
+    
+     - Are secondary data used by protocol-specific hooks
+     - Can be changed on an existing route (in contrast to copy-on-write
+       for primary data)
+     - Are irrelevant for propagation (not propagated when changed)
+     - Are specific to a routing table (not propagated by pipe)
+    
+    The patch did these fixes:
+    
+     - Do not compare pflags in rte_same(), as they may keep cached values
+       like BGP_REF_STALE, causing spurious propagation.
+    
+     - Initialize pflags to zero in rte_get_temp(), avoid initialization in
+       protocol code, fixing at least two forgotten initializations (krt
+       and one case in babel).
+    
+     - Improve documentation about pflags
+
+commit 8b06a4d8af46511f0f8dbb8905afa88590a831b6
+Author: Toke Høiland-Jørgensen <toke@toke.dk>
+Date:   Sat Dec 24 15:47:11 2022 +0100
+
+    Babel: Rework seqno request handling
+    
+    The seqno request retransmission handling was tracking the destination
+    that a forwarded request was being sent to and always retransmitting to
+    that same destination. This is unnecessary because we only need to
+    retransmit requests we originate ourselves, not those we forward on
+    behalf of others; in fact retransmitting on behalf of others can lead to
+    exponential multiplication of requests, which would be bad.
+    
+    So rework the seqno request tracking so that instead of storing the
+    destination of a request, we just track whether it was a request that we
+    forwarded on behalf of another node, or if it was a request we originated
+    ourselves. Forwarded requests are not retransmitted, they are only used
+    for duplicate suppression, and for triggering an update when satisfied.
+    If we end up originating a request that we previously forwarded, we
+    "upgrade" the old request and restart the retransmit counter.
+    
+    One complication with this is that requests sent in response to unfeasible
+    updates (section 3.8.2.2 of the RFC) have to be sent as unicast to a
+    particular peer. However, we don't really need to retransmit those as
+    there's no starvation when sending such a request; so we just change
+    such requests to be one-off unicast requests that are not subject to
+    retransmission or duplicate suppression. This is the same behaviour as
+    babeld has for such requests.
+    
+    Minor changes from committer.
+
+commit 2b7643e1f8ecb0bd4cf9af4183b4fd53b655d19c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Dec 18 20:10:14 2022 +0100
+
+    BSD: Use ip_mreqn on FreeBSD 12.1+ and OpenBSD 6.9+
+
+commit 6825f94570b05f933f09ae1bd7e520954d903e6a
+Author: Alexander Chernikov <melifaro@FreeBSD.org>
+Date:   Fri Dec 16 19:35:02 2022 +0100
+
+    FreeBSD: use interface index instead of IP address when specifying multicast interface
+    
+    Minor changes from committer.
+
+commit 176fc68aed32a5675aa643e3b7c6f65ff9ad13d0
+Author: Alexander Chernikov <melifaro@FreeBSD.org>
+Date:   Fri Dec 16 19:20:05 2022 +0100
+
+    Netlink: move OS-specific headers and defines to sysdep
+    
+    Minor changes from committer.
+
+commit 7b6c9649775b288653b0d61df6004d79f0d83ccf
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Dec 16 19:03:41 2022 +0100
+
+    BSD: Add missing makefile for bsd-netlink target
+    
+    Use symlinks to linux/netlink* to avoid limitations of our buildsystem.
+
+commit 1e47b9f203aaaad0fb658d40a1670f1d0437f1f8
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Dec 11 17:28:14 2022 +0100
+
+    NEWS and version update
+
+commit 34ebc4e1ba41c618e5d46112696011ed596c5ebc
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Dec 11 16:28:28 2022 +0100
+
+    BSD: Workaround for direct routes on FreeBSD 13.0
+    
+    FreeBSD 13.0 added some safechecks for syscalls, rejecting sockaddrs that
+    are too small, later versions loosen up the check.
+
+commit 937ebf2536e6b4d65f996af53a29ac550ac0cc2a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Dec 10 18:03:41 2022 +0100
+
+    BGP: Log unacceptable hold time as decimal number
+    
+    Thanks Johannes Moos for the suggestion.
+
+commit 4c19a8a984c39c7269cf497808735f147243800b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Dec 10 17:32:42 2022 +0100
+
+    CLI: Fix for long-lived sessions during high loads
+    
+    When there is a continuos stream of CLI commands, cli_get_command()
+    always returns 1 (there is a new command). Anyway, the socket receive
+    buffer was reset only when there was no command at all, leading to a
+    strange behavior: after a while, the CLI receive buffer came to its end,
+    then read() was called with zero size buffer, it returned 0 which was
+    interpreted as EOF.
+    
+    The patch fixes that by resetting the buffer position after each command
+    and moving remaining data at the beginning of buffer.
+    
+    Thanks to Maria Matejka for examining the bug and for the original bugfix.
+
+commit 1124f39f731610687eb8fdd6d7079c20063809c1
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Dec 10 03:02:26 2022 +0100
+
+    Client: Unknown command should return nonzero errorcode
+
+commit e48f898fdaf06b61754ae520410729a9984ab65b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Dec 9 22:43:27 2022 +0100
+
+    Doc: Document issue with import tables
+    
+    The import table does not work reliably together with re-evaluation of
+    routes due to recursive next hops or flowspec validation. We will at
+    least document that here, as import tables are completely redesigned and
+    this issue is fixed in BIRD 3.x branch.
+
+commit a80cd4707464cedb526eb72e7704b097af20beb7
+Author: Alexander V. Chernikov <melifaro@ipfw.ru>
+Date:   Fri Dec 9 15:59:06 2022 +0100
+
+    Netlink on FreeBSD support
+    
+    Netlink support was added to FreeBSD recently. It is not as full-featured
+    as its Linux counterpart yet, however the added subset is enough to make
+    a routing daemon work. Specifically, it supports multiple tables,
+    multipath, nexthops and nexthops groups. No MPLS support yet.
+    
+    The attached change adds 'bsd-netlink’ sysconf target, allowing to build
+    both netlink & rtsock versions on FreeBSD.
+
+commit 3859e4efc1597368df647323c5a3cc1771cb64ca
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Dec 9 05:51:30 2022 +0100
+
+    BGP: Improve handling of hold and keepalive timers
+    
+    The effective keepalive time now scales relative to the negotiated
+    hold time, to maintain proportion between the keepalive time and the
+    hold time. This avoids issues when both keepalive and hold times
+    were configured, the hold time was negotiated to a smaller value,
+    but the keepalive time stayed the same.
+    
+    Add new options 'min hold time' and 'min keepalive time', which reject
+    session attempts with too small hold time.
+    
+    Improve validation of config options an their documentation.
+    
+    Thanks to Alexander Zubkov and Sergei Goriunov for suggestions.
+
+commit e80156d9363a594ff23524f56d59f0eee160859d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Dec 6 19:40:02 2022 +0100
+
+    Nest: Avoid spurious announcements triggered by filtered routes
+    
+    When filtered routes (enabled by 'import keep filtered' option) are
+    updated, they trigger announcements by rte_announce(). For regular
+    channels (e.g. type RA_OPTIMAL or RA_ANY) such announcement is just
+    ignored, but in case of RA_ACCEPTED (BGP peer with 'secondary' option)
+    it just reannounces the old (and still valid) best route.
+    
+    The patch ensures that such no-change is ignored even for these channels.
+
+commit a50d2fa65f3350ee55f5106b87a884d1b98e7761
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Nov 30 02:45:07 2022 +0100
+
+    CI: Remove docker rebuild phase
+    
+    It is unnnecessary and takes too much time
+
+commit ff38ee598648ae2fc76cc18dada7602dcfc90668
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Nov 29 18:30:16 2022 +0100
+
+    CI: Try new workers
+
+commit 543c8ba0971e91da3fe507dbfc1e1f9b556642b1
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Nov 29 19:43:38 2022 +0100
+
+    BSD: Fix krt socket code w.r.t. rte/rta changes
+
+commit 140c534fb81d0e165b7d674e869c646455ed19d1
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Nov 29 03:50:33 2022 +0100
+
+    Fix build variables for OpenBSD
+
+commit bbac9ca958c73fd08b4691ea40067d1cc3ac275a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Nov 9 22:02:46 2022 +0100
+
+    Conf: Make 'configure check' command restricted
+    
+    While it does not directly change BIRD state, it can trigger reading
+    arbitrary files and eating significant memory.
+
+commit 371eb49043d225d2bab8149187b813a14b4b86d2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Nov 9 21:09:16 2022 +0100
+
+    Conf: Free stored old config before parsing new one
+    
+    BIRD keeps a previous (old) configuration for the purpose of undo. The
+    existing code frees it after a new configuration is successfully parsed
+    during reconfiguration. That causes memory usage spikes as there are
+    temporarily three configurations (old, current, and new). The patch
+    changes it to free the old one before parsing the new one (as user
+    already requested a new config). The disadvantage is that undo is
+    not available after failed reconfiguration.
+
+commit 84545a26cc3f7ce68408a663c1ad4a50edccdacc
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Nov 8 10:20:55 2022 +0100
+
+    Added more netlab tests for automatic run.
+    
+    This commit uses bird-tools in version
+    f35e8bce829f4bff61ec7eb07ec9c67aa867bc9a
+
+commit 57308fb277788ab082a0047e8764fe8023aff6df
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Nov 3 12:38:57 2022 +0100
+
+    Page allocator: Fixed minor bugs and added commentary
+
+commit 9d03c3f56ced3d3191982f57029f9a3d12fa2e5a
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Nov 1 18:40:56 2022 +0100
+
+    Memory pages are not munmapped, instead we just madvise()
+    
+    Memory unmapping causes slow address space fragmentation, leading in
+    extreme cases to failing to allocate pages at all. Removing this problem
+    by keeping all the pages allocated to us, yet calling madvise() to let
+    kernel dispose of them.
+    
+    This adds a little complexity and overhead as we have to keep the
+    pointers to the free pages, therefore to hold e.g. 1 GB of 4K pages with
+    8B pointers, we have to store 2 MB of data.
+
+commit 37b644413723670928f6b54f2abe0c852eb0b652
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Nov 1 08:56:26 2022 +0100
+
+    Moved config-related allocations to config_pool and showing its size in memory usage
+
+commit 5aebce5e0cc59c4c8459ab92a201df5868f46e7a
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Tue Oct 18 04:25:29 2022 +0200
+
+    Doc: Add documentation for "show route (import|export) table"
+
+commit e471f9e0fb7ade475dd3eb8b230bcb440877ee7e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Oct 18 03:58:19 2022 +0200
+
+    Filter: Fix handling of variables in anonymous filters
+    
+    Define scope for anonymous filters, and also explicitly distinguish block
+    scopes and function/filter scopes instead of using anonymous / named
+    distinction.
+    
+    Anonymous filters forgot to push scope, so variables for them were in
+    fact defined in the top scope and therefore they shared a frame. This got
+    broken after rework of variables, which assumed that there is a named
+    scope for every function/filter.
+
+commit 324252975004154cc70623c94f05083bff100209
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 12 17:57:26 2022 +0200
+
+    Netlink: Parse onlink flag even on direct routes
+    
+    While onlink flag is meaningful only with explicit next hops, it can be
+    defined also on direct routes. Parse it also in this case to avoid
+    periodic updates of the same route.
+    
+    Thanks to Marcin Saklak for the bugreport.
+
+commit 8f79e6b93e32a4eb7e4dda9bd4a9d04400b79d45
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Oct 10 05:06:19 2022 +0200
+
+    BGP: Add option 'next hop prefer global'
+    
+    Add BGP channel option 'next hop prefer global' that modifies BGP
+    recursive next hop resolution to use global next hop IPv6 address instead
+    of link-local next hop IPv6 address for immediate next hop of received
+    routes.
+
+commit 8478de8817c58af02f7aed1d621013891115a2dc
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Oct 3 18:53:21 2022 +0200
+
+    Nest: Add channel config flag to distinguish new or copy
+    
+    It is useful to distinguish whehter channel config returned from
+    channel_config_get() was allocated new, or existing from template.
+    Caller may want to initialize new ones.
+
+commit 92a856554780c262f188acb4cdcee363bf6dd1bb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Sep 27 16:47:52 2022 +0200
+
+    Filter: Add some minor functions for f_tree and EC
+    
+    Add some supportive functions for f_tree and EC. These functions are used
+    by L3VPN code.
+
+commit da0b589e7bbcd8177702caa925063d36e7f316ec
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Sep 27 16:13:27 2022 +0200
+
+    BGP: Some fixes related to VRF and MPLS interactions
+    
+     - When next hop is reset to local IP, we should remove BGP label stack,
+       as it is related to original next hop
+    
+     - BGP next hop or immediate next hop from one VRF should not be passed
+       to another VRF, as they are different IP namespaces
+
+commit 54430df953d6c590e5f446530a21d18277eeda56
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Sep 8 19:41:02 2022 +0200
+
+    BGP: Do not assume that all channels are struct bgp_channel
+    
+    In principle, the channel list is a list of parent struct proto and can
+    contain general structures of type struct channel, That is useful e.g.
+    for adding MPLS channels to BGP.
+
+commit 605ff0a0ebdd32b1a98316737c3e65acb528a156
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Oct 3 17:09:02 2022 +0200
+
+    RPKI: wait for retry_time if we get error immediately after connected
+
+commit 0f2be469f897b6d9f925563bbf522438c83522ea
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Wed Sep 21 17:07:11 2022 +0200
+
+    KRT: Fix setting default preference
+    
+    Changes in commit eb937358 broke setting of channel preference for alien
+    routes learned during scan. The preference was set only for async routes.
+    Move common attribute processing part of functions krt_learn_async() and
+    krt_learn_async() to a separate function to have only one place for such
+    changes.
+
+commit c73343de67afc703dfe812b8e94034b1b1dcfca8
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Sep 16 10:11:51 2022 +0200
+
+    Revert "Reducing filter stack size to allow for lesser thread stack size"
+    
+    This reverts commit 2c13759136951ef0e70a3e3c2b2d3c9a387f7ed9.
+
+commit 71b3456eede17be6646b7deebff84f34ee5755f7
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Oct 22 19:43:55 2021 +0200
+
+    Better profylaction recursive route loops
+    
+    In some specific configurations, it was possible to send BIRD into an
+    infinite loop of recursive next hop resolution. This was caused by route
+    priority inversion.
+    
+    To prevent priority inversions affecting other next hops, we simply
+    refuse to resolve any next hop if the best route for the matching prefix
+    is recursive or any other route with the same preference is recursive.
+    
+    Next hop resolution doesn't change route priority, therefore it is
+    perfectly OK to resolve BGP next hops e.g. by an OSPF route, yet if the
+    same (or covering) prefix is also announced by iBGP, by retraction of
+    the OSPF route we would get a possible priority inversion.
+
+commit d2c1036a42881d413ec97203ede92a69f8cd218f
+Merge: dc28c6ed 16ac6c3c
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Aug 18 22:07:50 2022 +0200
+
+    Merge branch 'mq-fix-eattr-setting' into backport
+
+commit dc28c6ed1c6643ec19d2e8f94f92955f58c357a7
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Aug 18 18:32:33 2022 +0200
+
+    Simplified the protocol hookup code in Makefiles
+
+commit 16ac6c3c74020f043204ecf44aba30ba7257a3e3
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Aug 18 17:44:00 2022 +0200
+
+    Fixed initialization of Linux kernel route attributes
+
+commit bc4ad83dacb07ad6bb454b75d78daa2f9c953088
+Merge: 73abd91a 082905a8
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Aug 3 15:04:42 2022 +0200
+
+    Merge commit '082905a8' into HEAD
+
+commit 73abd91ac661f28d9341c7fbb80d2f7a71db186d
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Jul 22 16:09:37 2022 +0200
+
+    rip_rte_better() uses the IGP_METRIC_UNKNOWN instead of protocol-specific infinity
+
+commit 082905a8338b4ba20a08ada0d562bbc5e15c707b
+Merge: 2e484f8d ddb1bdf2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jul 27 00:47:24 2022 +0200
+
+    Merge branch 'master' into backport
+
+commit ddb1bdf2819ce69248d5a51e71d803f13548b217
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jul 26 18:45:20 2022 +0200
+
+    Netlink: Restrict route replace for IPv6
+    
+    Seems like the previous patch was too optimistic, as route replace is
+    still broken even in Linux 4.19 LTS (but fixed in Linux 5.10 LTS) for:
+    
+      ip route add 2001:db8::/32 via fe80::1 dev eth0
+      ip route replace 2001:db8::/32 dev eth0
+    
+    It ends with two routes instead of just the second.
+    
+    The issue is limited to direct and special type (e.g. unreachable)
+    routes, the patch restricts route replace for cases when the new route
+    is a regular route (with a next hop address).
+
+commit 722daa950046a7ad307fd7aca8e0506f30b3d000
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jul 25 00:11:40 2022 +0200
+
+    Netlink: Simplify handling of IPv6 ECMP routes
+    
+    When IPv6 ECMP support first appeared in Linux kernel, it used different
+    API than IPv4 ECMP. Individual next hops were updated and announced
+    separately, instead of using RTA_MULTIPATH as in IPv4. This has several
+    drawbacks and requires complex code to merge received notifications to
+    one multipath route.
+    
+    When Linux came with IPv6 RTA_MULTIPATH support, the initial versions
+    were somewhat buggy, so we kept using the old API for updates (splitting
+    multipath routes to sequences of route updates), while accepting both
+    old-style routes and RTA_MULTIPATH routes in scans / notifications.
+    
+    As IPv6 RTA_MULTIPATH support is here for a long time, this patch fully
+    switches Netlink to the IPv6 RTA_MULTIPATH API and removes old complex
+    code for handling individual next hop announces.
+    
+    The required Linux version is at least 4.11 for reliable operation.
+    
+    Thanks to Daniel Gröber for the original patch.
+
+commit 2e484f8d2977186f6d97213827a66847738d2c31
+Merge: 4d48ede5 971721c9
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Jul 24 20:08:02 2022 +0200
+
+    Merge branch 'master' into backport
+
+commit 534d0a4b44aa193da785ae180475a448f57805e2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Jul 24 02:15:20 2022 +0200
+
+    KRT: Scan routing tables separetely on linux to avoid congestion
+    
+    Remove compile-time sysdep option CONFIG_ALL_TABLES_AT_ONCE, replace it
+    with runtime ability to run either separate table scans or shared scan.
+    
+    On Linux, use separate table scans by default when the netlink socket
+    option NETLINK_GET_STRICT_CHK is available, but retreat to shared scan
+    when it fails.
+    
+    Running separate table scans has advantages where some routing tables are
+    managed independently, e.g. when multiple routing daemons are running on
+    the same machine, as kernel routing table modification performance is
+    significantly reduced when the table is modified while it is being
+    scanned.
+    
+    Thanks Daniel Gröber for the original patch and Toke Høiland-Jørgensen
+    for suggestions.
+
+commit 432dfe3b9b97062be243609d69e0f49bdb0bcaf6
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Jul 22 15:48:20 2022 +0200
+
+    Fixed a rarely used part of Babel: comparing two routes in table by their metric
+
+commit 4d48ede51dfff9a59572a6b7a21a1bbf159dec60
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Jul 22 15:37:21 2022 +0200
+
+    Revert "Export table: Delay freeing of old stored route."
+    
+    This reverts commit cee0cd148c9b71bf47d007c850193b5fbf9486c1.
+    This change is not needed in version 2 and the surrounding code has
+    disappeared mostly in version 3.
+
+commit 971721c9b50d361e886762f1c7d0392e10f74021
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jul 12 15:03:17 2022 +0200
+
+    BGP: Minor improvements to BGP roles
+    
+    Add support for bgp_otc in filters and warning for configuration
+    inside confederations.
+
+commit c73b5d2d3d94204d2a81d93efd02c4c115859353
+Author: Eugene Bogomazov <eb@qrator.net>
+Date:   Mon Jul 11 17:19:34 2022 +0200
+
+    BGP: Implement BGP roles
+    
+    Implement BGP roles as described in RFC 9234. It is  a mechanism for
+    route leak prevention and automatic route filtering based on common BGP
+    topology relationships. It defines role capability (controlled by 'local
+    role' option) and OTC route attribute, which is used for automatic route
+    filtering and leak detection.
+    
+    Minor changes done by commiter.
+
+commit b5c8fce284a2bb529aee6ff201fe044f09a0e418
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jul 11 13:04:01 2022 +0200
+
+    Added forgotten route source locking in flowspec validation
+
+commit 2e5bfeb73ac25e236a24b6c1a88d0f2221ca303f
+Merge: d429bc5c cb339a30
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jul 11 11:08:10 2022 +0200
+
+    Merge remote-tracking branch 'origin/master' into backport
+
+commit d429bc5c841a8e9d4c81786973edfa56d20a407e
+Merge: 7e9cede1 beb5f78a
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jul 11 10:41:17 2022 +0200
+
+    Merge commit 'beb5f78a' into backport
+
+commit 7e9cede1fd1878fb4c00e793bccd0ca6c18ad452
+Merge: 652be92a b867c798
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Sun Jul 10 14:19:24 2022 +0200
+
+    Merge version 2.0.10 into backport
+
+commit cb339a30677901f2c248de08ff535cf0a9efab3d
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Mon Mar 14 20:36:20 2022 +0100
+
+    Filter: Implement for loops
+    
+    For loops allow to iterate over elements in compound data like BGP paths
+    or community lists. The syntax is:
+    
+      for [ <type> ] <variable> in <expr> do <command-body>
+
+commit 1ac8e11bba15551ad6473a57a585649757fefa6b
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Mar 10 01:02:45 2022 +0100
+
+    Filter: Implement mixed declarations of local variables
+    
+    Allow variable declarations mixed with code, also in nested blocks with
+    proper scoping, and with variable initializers. E.g:
+    
+    function fn(int a)
+    {
+      int b;
+      int c = 10;
+    
+      if a > 20 then
+      {
+        b = 30;
+        int d = c * 2;
+        print a, b, c, d;
+      }
+    
+      string s = "Hello";
+    }
+
+commit a2527ee53d9d8fe7a1c29b56f8450b9ef1f9c7bc
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Mar 9 02:32:29 2022 +0100
+
+    Filter: Improve handling of stack frames in filter bytecode
+    
+    When f_line is done, we have to pop the stack frame. The old code just
+    removed nominal number of args/vars. Change it to use stored ventry value
+    modified by number of returned values. This allows to allocate variables
+    on a stack frame during execution of f_lines instead of just at start.
+    
+    But we need to know the number of returned values for a f_line. It is 1
+    for term, 0 for cmd. Store that to f_line during linearization.
+
+commit f31f4e6eef1762a4b9bf54a274f1ba9e9e161802
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Wed Mar 9 00:31:39 2022 +0100
+
+    Filter: Simplify handling of command sequences
+    
+    Command sequences in curly braces used a separate nonterminal in grammar.
+    Handle them as a regular command.
+
+commit 1e6acf34bbf2d9c31246c6fc450ac3b0232531e2
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Mar 6 22:57:33 2022 +0100
+
+    Filter: Fix bug in variable shadowing
+    
+    When a new variable used the same name as an existing symbol in an outer
+    scope, then offset number was defined based on a scope of the existing
+    symbol ($3) instead of a scope of the new symbol (sym_). That can lead
+    to two variables sharing the same memory slot.
+
+commit 946cedfcfe3bdfd850613c4d891f8abfd6b2cafd
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Mar 6 16:37:30 2022 +0100
+
+    Filter: Implement soft scopes
+    
+    Soft scopes are anonymous scopes that most likely do not contain any
+    symbol, so allocating regular scope is postponed when it is really
+    needed.
+
+commit 26bc4f9904b014c9949489e8ae28366da473e85d
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Mar 6 02:18:01 2022 +0100
+
+    Filter: Implement direct recursion
+    
+    Direct recursion almost worked, just crashed on function signature check.
+    Split function parsing such that function signature is saved before
+    function body is processed. Recursive calls are marked so they can be
+    avoided during f_same() and similar code walking.
+    
+    Also, include tower of hanoi solver as a test case.
+
+commit fb1d8f65136aa6190b527b691f24abe16a461471
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Fri Mar 4 17:51:50 2022 +0100
+
+    Filter: Apply constant promotion for FI_EQ / FI_NEQ
+    
+    Equality comparison is defined on all values, even of different
+    types, but we still want to do constant promotion if possible.
+
+commit b2d6d2948af268812a8f55f260d340194eb3f7ac
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Fri Mar 4 14:07:58 2022 +0100
+
+    Filter: Add literal for empty set
+    
+    Add literal for empty set [], which works both for tree-based sets
+    and prefix sets by using existing constant promotion mechanism.
+    
+    Minor changes by committer.
+
+commit 8f3c6151b4ff11d98a20f6f9919723f0fb719161
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Fri Mar 4 02:01:34 2022 +0100
+
+    Nest: Cleanups in as_path_filter()
+    
+    Use struct f_val as a common argument for as_path_filter(), as suggested
+    by Alexander Zubkov. That allows to use NULL sets as valid arguments.
+
+commit 9b302c133f02f96edc5caa769dfd21dc9ef038b5
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Mar 3 20:34:44 2022 +0100
+
+    Filter: Ensure that all expressions declared return type
+    
+    All instructions with a return value (i.e. expressions, ones with
+    non-zero outval, third argument in INST()) should declare their return
+    type. Check that automatically by M4 macros.
+    
+    Set outval of FI_RETURN to 0. The instruction adds one value to stack,
+    but syntactically it is a statement, not an expression.
+    
+    Add fake return type declaration to FI_CALL, otherwise the automatic
+    check would fail builds.
+
+commit cde8094c1f81a74d8a434c4cbf41b4d9183e2879
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Mar 3 15:11:05 2022 +0100
+
+    Filter: Improve description of type system
+
+commit 93d6096c8714f3c7c9450df89e812021a212b978
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Mar 3 03:38:12 2022 +0100
+
+    Filter: Implement type checks for function calls
+    
+    Keep list of function parameters in f_line and use it to verify
+    types of arguments for function calls. Only static type checks
+    are implemented.
+
+commit 4c0c507b1fabbdab557d66eb9d90a2d3c8009880
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Tue Mar 1 02:04:35 2022 +0100
+
+    Filter: Clean up function call instruction
+    
+    Pass instructions of function call arguments as vararg arguments to
+    FI_CALL instruction constructor and move necessary magic from parser
+    code to interpreter / instruction code.
+
+commit beb5f78ada79ac90f31f2c4923302c74d9ab38bf
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jun 27 19:04:22 2022 +0200
+
+    Preexport callback now takes the channel instead of protocol as argument
+    
+    Passing protocol to preexport was in fact a historical relic from the
+    old times when channels weren't a thing. Refactoring that to match
+    current extensibility needs.
+
 commit b867c798c3e42c875311a79fe53a36d4a5bfd126
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu Jun 16 02:58:37 2022 +0200
@@ -63,6 +1036,27 @@ Date:   Sat Jun 4 17:34:57 2022 +0200
     In marge multi-table RS setup, the patch improved time of flushing
     a downed peer from 20-30 min to <2 min and removed 40s latencies.
 
+commit 652be92a21f5575e5f74f6abe98eb4200b86776c
+Merge: f196b12c 9e60b500
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon May 30 15:20:21 2022 +0200
+
+    Merge remote-tracking branch 'origin/master' into haugesund-to-2.0
+
+commit f196b12c62633e382541ba156e6df1534860c568
+Merge: 097f1571 9eec503b
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon May 30 15:20:05 2022 +0200
+
+    Merge commit '9eec503b251c3388579032b300d32640403d8612' into haugesund-to-2.0
+
+commit 097f1571821caa775aec3ada52a1b02b5ffc89bb
+Merge: 5299fb9d 692055e3
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon May 30 15:17:52 2022 +0200
+
+    Merge commit '692055e3df6cc9f0d428d3b0dd8cdd8e825eb6f4' into haugesund-to-2.0
+
 commit 9e60b500c76945ccdea94d3a67e7acfde5e3f969
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri May 27 16:07:24 2022 +0200
@@ -110,6 +1104,12 @@ Date:   Sun May 15 15:05:13 2022 +0200
     
     This leads to order of magnitude faster flushes (on my test data).
 
+commit 5299fb9db0e3fb75c37f233e9a8b737c46e61265
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Wed May 4 15:37:23 2022 +0200
+
+    Fixed spurious undef of route attributes
+
 commit 207ac4853316ceffa6d56ff06f8904320d3bf45f
 Author: Vincent Bernat <vincent@bernat.ch>
 Date:   Fri Apr 22 17:06:27 2022 +0200
@@ -138,6 +1138,16 @@ Date:   Fri Apr 22 16:41:52 2022 +0200
     
     This will cause neighbours to modify their expiry timers for the node's
     state to quickly time it out, thus conserving resources in the network.
+
+commit 98fd158e28d89f10ee7a41b4f6a14fbd0021ef35
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Apr 13 17:05:12 2022 +0200
+
+    RIP: fixed the EA_RIP_FROM attribute
+    
+    The interface pointer was improperly converted to u32 and back. Fixing
+    this by explicitly allocating an adata structure for it. It's not so
+    memory efficient, we'll optimize this later.
 
 commit 9eec503b251c3388579032b300d32640403d8612
 Author: Maria Matejka <mq@ucw.cz>
@@ -168,6 +1178,72 @@ Date:   Thu Apr 7 19:33:40 2022 +0200
     for each BFD interface bound to its address instead of using shared
     listening sockets.
 
+commit d39ef961d1dde230c55fcc931b53f44cb34a1e63
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Apr 5 15:09:56 2022 +0200
+
+    BGP uses lp_save / lp_restore instead of linpool flushing
+    
+    It is too cryptic to flush tmp_linpool in these cases and we don't want
+    anybody in the future to break this code by adding an allocation
+    somewhere which should persist over that flush.
+    
+    Saving and restoring linpool state is safer.
+
+commit 7e86ff2076f3046c6dcca53e7756f112362aeee9
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Apr 4 22:34:14 2022 +0200
+
+    All linpools use pages to allocate regular blocks
+
+commit dabd7bccb3b9e2b7482cf4ae7619a67559f3ac94
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Mar 22 14:39:32 2022 +0100
+
+    BGP: Fixed LLGR depreferencing in bgp_rte_mergable
+
+commit 4a23ede2b056a41456790cc20a0c3d92a7137693
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Mar 18 22:05:50 2022 +0100
+
+    Protocols have their own explicit init routines
+
+commit 0f68515263e91dd49b2d845cdff35af40c064dc2
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Mar 14 11:13:48 2022 +0100
+
+    Unsetting route attributes without messing with type system
+
+commit 63cf5d5d8c8e156a1f427614c8017ca71c32191c
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Mar 14 10:06:44 2022 +0100
+
+    Eattr flags (originated and fresh) get their own struct fields
+
+commit af8568a8700b83f4d1946b7075fa3eac96d1d5b6
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 16 10:22:49 2022 +0100
+
+    Minor fix: f_val literals should always have named struct fields
+
+commit 170b20701c46b36e6272d85fd00cc65f72c70b0d
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Apr 4 20:31:25 2022 +0200
+
+    Converted Slab allocator to typed lists
+
+commit ebd807c0b8eb0b7a3dc3371cd4c87ae886c00885
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Apr 4 20:31:14 2022 +0200
+
+    Slab allocator can free the blocks without knowing the parent structure
+
+commit 3a6eda995ecfcebff3130d86ee3baeab12a41335
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Apr 4 20:28:23 2022 +0200
+
+    Typed lists for easier walking and stronger type checking
+
 commit 4b1aa37f931888febfd768309d5e2ef36f5e7194
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Wed Mar 16 23:16:26 2022 +0100
@@ -187,6 +1263,18 @@ Date:   Wed Mar 16 19:50:16 2022 +0100
     allow that too.
     
     Thanks to Vincent Bernat and others for suggestion and patches.
+
+commit c53f547a0bf437fb95923b2a0b9ac497e474aef1
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Mar 15 11:21:46 2022 +0100
+
+    Printf variant with a result allocated inside a pool / linpool
+
+commit 3c42f7af6a23de3f135235521318301e5b34f2de
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Mar 14 17:29:39 2022 +0100
+
+    Slab memory allocator unit test
 
 commit c3828879a395c84bd7aac089903c88bb3a9c149d
 Author: Vincent Bernat <vincent@bernat.ch>
@@ -208,11 +1296,150 @@ Date:   Fri Mar 11 03:40:03 2022 +0100
     
     Thanks to Vincent Bernat and others for suggestion.
 
+commit 4e60b3ee7270a432357e203824a7d519a3134f01
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 13:27:49 2022 +0100
+
+    Fixed a static assert in page allocator
+
+commit 9b6db9f9b8e561d215e1df01169b15a9dfaba1b9
+Merge: 19e727a2 5ddf98f6
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 11:51:00 2022 +0100
+
+    Merge remote-tracking branch 'origin/master' into haugesund
+
+commit 19e727a248d15e9f8871986ac286cf74b3d86e61
+Merge: 8a4bc4fd 60880b53
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 11:28:34 2022 +0100
+
+    Merge commit '60880b539b8886f76961125d89a265c6e1112b7a' into haugesund
+
+commit 8a4bc4fdbf2f4c6ccaa684c922779ddc11489e68
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Feb 11 22:29:13 2022 +0100
+
+    BGP Flowspec validation: Removed in-route optimization for multithreading compatibility
+
+commit 24773af9e099530aa6ccf4c730ad31c452284228
+Merge: 83d9920f e42eedb9
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 11:01:44 2022 +0100
+
+    Merge commit 'e42eedb9' into haugesund
+
+commit 83d9920f90738e4df75b3cf57335b43c094051cd
+Merge: ff47cd80 5cff1d5f
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 10:56:06 2022 +0100
+
+    Merge commit '5cff1d5f' into haugesund
+    
+    Conflicts:
+          proto/bgp/attrs.c
+          proto/pipe/pipe.c
+
+commit ff47cd80dd04bc11692248a40cbf52ee8d351064
+Merge: 9e60a1fb d5a32563
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 10:50:38 2022 +0100
+
+    Merge commit 'd5a32563' into haugesund
+
+commit 9e60a1fbc3ef9ab93b414dcf451bbe741e2e8827
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 10:30:03 2022 +0100
+
+    Fixed resource initialization in unit tests
+
+commit b90c9b164fedd44115c01fb2b07f71fb40ab3b77
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 10:30:33 2022 +0100
+
+    Linpools with pages fixed to the final page allocator version
+
+commit eeec9ddbf2a3536417c6dd434da9a7dd2bbdaa42
+Merge: c78247f9 0c59f7ff
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 09:13:55 2022 +0100
+
+    Merge commit '0c59f7ff' into haugesund
+
+commit 0c59f7ff0112abd1261afb8f21b7c00fc5e37885
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 09:13:31 2022 +0100
+
+    Revert "Bound allocated pages to resource pools with page caches to avoid unnecessary syscalls"
+    
+    This reverts commit 7f0e59820899c30a243c18556ce2e3fb72d6d221.
+
+commit c20506dc07e1b99cf1d9f2cf9d00e9211cd9e2f4
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 09:13:21 2022 +0100
+
+    Revert "fixup! Bound allocated pages to resource pools with page caches to avoid unnecessary syscalls"
+    
+    This reverts commit bea582cbb53e30dd32a5b6829c7443e0e5558d11.
+
+commit 1c7df2c24029d6721745b99fd4137935db03e257
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 09:13:20 2022 +0100
+
+    Revert "Multipage allocation"
+    
+    This reverts commit 6cd37713781a3092f8166b2178fae35cbfec1e28.
+
+commit 1740ff57e8ea05d7d9f15d1a6830ce42add3e4bd
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 09:13:18 2022 +0100
+
+    Revert "fixup! Multipage allocation"
+    
+    This reverts commit a54f75f454b7ed8c8ff2c1787a506528f22cbae7.
+
+commit c78247f9b97802d6fe76d9b7cddf2c1940134d33
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 9 09:10:44 2022 +0100
+
+    Single-threaded version of sark-branch memory page management
+
+commit 06ece3265e222f218224bb394c250cb414e44ab4
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 2 11:22:32 2022 +0100
+
+    Replacing BGP temporary linpools by the common temporary linpool
+
+commit d814a8cb9381e8cb22c3f37d3c970ca7972656a6
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 2 10:59:52 2022 +0100
+
+    Replaced custom linpools in tests for the common tmp_linpool
+
+commit 48bf1322aa141ca6259b26b37551402758cff0cc
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 2 10:35:21 2022 +0100
+
+    Introducing an universal temporary linpool flushed after every task
+
+commit 2e8b8bfcc46ec1493f9e0efe9c796b88df85ada4
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 2 11:22:01 2022 +0100
+
+    Static list initializer
+
 commit 5ddf98f6bdfec213d64957a580e0425c3ed4d660
 Author: Ondrej Filip <feela@network.cz>
 Date:   Wed Mar 2 10:52:09 2022 +0100
 
     Small improvement in directory test
+
+commit d071aca7aaf7a4add9e0d1d93029fb9a0fad560a
+Merge: fcb4dd0c 2c137591
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Mar 2 10:01:44 2022 +0100
+
+    Merge commit '2c13759136951ef0e70a3e3c2b2d3c9a387f7ed9' into haugesund
 
 commit fcb4dd0c831339c4374ace17d8f2ae6ebfeed279
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
@@ -801,6 +2028,12 @@ Date:   Sat Nov 13 21:11:18 2021 +0100
     
     Introduce ipX_prefix_equal() and use it to simplify network matching code.
 
+commit 60880b539b8886f76961125d89a265c6e1112b7a
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Nov 9 17:42:36 2021 +0100
+
+    Extended route trace: logging Path Identifiers
+
 commit 9f24fef5e91fb4df301242ede91ee7ac1b46b8a8
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Wed Oct 20 01:51:28 2021 +0200
@@ -815,6 +2048,166 @@ Date:   Wed Oct 20 01:51:28 2021 +0200
     
     Clean up symbol table, table list and links to default tables, so removed
     routing tables cannot be accessed during shutdown.
+
+commit 0b295d695acab007dd7baab3e9e97c682f716ee8
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Sep 14 11:20:16 2021 +0200
+
+    Dropping the unused rte_same hook
+
+commit 89ff49f8f0bcd2015f157134728d28ec428e1262
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Feb 17 12:42:14 2020 +0100
+
+    Dropping rte-local dumper entries
+
+commit e42eedb912428aa9af450b0426e53b0a7004dfb1
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Feb 13 16:59:53 2020 +0100
+
+    Kernel: Convert the rte-local attributes to extended attributes and flags to pflags
+
+commit 5cff1d5f022755df61af6fc21cc4f2e5d384404e
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Apr 10 17:08:29 2020 +0200
+
+    Route: moved rte_src pointer from rta to rte
+    
+    It is an auxiliary key in the routing table, not a route attribute.
+
+commit d5a32563df1653952937117133f09143929ff0c2
+Author: Maria Matejka <mq@jmq.cz>
+Date:   Sun Apr 12 21:54:20 2020 +0200
+
+    Preexport: No route modification, no linpool needed
+
+commit 541881bedf391d9a19f071b856dcbd55e850dece
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Sep 16 11:00:19 2021 +0200
+
+    RIP fixup + dropping the tmp_attrs mechanism as obsolete
+
+commit 3660f19dd534224da4870a507efcef5b36794506
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Feb 17 11:18:32 2020 +0100
+
+    Dropping the RTS_DUMMY temporary route storage.
+    
+    Kernel route sync is done by other ways now and this code is not used
+    currently.
+
+commit eb937358c087eaeb6f209660cc7ecfe6d6eff739
+Author: Maria Matejka <mq@jmq.cz>
+Date:   Mon Feb 10 08:41:05 2020 +0100
+
+    Preference moved to RTA and set explicitly in protocols
+
+commit cee0cd148c9b71bf47d007c850193b5fbf9486c1
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Sat Mar 20 21:16:12 2021 +0100
+
+    Export table: Delay freeing of old stored route.
+    
+    This is needed to provide the protocols the full old route after filters
+    when export table is enabled.
+
+commit ddd89ba12d03d648e9bb820c6a4f48b1f96f15d2
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Feb 10 15:01:36 2020 +0100
+
+    BGP: Moved the suppressed and stale flags to pflags
+
+commit c507fb41bb2e62f336357121598debab95a7c767
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Feb 13 13:22:15 2020 +0100
+
+    Babel: Convert the rte-local attributes to extended attributes
+
+commit 8216ec3027d01b790e59a266227d378ba77a623e
+Author: Maria Matejka <mq@jmq.cz>
+Date:   Wed Sep 8 15:30:09 2021 +0000
+
+    There may be a symbol with NULL protocol when reconfiguring
+
+commit 5f0cb61d82315035a3a7f10eef510884da9f94c6
+Author: Maria Matejka <mq@jmq.cz>
+Date:   Tue Feb 11 21:24:15 2020 +0100
+
+    OSPF: Convert the rte-local attributes to extended attributes
+
+commit 8ac20511e17af14d62cd84fcc4e460474820a584
+Author: Maria Matejka <mq@jmq.cz>
+Date:   Wed Sep 8 08:33:25 2021 +0000
+
+    Show route may be accidentally called on shutdown also when not all default tables are present
+
+commit a0e4c66404681c5613ef7f6e80f8b8c3022446d4
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Sep 14 20:12:33 2021 +0200
+
+    RIP: convert the rte-local attributes to extended attributes
+
+commit 6e13df70fdaeb0f08ae5171f62240402501783ea
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Sep 14 19:53:03 2021 +0200
+
+    Extended route attributes may include also pointers
+
+commit d471d5fc7ce587ed836ca7fa10a79331bc181d45
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Sat Mar 20 23:18:34 2021 +0100
+
+    IGP metric getter refactoring to protocol callback
+    
+    Direct protocol hooks for IGP metric inside nest/rt-table.c make the
+    protocol API unnecessarily complex. Instead, we use a proper callback.
+
+commit a54f75f454b7ed8c8ff2c1787a506528f22cbae7
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Oct 13 19:08:35 2021 +0200
+
+    fixup! Multipage allocation
+
+commit 6cd37713781a3092f8166b2178fae35cbfec1e28
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Sep 8 11:29:49 2021 +0200
+
+    Multipage allocation
+    
+    We can also quite simply allocate bigger blocks. Anyway, we need these
+    blocks to be aligned to their size which needs one mmap() two times
+    bigger and then two munmap()s returning the unaligned parts.
+    
+    The user can specify -B <N> on startup when <N> is the exponent of 2,
+    setting the block size to 2^N. On most systems, N is 12, anyway if you
+    know that your configuration is going to eat gigabytes of RAM, you are
+    almost forced to raise your block size as you may easily get into memory
+    fragmentation issues or you have to raise your maximum mapping count,
+    e.g. "sysctl vm.max_map_count=(number)".
+
+commit 3a31c3aad6c53ea9673743f983e13728d8551149
+Author: Maria Matejka <mq@jmq.cz>
+Date:   Tue Sep 7 16:22:32 2021 +0000
+
+    CLI socket accept() may also fail and should produce some message, not a coredump.
+
+commit d322ee3d548a87d6e996dd20b2b415aad4b53f62
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Sun Sep 5 13:00:08 2021 +0200
+
+    OSPF: explicitly stop the periodic tick on shutdown to avoid recalculation races
+
+commit e5a8eec6d720408139d0a209ef149848c5dcfbe3
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Sep 3 19:48:38 2021 +0200
+
+    Linpools may use pages instead of xmalloc
+
+commit bea582cbb53e30dd32a5b6829c7443e0e5558d11
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Oct 13 18:59:45 2021 +0200
+
+    fixup! Bound allocated pages to resource pools with page caches to avoid unnecessary syscalls
 
 commit 067f69a56de0e0e61d423ec5aa68095aa28e3124
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
@@ -861,6 +2254,50 @@ Date:   Sun Apr 5 03:24:46 2020 +0200
     
     Together with a previous filter change, it makes IPv4 prefix sets
     about ~4.3x faster and slightly smaller (on my test data).
+
+commit 7f0e59820899c30a243c18556ce2e3fb72d6d221
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Sep 1 00:46:46 2021 +0200
+
+    Bound allocated pages to resource pools with page caches to avoid unnecessary syscalls
+
+commit 2c13759136951ef0e70a3e3c2b2d3c9a387f7ed9
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Aug 25 22:20:48 2021 +0200
+
+    Reducing filter stack size to allow for lesser thread stack size
+
+commit ceef6de459b25d8fcc5dd416e0cecf179bd243e7
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu May 27 10:35:38 2021 +0200
+
+    OSPF: Setting a list node NULL before use
+
+commit 923a6644b206f70435c3d01b93b6880701938b49
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu May 27 10:35:33 2021 +0200
+
+    Fixed memory poisoning in slab
+
+commit 227e2d5541e86210b383c8e8054805692ad3cf14
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed May 26 16:42:02 2021 +0200
+
+    Debug output uses local buffer to avoid clashes between threads.
+
+commit eb2025165546d12114ca5ca4f2b338765f338af6
+Author: Maria Matejka <mq@jmq.cz>
+Date:   Mon Apr 27 22:33:10 2020 +0200
+
+    Filter: Additional consistency checks
+
+commit 47d92d8f9d9891a9b40f3fbef1d762537af4ae25
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Jun 17 16:56:51 2021 +0200
+
+    Nest: Clean up main channel handling
+    
+    Remove assumption that main channel is the only channel.
 
 commit f761be6b30633054a54369eee7d08b951a366e5e
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>

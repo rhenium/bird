@@ -56,10 +56,11 @@ static void
 static_announce_rte(struct static_proto *p, struct static_route *r)
 {
   rta *a = allocz(RTA_MAX_SIZE);
-  a->src = static_get_source(p, r->index);
+  struct rte_src *src = static_get_source(p, r->index);
   a->source = RTS_STATIC;
   a->scope = SCOPE_UNIVERSE;
   a->dest = r->dest;
+  a->pref = p->p.main_channel->preference;
 
   if (r->dest == RTD_UNICAST)
   {
@@ -102,8 +103,7 @@ static_announce_rte(struct static_proto *p, struct static_route *r)
     return;
 
   /* We skip rta_lookup() here */
-  rte *e = rte_get_temp(a);
-  e->pflags = 0;
+  rte *e = rte_get_temp(a, src);
 
   if (r->cmds)
   {
@@ -119,7 +119,7 @@ static_announce_rte(struct static_proto *p, struct static_route *r)
     e->net = NULL;
   }
 
-  rte_update2(p->p.main_channel, r->net, e, a->src);
+  rte_update2(p->p.main_channel, r->net, e, src);
   r->state = SRS_CLEAN;
 
   if (r->cmds)
@@ -131,7 +131,7 @@ withdraw:
   if (r->state == SRS_DOWN)
     return;
 
-  rte_update2(p->p.main_channel, r->net, NULL, a->src);
+  rte_update2(p->p.main_channel, r->net, NULL, src);
   r->state = SRS_DOWN;
 }
 
@@ -485,7 +485,7 @@ static_start(struct proto *P)
   struct static_route *r;
 
   if (!static_lp)
-    static_lp = lp_new(&root_pool, LP_GOOD_SIZE(1024));
+    static_lp = lp_new(&root_pool);
 
   if (p->igp_table_ip4)
     rt_lock_table(p->igp_table_ip4);
@@ -721,9 +721,9 @@ static_get_route_info(rte *rte, byte *buf)
 {
   eattr *a = ea_find(rte->attrs->eattrs, EA_GEN_IGP_METRIC);
   if (a)
-    buf += bsprintf(buf, " (%d/%u)", rte->pref, a->u.data);
+    buf += bsprintf(buf, " (%d/%u)", rte->attrs->pref, a->u.data);
   else
-    buf += bsprintf(buf, " (%d)", rte->pref);
+    buf += bsprintf(buf, " (%d)", rte->attrs->pref);
 }
 
 static void
@@ -792,3 +792,9 @@ struct protocol proto_static = {
   .copy_config =	static_copy_config,
   .get_route_info =	static_get_route_info,
 };
+
+void
+static_build(void)
+{
+  proto_build(&proto_static);
+}

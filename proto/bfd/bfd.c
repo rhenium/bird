@@ -113,8 +113,8 @@
 #define HASH_IP_EQ(a1,n1,a2,n2)	ipa_equal(a1, a2) && n1 == n2
 #define HASH_IP_FN(a,n)		ipa_hash(a) ^ u32_hash(n)
 
-static list bfd_proto_list;
-static list bfd_wait_list;
+static list STATIC_LIST_INIT(bfd_proto_list);
+static list STATIC_LIST_INIT(bfd_wait_list);
 
 const char *bfd_state_names[] = { "AdminDown", "Down", "Init", "Up" };
 
@@ -508,7 +508,7 @@ bfd_remove_session(struct bfd_proto *p, struct bfd_session *s)
   HASH_REMOVE(p->session_hash_id, HASH_ID, s);
   HASH_REMOVE(p->session_hash_ip, HASH_IP, s);
 
-  sl_free(p->session_slab, s);
+  sl_free(s);
 
   TRACE(D_EVENTS, "Session to %I removed", ip);
 
@@ -1007,13 +1007,6 @@ bfd_notify_init(struct bfd_proto *p)
  *	BFD protocol glue
  */
 
-void
-bfd_init_all(void)
-{
-  init_list(&bfd_proto_list);
-  init_list(&bfd_wait_list);
-}
-
 static struct proto *
 bfd_init(struct proto_config *c)
 {
@@ -1199,3 +1192,9 @@ struct protocol proto_bfd = {
   .reconfigure =	bfd_reconfigure,
   .copy_config =	bfd_copy_config,
 };
+
+void
+bfd_build(void)
+{
+  proto_build(&proto_bfd);
+}
