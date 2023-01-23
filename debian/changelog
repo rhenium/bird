@@ -1,3 +1,11 @@
+bird2 (2.0.12-2) unstable; urgency=medium
+
+  * Don't Depend on obsolete lsb-base
+  * Update Depends: libncurses5-dev -> libncurses-dev
+  * Update version in debian/watch
+
+ -- Jakub Ružička <jakub.ruzicka@nic.cz>  Mon, 23 Jan 2023 19:12:43 +0100
+
 bird2 (2.0.12-1) unstable; urgency=medium
 
   [ Debian Janitor ]
