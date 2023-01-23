@@ -47,6 +47,11 @@ const int rt_default_ecmp = 0;
  * table_id is specified explicitly as sysctl scan argument, while in FreeBSD it
  * is handled implicitly by changing default table using setfib() syscall.
  *
+ * OpenBSD allows to use route metric. The behavior is controlled by these macro
+ * KRT_USE_METRIC, which enables use of rtm_priority in route send/recevive.
+ * There is also KRT_DEFAULT_METRIC and KRT_MAX_METRIC for default and maximum
+ * metric values.
+ *
  * KRT_SHARED_SOCKET	- use shared kernel socked instead of one for each krt_proto
  * KRT_USE_SETFIB_SCAN	- use setfib() for sysctl() route scan
  * KRT_USE_SETFIB_SOCK	- use SO_SETFIB socket option for kernel sockets
@@ -63,12 +68,23 @@ const int rt_default_ecmp = 0;
 
 #ifdef __OpenBSD__
 #define KRT_MAX_TABLES (RT_TABLEID_MAX+1)
+#define KRT_USE_METRIC
+#define KRT_MAX_METRIC 255
+#define KRT_DEFAULT_METRIC 56
 #define KRT_SHARED_SOCKET
 #define KRT_USE_SYSCTL_7
 #endif
 
 #ifndef KRT_MAX_TABLES
 #define KRT_MAX_TABLES 1
+#endif
+
+#ifndef KRT_MAX_METRIC
+#define KRT_MAX_METRIC 0
+#endif
+
+#ifndef KRT_DEFAULT_METRIC
+#define KRT_DEFAULT_METRIC 0
 #endif
 
 
@@ -143,6 +159,10 @@ static struct krt_proto *krt_table_map[KRT_MAX_TABLES][2];
 #endif
 
 
+/* Make it available to parser code */
+const uint krt_max_metric = KRT_MAX_METRIC;
+
+
 /* Route socket message processing */
 
 int
@@ -186,10 +206,14 @@ struct ks_msg
     memcpy(p, body, (l > sizeof(*p) ? sizeof(*p) : l));\
     body += l;}
 
-static inline void
+static inline void UNUSED
 sockaddr_fill_dl(struct sockaddr_dl *sa, struct iface *ifa)
 {
   uint len = OFFSETOF(struct sockaddr_dl, sdl_data);
+
+  /* Workaround for FreeBSD 13.0 */
+  len = MAX(len, sizeof(struct sockaddr));
+
   memset(sa, 0, len);
   sa->sdl_len = len;
   sa->sdl_family = AF_LINK;
@@ -225,6 +249,10 @@ krt_send_route(struct krt_proto *p, int cmd, rte *e)
 
 #ifdef KRT_SHARED_SOCKET
   msg.rtm.rtm_tableid = KRT_CF->sys.table_id;
+#endif
+
+#ifdef KRT_USE_METRIC
+  msg.rtm.rtm_priority = KRT_CF->sys.metric;
 #endif
 
 #ifdef RTF_REJECT
@@ -347,7 +375,7 @@ krt_send_route(struct krt_proto *p, int cmd, rte *e)
 }
 
 void
-krt_replace_rte(struct krt_proto *p, net *n, rte *new, rte *old)
+krt_replace_rte(struct krt_proto *p, net *n UNUSED, rte *new, rte *old)
 {
   int err = 0;
 
@@ -519,7 +547,6 @@ krt_read_route(struct ks_msg *msg, struct krt_proto *p, int scan)
   net = net_get(p->p.main_channel->table, &ndst);
 
   rta a = {
-    .src = p->p.main_source,
     .source = RTS_INHERIT,
     .scope = SCOPE_UNIVERSE,
   };
@@ -580,18 +607,32 @@ krt_read_route(struct ks_msg *msg, struct krt_proto *p, int scan)
   }
 
  done:
-  e = rte_get_temp(&a);
+  e = rte_get_temp(&a, p->p.main_source);
   e->net = net;
-  e->u.krt.src = src;
-  e->u.krt.proto = src2;
-  e->u.krt.seen = 0;
-  e->u.krt.best = 0;
-  e->u.krt.metric = 0;
+
+  ea_list *ea = alloca(sizeof(ea_list) + 2 * sizeof(eattr));
+  *ea = (ea_list) { .count = 1, .next = e->attrs->eattrs };
+  e->attrs->eattrs = ea;
+
+  ea->attrs[0] = (eattr) {
+    .id = EA_KRT_SOURCE,
+    .type = EAF_TYPE_INT,
+    .u.data = src2,
+  };
+
+#ifdef KRT_USE_METRIC
+  ea->count++;
+  ea->attrs[1] = (eattr) {
+    .id = EA_KRT_METRIC,
+    .type = EAF_TYPE_INT,
+    .u.data = msg->rtm.rtm_priority,
+  };
+#endif
 
   if (scan)
-    krt_got_route(p, e);
+    krt_got_route(p, e, src);
   else
-    krt_got_route_async(p, e, new);
+    krt_got_route_async(p, e, new, src);
 }
 
 static void
@@ -1147,7 +1188,7 @@ krt_sys_shutdown(struct krt_proto *p)
 int
 krt_sys_reconfigure(struct krt_proto *p UNUSED, struct krt_config *n, struct krt_config *o)
 {
-  return n->sys.table_id == o->sys.table_id;
+  return (n->sys.table_id == o->sys.table_id) && (n->sys.metric == o->sys.metric);
 }
 
 void
@@ -1160,11 +1201,13 @@ krt_sys_preconfig(struct config *c UNUSED)
 void krt_sys_init_config(struct krt_config *c)
 {
   c->sys.table_id = 0; /* Default table */
+  c->sys.metric = KRT_DEFAULT_METRIC;
 }
 
 void krt_sys_copy_config(struct krt_config *d, struct krt_config *s)
 {
   d->sys.table_id = s->sys.table_id;
+  d->sys.metric = s->sys.metric;
 }
 
 
@@ -1198,7 +1241,7 @@ kif_update_sysdep_addr(struct iface *i)
     return 0;
 
   ip4_addr old = i->sysdep;
-  i->sysdep = ipa_to_ip4(ipa_from_sa4(&ifr.ifr_addr));
+  i->sysdep = ipa_to_ip4(ipa_from_sa4((sockaddr *) &ifr.ifr_addr));
 
   return !ip4_equal(i->sysdep, old);
 }

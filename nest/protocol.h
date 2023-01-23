@@ -74,7 +74,6 @@ struct protocol {
   struct proto * (*init)(struct proto_config *);		/* Create new instance */
   int (*reconfigure)(struct proto *, struct proto_config *);	/* Try to reconfigure instance, returns success */
   void (*dump)(struct proto *);			/* Debugging dump */
-  void (*dump_attrs)(struct rte *);		/* Dump protocol-dependent attributes */
   int (*start)(struct proto *);			/* Start the instance */
   int (*shutdown)(struct proto *);		/* Stop the instance */
   void (*cleanup)(struct proto *);		/* Called after shutdown when protocol became hungry/down */
@@ -85,8 +84,8 @@ struct protocol {
   void (*copy_config)(struct proto_config *, struct proto_config *);	/* Copy config from given protocol instance */
 };
 
-void protos_build(void);
-void proto_build(struct protocol *);
+void protos_build(void);		/* Called from sysdep to initialize protocols */
+void proto_build(struct protocol *);	/* Called from protocol to register itself */
 void protos_preconfig(struct config *);
 void protos_commit(struct config *new, struct config *old, int force_restart, int type);
 struct proto * proto_spawn(struct proto_config *cf, uint disabled);
@@ -95,6 +94,7 @@ void protos_dump_all(void);
 #define GA_UNKNOWN	0		/* Attribute not recognized */
 #define GA_NAME		1		/* Result = name */
 #define GA_FULL		2		/* Result = both name and value */
+#define GA_HIDDEN	3		/* Attribute should not be printed */
 
 /*
  *	Known protocols
@@ -198,12 +198,11 @@ struct proto {
    *	   ifa_notify	Notify protocol about interface address changes.
    *	   rt_notify	Notify protocol about routing table updates.
    *	   neigh_notify	Notify protocol about neighbor cache events.
-   *	   make_tmp_attrs  Add attributes to rta from from private attrs stored in rte. The route and rta MUST NOT be cached.
-   *	   store_tmp_attrs Store private attrs back to rte and undef added attributes. The route and rta MUST NOT be cached.
-   *	   preexport  Called as the first step of the route exporting process.
-   *			It can construct a new rte, add private attributes and
-   *			decide whether the route shall be exported: 1=yes, -1=no,
-   *			0=process it through the export filter set by the user.
+   *	   preexport	Called as the first step of the route exporting process.
+   *			It can decide whether the route shall be exported:
+   *			  -1 = reject,
+   *			   0 = continue to export filter
+   *			   1 = accept immediately
    *	   reload_routes   Request channel to reload all its routes to the core
    *			(using rte_update()). Returns: 0=reload cannot be done,
    *			1= reload is scheduled and will happen (asynchronously).
@@ -215,9 +214,7 @@ struct proto {
   void (*ifa_notify)(struct proto *, unsigned flags, struct ifa *a);
   void (*rt_notify)(struct proto *, struct channel *, struct network *net, struct rte *new, struct rte *old);
   void (*neigh_notify)(struct neighbor *neigh);
-  void (*make_tmp_attrs)(struct rte *rt, struct linpool *pool);
-  void (*store_tmp_attrs)(struct rte *rt, struct linpool *pool);
-  int (*preexport)(struct proto *, struct rte **rt, struct linpool *pool);
+  int (*preexport)(struct channel *, struct rte *rt);
   void (*reload_routes)(struct channel *);
   void (*feed_begin)(struct channel *, int initial);
   void (*feed_end)(struct channel *);
@@ -235,11 +232,11 @@ struct proto {
 
   int (*rte_recalculate)(struct rtable *, struct network *, struct rte *, struct rte *, struct rte *);
   int (*rte_better)(struct rte *, struct rte *);
-  int (*rte_same)(struct rte *, struct rte *);
   int (*rte_mergable)(struct rte *, struct rte *);
   struct rte * (*rte_modify)(struct rte *, struct linpool *);
   void (*rte_insert)(struct network *, struct rte *);
   void (*rte_remove)(struct network *, struct rte *);
+  u32 (*rte_igp_metric)(struct rte *);
 
   /* Hic sunt protocol-specific data */
 };
@@ -469,7 +466,6 @@ struct channel_class {
 
 
   void (*dump)(struct proto *);			/* Debugging dump */
-  void (*dump_attrs)(struct rte *);		/* Dump protocol-dependent attributes */
 
   void (*get_status)(struct proto *, byte *buf); /* Get instance status (for `show protocols' command) */
   void (*get_route_info)(struct rte *, byte *buf); /* Get route information (for `show route' command) */
@@ -498,6 +494,7 @@ struct channel_config {
   u8 ra_mode;				/* Mode of received route advertisements (RA_*) */
   u16 preference;			/* Default route preference */
   u32 debug;				/* Debugging flags (D_*) */
+  u8 copy;				/* Value from channel_config_get() is new (0) or from template (1) */
   u8 merge_limit;			/* Maximal number of nexthops for RA_MERGED */
   u8 in_keep_filtered;			/* Routes rejected in import filter are kept */
   u8 rpki_reload;			/* RPKI changes trigger channel reload */

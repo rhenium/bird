@@ -391,12 +391,12 @@ radv_net_match_trigger(struct radv_config *cf, net *n)
 }
 
 int
-radv_preexport(struct proto *P, rte **new, struct linpool *pool UNUSED)
+radv_preexport(struct channel *C, rte *new)
 {
   // struct radv_proto *p = (struct radv_proto *) P;
-  struct radv_config *cf = (struct radv_config *) (P->cf);
+  struct radv_config *cf = (struct radv_config *) (C->proto->cf);
 
-  if (radv_net_match_trigger(cf, (*new)->net))
+  if (radv_net_match_trigger(cf, new->net))
     return RIC_PROCESS;
 
   if (cf->propagate_routes)
@@ -555,7 +555,7 @@ radv_check_active(struct radv_proto *p)
     return 1;
 
   struct channel *c = p->p.main_channel;
-  return rt_examine(c->table, &cf->trigger, &p->p, c->out_filter);
+  return rt_examine(c->table, &cf->trigger, c, c->out_filter);
 }
 
 static void
@@ -663,6 +663,9 @@ radv_reconfigure(struct proto *P, struct proto_config *CF)
   struct iface *iface;
   WALK_LIST(iface, iface_list)
   {
+    if (p->p.vrf_set && p->p.vrf != iface->master)
+      continue;
+
     if (!(iface->flags & IF_UP))
       continue;
 
@@ -771,3 +774,9 @@ struct protocol proto_radv = {
   .get_status =		radv_get_status,
   .get_attr =		radv_get_attr
 };
+
+void
+radv_build(void)
+{
+  proto_build(&proto_radv);
+}

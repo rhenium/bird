@@ -9,7 +9,6 @@
 #define CONFIG_AUTO_ROUTES
 #define CONFIG_SELF_CONSCIOUS
 #define CONFIG_MULTIPLE_TABLES
-#define CONFIG_ALL_TABLES_AT_ONCE
 #define CONFIG_IP6_SADR_KERNEL
 
 #define CONFIG_MC_PROPER_SRC
@@ -17,10 +16,15 @@
 
 #define CONFIG_INCLUDE_SYSIO_H "sysdep/linux/sysio.h"
 #define CONFIG_INCLUDE_KRTSYS_H "sysdep/linux/krt-sys.h"
+#define CONFIG_INCLUDE_NLSYS_H "sysdep/linux/netlink-sys.h"
+
+#define CONFIG_LINUX_NETLINK
 
 #define CONFIG_RESTRICTED_PRIVILEGES
 #define CONFIG_INCLUDE_SYSPRIV_H "sysdep/linux/syspriv.h"
 
+#define CONFIG_MADV_DONTNEED_TO_FREE
+#define CONFIG_DISABLE_THP
 
 #ifndef AF_MPLS
 #define AF_MPLS 28

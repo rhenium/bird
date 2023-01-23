@@ -5,9 +5,10 @@ variables:
   DOCKER_CMD: docker --config="$HOME/.docker/$CI_JOB_ID/"
   IMG_BASE: registry.nic.cz/labs/bird
   TOOLS_DIR: /var/lib/gitlab-runner/bird-tools
+  STAYRTR_BINARY: /var/lib/gitlab-runner/stayrtr-0.1-108-g8d18a41-linux-x86_64
 
 stages:
-  - image
+#  - image
   - build
   - pkg
   - test
@@ -32,184 +33,11 @@ stages:
   # That's Docker in Docker
   - dind
 
-docker_debian-8-amd64:
-  variables:
-    IMG_NAME: "debian-8-amd64"
-  <<: *docker_build
-
-docker_debian-8-i386:
-  variables:
-    IMG_NAME: "debian-8-i386"
-  <<: *docker_build
-
-docker_debian-9-amd64:
-  variables:
-    IMG_NAME: "debian-9-amd64"
-  <<: *docker_build
-
-docker_debian-9-i386:
-  variables:
-    IMG_NAME: "debian-9-i386"
-  <<: *docker_build
-
-docker_debian-10-amd64:
-  variables:
-    IMG_NAME: "debian-10-amd64"
-  <<: *docker_build
-
-docker_debian-10-i386:
-  variables:
-    IMG_NAME: "debian-10-i386"
-  <<: *docker_build
-
-docker_debian-11-amd64:
-  variables:
-    IMG_NAME: "debian-11-amd64"
-  <<: *docker_build
-
-# GPG error
-#docker_debian-11-i386:
+# Docker build example
+#docker_debian-11-amd64:
 #  variables:
-#    IMG_NAME: "debian-11-i386"
+#    IMG_NAME: "debian-11-amd64"
 #  <<: *docker_build
-
-docker_debian-testing-amd64:
-  variables:
-    IMG_NAME: "debian-testing-amd64"
-  <<: *docker_build
-
-# GPG error
-#docker_debian-testing-i386:
-#  variables:
-#    IMG_NAME: "debian-testing-i386"
-#  <<: *docker_build
-
-docker_fedora-25-amd64:
-  variables:
-    IMG_NAME: "fedora-25-amd64"
-  <<: *docker_build
-
-docker_fedora-26-amd64:
-  variables:
-    IMG_NAME: "fedora-26-amd64"
-  <<: *docker_build
-
-docker_fedora-27-amd64:
-  variables:
-    IMG_NAME: "fedora-27-amd64"
-  <<: *docker_build
-
-docker_fedora-28-amd64:
-  variables:
-    IMG_NAME: "fedora-28-amd64"
-  <<: *docker_build
-
-docker_fedora-29-amd64:
-  variables:
-    IMG_NAME: "fedora-29-amd64"
-  <<: *docker_build
-
-docker_fedora-30-amd64:
-  variables:
-    IMG_NAME: "fedora-30-amd64"
-  <<: *docker_build
-
-docker_fedora-31-amd64:
-  variables:
-    IMG_NAME: "fedora-31-amd64"
-  <<: *docker_build
-
-docker_fedora-32-amd64:
-  variables:
-    IMG_NAME: "fedora-32-amd64"
-  <<: *docker_build
-
-docker_fedora-33-amd64:
-  variables:
-    IMG_NAME: "fedora-33-amd64"
-  <<: *docker_build
-
-docker_fedora-34-amd64:
-  variables:
-    IMG_NAME: "fedora-34-amd64"
-  <<: *docker_build
-
-docker_centos-7-amd64:
-  variables:
-    IMG_NAME: "centos-7-amd64"
-  <<: *docker_build
-
-docker_centos-8-amd64:
-  variables:
-    IMG_NAME: "centos-8-amd64"
-  <<: *docker_build
-
-docker_ubuntu-14_04-amd64:
-  variables:
-    IMG_NAME: "ubuntu-14.04-amd64"
-  <<: *docker_build
-
-docker_ubuntu-16_04-amd64:
-  variables:
-    IMG_NAME: "ubuntu-16.04-amd64"
-  <<: *docker_build
-
-docker_ubuntu-18_04-amd64:
-  variables:
-    IMG_NAME: "ubuntu-18.04-amd64"
-  <<: *docker_build
-
-docker_ubuntu-20_04-amd64:
-  variables:
-    IMG_NAME: "ubuntu-20.04-amd64"
-  <<: *docker_build
-
-docker_ubuntu-21_10-amd64:
-  variables:
-    IMG_NAME: "ubuntu-21.10-amd64"
-  <<: *docker_build
-
-# GPG error
-#docker_ubuntu-21_04-amd64:
-#  variables:
-#    IMG_NAME: "ubuntu-21.04-amd64"
-#  <<: *docker_build
-
-docker_opensuse-15.0-amd64:
-  variables:
-    IMG_NAME: "opensuse-15.0-amd64"
-  <<: *docker_build
-
-docker_opensuse-15.1-amd64:
-  variables:
-    IMG_NAME: "opensuse-15.1-amd64"
-  <<: *docker_build
-
-docker_opensuse-15.2-amd64:
-  variables:
-    IMG_NAME: "opensuse-15.2-amd64"
-  <<: *docker_build
-
-docker_opensuse-15.3-amd64:
-  variables:
-    IMG_NAME: "opensuse-15.3-amd64"
-  <<: *docker_build
-
-# TODO We want to copy these BSDs to our own virtual machines, to make sure
-# someone doesn't update them by accident.
-.freebsd-11-i386: &freebsd-11-i386_env
-  tags:
-  - freebsd
-  - i386
-  #only:
-  #- master
-  #- triggers
-  #- tags
-
-.freebsd-11-amd64: &freebsd-11-amd64_env
-  tags:
-  - freebsd
-  - amd64
 
 
 .build: &build-base
@@ -416,13 +244,11 @@ build-opensuse-15.3-amd64:
 #  needs: [build-debian-8-i386]
 #  image: registry.nic.cz/labs/bird:debian-8-i386
 
-# Dpkg error: PATH is not set
 pkg-debian-9-amd64:
   <<: *pkg-deb
   needs: [build-debian-9-amd64]
   image: registry.nic.cz/labs/bird:debian-9-amd64
 
-# Dpkg error: PATH is not set
 pkg-debian-9-i386:
   <<: *pkg-deb
   needs: [build-debian-9-i386]
@@ -531,6 +357,7 @@ build-birdlab:
     - sudo git clean -fx
     - git pull --ff-only
     - mv $DIR/bird $DIR/birdc netlab/common
+    - ln -s $STAYRTR_BINARY netlab/common/stayrtr
 
 .test: &test-base
   stage: test
@@ -541,7 +368,7 @@ build-birdlab:
   script:
     - cd $TOOLS_DIR/netlab
     - sudo ./stop
-    - sudo ./runtest -m check $TEST_NAME
+    - sudo ./runtest -s v2 -m check $TEST_NAME
 
 test-ospf-base:
   <<: *test-base
@@ -613,6 +440,16 @@ test-bgp-merged:
   variables:
     TEST_NAME: cf-bgp-merged
 
+test-bgp-flowspec:
+  <<: *test-base
+  variables:
+    TEST_NAME: cf-bgp-flowspec
+
+test-bgp-rs-multitab:
+  <<: *test-base
+  variables:
+    TEST_NAME: cf-bgp-rs-multitab
+
 test-ebgp-loop:
   <<: *test-base
   variables:
@@ -623,12 +460,32 @@ test-ebgp-star:
   variables:
     TEST_NAME: cf-ebgp-star
 
+test-ebgp-role:
+  <<: *test-base
+  variables:
+    TEST_NAME: cf-ebgp-role
+
+test-ebgp-graceful:
+  <<: *test-base
+  variables:
+    TEST_NAME: cf-ebgp-graceful
+
+test-ebgp-import-limit:
+  <<: *test-base
+  variables:
+    TEST_NAME: cf-ebgp-import-limit
+
 test-ibgp-loop:
   <<: *test-base
   variables:
     TEST_NAME: cf-ibgp-loop
 
-test-ibgp-star:
+test-ibgp-loop-big:
+  <<: *test-base
+  variables:
+    TEST_NAME: cf-ibgp-loop-big
+
+test-ibgp-flat:
   <<: *test-base
   variables:
     TEST_NAME: cf-ibgp-flat
@@ -647,3 +504,49 @@ test-rip-base:
   <<: *test-base
   variables:
     TEST_NAME: cf-rip-base
+
+test-kernel-learn:
+  <<: *test-base
+  variables:
+    TEST_NAME: cf-kernel-learn
+
+
+.build-birdlab-base: &build-birdlab-base
+  stage: build
+  script:
+    - autoreconf
+    - ./configure
+    - gmake
+    - gmake check
+
+build-birdlab-debian-11:
+  <<: *build-birdlab-base
+  tags:
+    - birdlab-debian-11
+    - amd64
+
+build-birdlab-centos-08:
+  <<: *build-birdlab-base
+  tags:
+    - birdlab-centos-08
+    - amd64
+
+build-birdlab-fedora-37:
+  <<: *build-birdlab-base
+  tags:
+    - birdlab-fedora-37
+    - amd64
+
+build-birdlab-freebsd-13:
+  <<: *build-birdlab-base
+  tags:
+    - birdlab-freebsd-13
+    - amd64
+
+build-birdlab-openbsd-71:
+  <<: *build-birdlab-base
+  variables:
+     AUTOCONF_VERSION: "2.71"
+  tags:
+    - birdlab-openbsd-71
+    - amd64

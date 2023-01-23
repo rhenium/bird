@@ -31,7 +31,8 @@ CF_KEYWORDS(BGP, LOCAL, NEIGHBOR, AS, HOLD, TIME, CONNECT, RETRY, KEEPALIVE,
 	STRICT, BIND, CONFEDERATION, MEMBER, MULTICAST, FLOW4, FLOW6, LONG,
 	LIVED, STALE, IMPORT, IBGP, EBGP, MANDATORY, INTERNAL, EXTERNAL, SETS,
 	DYNAMIC, RANGE, NAME, DIGITS, BGP_AIGP, AIGP, ORIGINATE, COST, ENFORCE,
-	FIRST, FREE, VALIDATE, BASE)
+	FIRST, FREE, VALIDATE, BASE, ROLE, ROLES, PEER, PROVIDER, CUSTOMER,
+	RS_SERVER, RS_CLIENT, REQUIRE, BGP_OTC, GLOBAL)
 
 %type <i> bgp_nh
 %type <i32> bgp_afi
@@ -40,9 +41,12 @@ CF_KEYWORDS(CEASE, PREFIX, LIMIT, HIT, ADMINISTRATIVE, SHUTDOWN, RESET, PEER,
 	CONFIGURATION, CHANGE, DECONFIGURED, CONNECTION, REJECTED, COLLISION,
 	OUT, OF, RESOURCES)
 
-%type<i> bgp_cease_mask bgp_cease_list bgp_cease_flag
+%type<i> bgp_cease_mask bgp_cease_list bgp_cease_flag bgp_role_name
 
 CF_GRAMMAR
+
+/* Workaround for collisions between keywords and symbols */
+symbol: ROLE | PEER | PROVIDER | CUSTOMER | RS_SERVER | RS_CLIENT ;
 
 proto: bgp_proto '}'  ;
 
@@ -72,6 +76,7 @@ bgp_proto_start: proto_start BGP {
      BGP_CFG->llgr_mode = -1;
      BGP_CFG->llgr_time = 3600;
      BGP_CFG->setkey = 1;
+     BGP_CFG->local_role = BGP_ROLE_UNDEFINED;
      BGP_CFG->dynamic_name = "dynbgp";
      BGP_CFG->check_link = -1;
    }
@@ -114,6 +119,14 @@ bgp_cease_flag:
  | OUT OF RESOURCES		{ $$ = 1 << 8; }
  ;
 
+bgp_role_name:
+   PEER      { $$ = BGP_ROLE_PEER; }
+ | PROVIDER  { $$ = BGP_ROLE_PROVIDER; }
+ | CUSTOMER  { $$ = BGP_ROLE_CUSTOMER; }
+ | RS_SERVER { $$ = BGP_ROLE_RS_SERVER; }
+ | RS_CLIENT { $$ = BGP_ROLE_RS_CLIENT; }
+ ;
+
 bgp_proto:
    bgp_proto_start proto_name '{'
  | bgp_proto proto_item ';'
@@ -143,7 +156,8 @@ bgp_proto:
  | bgp_proto RS CLIENT bool ';' { BGP_CFG->rs_client = $4; }
  | bgp_proto CONFEDERATION expr ';' { BGP_CFG->confederation = $3; }
  | bgp_proto CONFEDERATION MEMBER bool ';' { BGP_CFG->confederation_member = $4; }
- | bgp_proto HOLD TIME expr ';' { BGP_CFG->hold_time = $4; }
+ | bgp_proto HOLD TIME expr ';' { BGP_CFG->hold_time = $4; if (($4 && $4<3) || ($4>65535)) cf_error("Hold time must be in range 3-65535 or zero"); }
+ | bgp_proto MIN HOLD TIME expr ';' { BGP_CFG->min_hold_time = $5; }
  | bgp_proto STARTUP HOLD TIME expr ';' { BGP_CFG->initial_hold_time = $5; }
  | bgp_proto DIRECT ';' { BGP_CFG->multihop = 0; }
  | bgp_proto MULTIHOP ';' { BGP_CFG->multihop = 64; }
@@ -167,7 +181,8 @@ bgp_proto:
  | bgp_proto START DELAY TIME expr ';' { BGP_CFG->connect_delay_time = $5; log(L_WARN "%s: Start delay time option is deprecated, use connect delay time", this_proto->name); }
  | bgp_proto CONNECT DELAY TIME expr ';' { BGP_CFG->connect_delay_time = $5; }
  | bgp_proto CONNECT RETRY TIME expr ';' { BGP_CFG->connect_retry_time = $5; }
- | bgp_proto KEEPALIVE TIME expr ';' { BGP_CFG->keepalive_time = $4; }
+ | bgp_proto KEEPALIVE TIME expr ';' { BGP_CFG->keepalive_time = $4; if (($4<1) || ($4>65535)) cf_error("Keepalive time must be in range 1-65535"); }
+ | bgp_proto MIN KEEPALIVE TIME expr ';' { BGP_CFG->min_keepalive_time = $5; }
  | bgp_proto ERROR FORGET TIME expr ';' { BGP_CFG->error_amnesia_time = $5; }
  | bgp_proto ERROR WAIT TIME expr ',' expr ';' { BGP_CFG->error_delay_time_min = $5; BGP_CFG->error_delay_time_max = $7; }
  | bgp_proto DISABLE AFTER ERROR bool ';' { BGP_CFG->disable_after_error = $5; }
@@ -197,6 +212,8 @@ bgp_proto:
  | bgp_proto BFD GRACEFUL ';' { init_bfd_opts(&BGP_CFG->bfd); BGP_CFG->bfd->mode = BGP_BFD_GRACEFUL; }
  | bgp_proto BFD { open_bfd_opts(&BGP_CFG->bfd); } bfd_opts { close_bfd_opts(); } ';'
  | bgp_proto ENFORCE FIRST AS bool ';' { BGP_CFG->enforce_first_as = $5; }
+ | bgp_proto LOCAL ROLE bgp_role_name ';' { BGP_CFG->local_role = $4; }
+ | bgp_proto REQUIRE ROLES bool ';' { BGP_CFG->require_roles = $4; }
  ;
 
 bgp_afi:
@@ -251,6 +268,7 @@ bgp_channel_item:
  | NEXT HOP ADDRESS ipa { BGP_CC->next_hop_addr = $4; }
  | NEXT HOP SELF bgp_nh { BGP_CC->next_hop_self = $4; }
  | NEXT HOP KEEP bgp_nh { BGP_CC->next_hop_keep = $4; }
+ | NEXT HOP PREFER GLOBAL { BGP_CC->next_hop_prefer = NHP_GLOBAL; }
  | MANDATORY bool { BGP_CC->mandatory = $2; }
  | MISSING LLADDR bgp_lladdr { log(L_WARN "%s.%s: Missing lladdr option is deprecated and ignored, remove it", this_proto->name, this_channel->name); }
  | GATEWAY DIRECT { BGP_CC->gw_mode = GW_DIRECT; }
@@ -343,6 +361,8 @@ dynamic_attr: BGP_AIGP
 	{ $$ = f_new_dynamic_attr(EAF_TYPE_OPAQUE, T_ENUM_EMPTY, EA_CODE(PROTOCOL_BGP, BA_AIGP)); } ;
 dynamic_attr: BGP_LARGE_COMMUNITY
 	{ $$ = f_new_dynamic_attr(EAF_TYPE_LC_SET, T_LCLIST, EA_CODE(PROTOCOL_BGP, BA_LARGE_COMMUNITY)); } ;
+dynamic_attr: BGP_OTC
+	{ $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_CODE(PROTOCOL_BGP, BA_ONLY_TO_CUSTOMER)); } ;
 
 
 

@@ -130,7 +130,7 @@ CF_KEYWORDS(SORTED, TRIE, MIN, MAX, SETTLE, TIME, GC, THRESHOLD, PERIOD)
 /* For r_args_channel */
 CF_KEYWORDS(IPV4, IPV4_MC, IPV4_MPLS, IPV6, IPV6_MC, IPV6_MPLS, IPV6_SADR, VPN4, VPN4_MC, VPN4_MPLS, VPN6, VPN6_MC, VPN6_MPLS, ROA4, ROA6, FLOW4, FLOW6, MPLS, PRI, SEC)
 
-CF_ENUM(T_ENUM_RTS, RTS_, DUMMY, STATIC, INHERIT, DEVICE, STATIC_DEVICE, REDIRECT,
+CF_ENUM(T_ENUM_RTS, RTS_, STATIC, INHERIT, DEVICE, STATIC_DEVICE, REDIRECT,
 	RIP, OSPF, OSPF_IA, OSPF_EXT1, OSPF_EXT2, BGP, PIPE, BABEL)
 CF_ENUM(T_ENUM_SCOPE, SCOPE_, HOST, LINK, SITE, ORGANIZATION, UNIVERSE, UNDEFINED)
 CF_ENUM(T_ENUM_RTD, RTD_, UNICAST, BLACKHOLE, UNREACHABLE, PROHIBIT)
@@ -165,7 +165,7 @@ rtrid:
 
 idval:
    NUM { $$ = $1; }
- | '(' term ')' { $$ = f_eval_int(f_linearize($2)); }
+ | '(' term ')' { $$ = f_eval_int(f_linearize($2, 1)); }
  | IP4 { $$ = ip4_to_u32($1); }
  | CF_SYM_KNOWN {
      if ($1->class == (SYM_CONSTANT | T_INT) || $1->class == (SYM_CONSTANT | T_QUAD))
@@ -632,7 +632,7 @@ CF_CLI(SHOW INTERFACES SUMMARY,,, [[Show summary of network interfaces]])
 { if_show_summary(); } ;
 
 CF_CLI_HELP(SHOW ROUTE, ..., [[Show routing table]])
-CF_CLI(SHOW ROUTE, r_args, [[[<prefix>|for <prefix>|for <ip>] [table <t>] [filter <f>|where <cond>] [all] [primary] [filtered] [(export|preexport|noexport) <p>] [protocol <p>] [stats|count]]], [[Show routing table]])
+CF_CLI(SHOW ROUTE, r_args, [[[<prefix>|for <prefix>|for <ip>] [table <t>] [(import|export) table <p>.<c>] [filter <f>|where <cond>] [all] [primary] [filtered] [(export|preexport|noexport) <p>] [protocol <p>] [stats|count]]], [[Show routing table]])
 { rt_show($3); } ;
 
 r_args:
@@ -860,7 +860,7 @@ CF_CLI(DUMP FILTER ALL,,, [[Dump all filters in linearized form]])
 { filters_dump_all(); cli_msg(0, ""); } ;
 
 CF_CLI(EVAL, term, <expr>, [[Evaluate an expression]])
-{ cmd_eval(f_linearize($2)); } ;
+{ cmd_eval(f_linearize($2, 1)); } ;
 
 CF_CLI_HELP(ECHO, ..., [[Control echoing of log messages]])
 CF_CLI(ECHO, echo_mask echo_size, (all | off | { debug|trace|info|remote|warning|error|auth [, ...] }) [<buffer-size>], [[Control echoing of log messages]]) {

@@ -522,7 +522,10 @@ static inline void
 add_nbma_node(struct ospf_iface *ifa, struct nbma_node *src, int found)
 {
   struct nbma_node *n = mb_alloc(ifa->pool, sizeof(struct nbma_node));
+
+  n->n = (node) {};
   add_tail(&ifa->nbma_list, NODE n);
+
   n->ip = src->ip;
   n->eligible = src->eligible;
   n->found = found;
@@ -1224,6 +1227,9 @@ ospf_reconfigure_ifaces2(struct ospf_proto *p)
 
   WALK_LIST(iface, iface_list)
   {
+    if (p->p.vrf_set && p->p.vrf != iface->master)
+      continue;
+
     if (! (iface->flags & IF_UP))
       continue;
 
@@ -1270,6 +1276,9 @@ ospf_reconfigure_ifaces3(struct ospf_proto *p)
 
   WALK_LIST(iface, iface_list)
   {
+    if (p->p.vrf_set && p->p.vrf != iface->master)
+      continue;
+
     if (! (iface->flags & IF_UP))
       continue;
 

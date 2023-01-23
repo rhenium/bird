@@ -70,6 +70,7 @@ struct config *config_alloc(const char *name);
 int config_parse(struct config *);
 int cli_parse(struct config *);
 void config_free(struct config *);
+void config_free_old(void);
 int config_commit(struct config *, int type, uint timeout);
 int config_confirm(void);
 int config_undo(void);
@@ -96,7 +97,7 @@ void order_shutdown(int gr);
 
 
 /* Pools */
-
+extern pool *config_pool;
 extern linpool *cfg_mem;
 
 #define cfg_alloc(size) lp_alloc(cfg_mem, size)
@@ -133,7 +134,9 @@ struct sym_scope {
   struct sym_scope *next;		/* Next on scope stack */
   struct symbol *name;			/* Name of this scope */
   uint slots;				/* Variable slots */
-  int active;				/* Currently entered */
+  byte active;				/* Currently entered */
+  byte block;				/* No independent stack frame */
+  byte soft_scopes;			/* Number of soft scopes above */
 };
 
 struct bytestring {
@@ -190,6 +193,9 @@ struct symbol *cf_get_symbol(const byte *c);
 struct symbol *cf_default_name(char *template, int *counter);
 struct symbol *cf_localize_symbol(struct symbol *sym);
 
+static inline int cf_symbol_is_local(struct symbol *sym)
+{ return (sym->scope == conf_this_scope) && !conf_this_scope->soft_scopes; }
+
 /**
  * cf_define_symbol - define meaning of a symbol
  * @sym: symbol to be defined
@@ -213,6 +219,15 @@ struct symbol *cf_localize_symbol(struct symbol *sym);
 
 void cf_push_scope(struct symbol *);
 void cf_pop_scope(void);
+void cf_push_soft_scope(void);
+void cf_pop_soft_scope(void);
+
+static inline void cf_push_block_scope(void)
+{ cf_push_scope(NULL); conf_this_scope->block = 1; }
+
+static inline void cf_pop_block_scope(void)
+{ ASSERT(conf_this_scope->block); cf_pop_scope(); }
+
 char *cf_symbol_class_name(struct symbol *sym);
 
 /* Parser */

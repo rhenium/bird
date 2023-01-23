@@ -83,7 +83,7 @@ dev_ifa_notify(struct proto *P, uint flags, struct ifa *ad)
       struct rte_src *src = rt_get_source(P, ad->iface->index);
 
       rta a0 = {
-	.src = src,
+	.pref = c->preference,
 	.source = RTS_DEVICE,
 	.scope = SCOPE_UNIVERSE,
 	.dest = RTD_UNICAST,
@@ -91,8 +91,7 @@ dev_ifa_notify(struct proto *P, uint flags, struct ifa *ad)
       };
 
       a = rta_lookup(&a0);
-      e = rte_get_temp(a);
-      e->pflags = 0;
+      e = rte_get_temp(a, src);
       rte_update2(c, net, e, src);
     }
 }
@@ -195,3 +194,9 @@ struct protocol proto_device = {
   .reconfigure =	dev_reconfigure,
   .copy_config =	dev_copy_config
 };
+
+void
+dev_build(void)
+{
+  proto_build(&proto_device);
+}

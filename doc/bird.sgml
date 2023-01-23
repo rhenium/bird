@@ -1113,7 +1113,7 @@ This argument can be omitted if there exists only a single instance.
 	Show the list of symbols defined in the configuration (names of
 	protocols, routing tables etc.).
 
-	<tag><label id="cli-show-route">show route [[for] <m/prefix/|<m/IP/] [table (<m/t/ | all)] [filter <m/f/|where <m/c/] [(export|preexport|noexport) <m/p/] [protocol <m/p/] [(stats|count)] [<m/options/]</tag>
+	<tag><label id="cli-show-route">show route [[for] <m/prefix/|<m/IP/] [table (<m/t/ | all)] [(import|export) table <m/p/.<m/c/] [filter <m/f/|where <m/c/] [(export|preexport|noexport) <m/p/] [protocol <m/p/] [(stats|count)] [<m/options/]</tag>
 	Show contents of specified routing tables, that is routes, their metrics
 	and (in case the <cf/all/ switch is given) all their attributes.
 
@@ -1132,6 +1132,11 @@ This argument can be omitted if there exists only a single instance.
 	arguments of several other switches (e.g., <cf/export/, <cf/protocol/).
 	Last, the set of default tables is used: <cf/master4/, <cf/master6/ and
 	each first table of any other network type.
+
+	<p>There are internal tables when <cf/(import|export) table/ options
+	are used for some channels. They can be selected explicitly with
+	<cf/(import|export) table/ switch, specifying protocol <m/p/ and
+	channel name <m/c/.
 
 	<p>You can also ask for printing only routes processed and accepted by
 	a given filter (<cf>filter <m/name/</cf> or <cf>filter { <m/filter/ }
@@ -1167,6 +1172,11 @@ This argument can be omitted if there exists only a single instance.
 	to the new configuration, protocols are reconfigured if possible,
 	restarted otherwise. Changes in filters usually lead to restart of
 	affected protocols.
+
+	The previous configuration is saved and the user can switch back to it
+	with <ref id="cli-configure-undo" name="configure undo"> command. The
+	old saved configuration is released (even if the reconfiguration attempt
+	fails due to e.g. a syntax error).
 
 	If <cf/soft/ option is used, changes in filters does not cause BIRD to
 	restart affected protocols, therefore already accepted routes (according
@@ -1260,8 +1270,8 @@ this:
 
 <code>
 filter not_too_far
-int var;
 {
+	int var;
 	if defined( rip_metric ) then
 		var = rip_metric;
 	else {
@@ -1290,9 +1300,9 @@ local variables. Recursion is not allowed. Function definitions look like this:
 
 <code>
 function name ()
-int local_variable;
 {
-	local_variable = 5;
+	int local_variable;
+	int another_variable = 5;
 }
 
 function with_parameters (int parameter)
@@ -1301,16 +1311,19 @@ function with_parameters (int parameter)
 }
 </code>
 
-<p>Unlike in C, variables are declared after the <cf/function/ line, but before
-the first <cf/{/. You can't declare variables in nested blocks. Functions are
-called like in C: <cf>name(); with_parameters(5);</cf>. Function may return
-values using the <cf>return <m/[expr]/</cf> command. Returning a value exits
-from current function (this is similar to C).
+<p>Like in C programming language, variables are declared inside function body,
+either at the beginning, or mixed with other statements. Declarations may
+contain initialization. You can also declare variables in nested blocks, such
+variables have scope restricted to such block. There is a deprecated syntax to
+declare variables after the <cf/function/ line, but before the first <cf/{/.
+Functions are called like in C: <cf>name(); with_parameters(5);</cf>. Function
+may return values using the <cf>return <m/[expr]/</cf> command. Returning a
+value exits from current function (this is similar to C).
 
-<p>Filters are defined in a way similar to functions except they can't have
+<p>Filters are defined in a way similar to functions except they cannot have
 explicit parameters. They get a route table entry as an implicit parameter, it
 is also passed automatically to any functions called. The filter must terminate
-with either <cf/accept/ or <cf/reject/ statement. If there's a runtime error in
+with either <cf/accept/ or <cf/reject/ statement. If there is a runtime error in
 filter, the route is rejected.
 
 <p>A nice trick to debug filters is to use <cf>show route filter <m/name/</cf>
@@ -1680,13 +1693,22 @@ prefix and an ASN as arguments.
 <sect>Control structures
 <label id="control-structures">
 
-<p>Filters support two control structures: conditions and case switches.
+<p>Filters support several control structures: conditions, for loops and case
+switches.
 
 <p>Syntax of a condition is: <cf>if <M>boolean expression</M> then <m/commandT/;
 else <m/commandF/;</cf> and you can use <cf>{ <m/command1/; <m/command2/;
 <M>...</M> }</cf> instead of either command. The <cf>else</cf> clause may be
 omitted. If the <cf><m>boolean expression</m></cf> is true, <m/commandT/ is
 executed, otherwise <m/commandF/ is executed.
+
+<p>For loops allow to iterate over elements in compound data like BGP paths or
+community lists. The syntax is: <cf>for [ <m/type/ ] <m/variable/ in <m/expr/
+do <m/command/;</cf> and you can also use compound command like in conditions.
+The expression is evaluated to a compound data, then for each element from such
+data the command is executed with the item assigned to the variable. A variable
+may be an existing one (when just name is used) or a locally defined (when type
+and name is used). In both cases, it must have the same type as elements.
 
 <p>The <cf>case</cf> is similar to case from Pascal. Syntax is <cf>case
 <m/expr/ { else: | <m/num_or_prefix [ .. num_or_prefix]/: <m/statement/ ; [
@@ -1700,15 +1722,20 @@ neither of the <cf/:/ clauses, the statements after <cf/else:/ are executed.
 <p>Here is example that uses <cf/if/ and <cf/case/ structures:
 
 <code>
+if 1234 = i then printn "."; else {
+	print "not 1234";
+	print "You need {} around multiple commands";
+}
+
+for int asn in bgp_path do {
+	printn "ASN: ", asn;
+	if asn < 65536 then print " (2B)"; else print " (4B)";
+}
+
 case arg1 {
 	2: print "two"; print "I can do more commands without {}";
 	3 .. 5: print "three to five";
 	else: print "something else";
-}
-
-if 1234 = i then printn "."; else {
-  print "not 1234";
-  print "You need {} around multiple commands";
 }
 </code>
 
@@ -1762,7 +1789,7 @@ Common route attributes are:
 
 	<tag><label id="rta-source"><m/enum/ source</tag>
 	what protocol has told me about this route. Possible values:
-	<cf/RTS_DUMMY/, <cf/RTS_STATIC/, <cf/RTS_INHERIT/, <cf/RTS_DEVICE/,
+	<cf/RTS_STATIC/, <cf/RTS_INHERIT/, <cf/RTS_DEVICE/,
 	<cf/RTS_RIP/, <cf/RTS_OSPF/, <cf/RTS_OSPF_IA/, <cf/RTS_OSPF_EXT1/,
 	<cf/RTS_OSPF_EXT2/, <cf/RTS_BGP/, <cf/RTS_PIPE/, <cf/RTS_BABEL/.
 
@@ -1788,6 +1815,14 @@ Common route attributes are:
 	be used for interface matching, however indexes might change on interface
 	creation/removal. Zero is returned for routes with undefined outgoing
 	interfaces. Read-only.
+
+	<tag><label id="rta-onlink"><m/bool/ onlink</tag>
+	Onlink flag means that the specified nexthop is accessible on the
+	interface regardless of IP prefixes configured on the interface.
+	The attribute can be used to configure such next hops by first setting
+	<cf/onlink = true/ and <cf/ifname/, and then setting <cf/gw/. Possible
+	use case for setting this flag is to automatically build overlay IP-IP
+	networks on linux.
 
 	<tag><label id="rta-weight"><m/int/ weight</tag>
 	Multipath weight of route next hops. Valid values are 1-256. Reading
@@ -2360,6 +2395,7 @@ avoid routing loops.
 <item> <rfc id="8203"> - BGP Administrative Shutdown Communication
 <item> <rfc id="8212"> - Default EBGP Route Propagation Behavior without Policies
 <item> <rfc id="9117"> - Revised Validation Procedure for BGP Flow Specifications
+<item> <rfc id="9234"> - Route Leak Prevention and Detection Using Roles
 </itemize>
 
 <sect1>Route selection rules
@@ -2722,9 +2758,16 @@ using the following configuration parameters:
 
 	<tag><label id="bgp-hold-time">hold time <m/number/</tag>
 	Time in seconds to wait for a Keepalive message from the other side
-	before considering the connection stale. Default: depends on agreement
-	with the neighboring router, we prefer 240 seconds if the other side is
-	willing to accept it.
+	before considering the connection stale. The effective value is
+	negotiated during session establishment and it is a minimum of this
+	configured value and the value proposed by the peer. The zero value has
+	a special meaning, signifying that no keepalives are used. Default: 240
+	seconds.
+
+	<tag><label id="bgp-min-hold-time">min hold time <m/number/</tag>
+	Minimum value of the hold time that is accepted during session negotiation.
+	If the peer proposes a lower value, the session is rejected with error.
+	Default: none.
 
 	<tag><label id="bgp-startup-hold-time">startup hold time <m/number/</tag>
 	Value of the hold timer used before the routers have a chance to exchange
@@ -2732,7 +2775,14 @@ using the following configuration parameters:
 
 	<tag><label id="bgp-keepalive-time">keepalive time <m/number/</tag>
 	Delay in seconds between sending of two consecutive Keepalive messages.
+	The effective value depends on the negotiated hold time, as it is scaled
+	to maintain proportion between the keepalive time and the hold time.
 	Default: One third of the hold time.
+
+	<tag><label id="bgp-min-keepalive-time">min keepalive time <m/number/</tag>
+	Minimum value of the keepalive time that is accepted during session
+	negotiation. If the proposed hold time would lead to a lower value of
+	the keepalive time, the session is rejected with error. Default: none.
 
 	<tag><label id="bgp-connect-delay-time">connect delay time <m/number/</tag>
 	Delay in seconds between protocol startup and the first attempt to
@@ -2800,6 +2850,29 @@ using the following configuration parameters:
 	protocol itself (for example, if a route is received through eBGP and
 	therefore does not have such attribute). Default: 100 (0 in pre-1.2.0
 	versions of BIRD).
+
+	<tag><label id="bgp-local-role">local role <m/role-name/</tag>
+	BGP roles are a mechanism for route leak prevention and automatic route
+	filtering based on common BGP topology relationships. They are defined
+	in <rfc id="9234">. Instead of manually configuring filters and
+	communities, automatic filtering is done with the help of the OTC
+	attribute - a flag for routes that should be sent only to customers.
+	The same attribute is also used to automatically detect and filter route
+	leaks created by third parties.
+
+	This option is valid for EBGP sessions, but it is not recommended to be
+	used within AS confederations (which would require manual filtering of
+	<cf/bgp_otc/ attribute on confederation boundaries).
+
+	Possible <cf><m/role-name/</cf> values are: <cf/provider/,
+	<cf/rs_server/, <cf/rs_client/, <cf/customer/ and <cf/peer/.
+	Default: No local role assigned.
+
+	<tag><label id="bgp-require-roles">require roles <m/switch/</tag>
+	If this option is set, the BGP roles must be defined on both sides,
+	otherwise the session will not be established. This behavior is defined
+	in <rfc id="9234"> as "strict mode" and is used to enforce corresponding
+	configuration at your conterpart side. Default: disabled.
 </descrip>
 
 <sect1>Channel configuration
@@ -2870,6 +2943,20 @@ be used in explicit configuration.
 	BGP session (if acceptable), or the preferred address of an associated
 	interface.
 
+	<tag><label id="bgp-next-hop-prefer">next hop prefer global</tag>
+	Prefer global IPv6 address to link-local IPv6 address for immediate next
+	hops of received routes. For IPv6 routes, the Next Hop attribute may
+	contain both a global IP address and a link-local IP address. For IBGP
+	sessions, the global IP address is resolved (<ref id="bgp-gateway"
+	name="gateway recursive">) through an IGP routing table
+	(<ref id="bgp-igp-table" name="igp table">) to get an immediate next
+	hop. If the resulting IGP route is a direct route (i.e., the next hop is
+	a direct neighbor), then the link-local IP address from the Next Hop
+	attribute is used as the immediate next hop. This option change it to
+	use the global IP address instead. Note that even with this option
+	enabled a route may end with a link-local immediate next hop when the
+	IGP route has one. Default: disabled.
+
 	<tag><label id="bgp-gateway">gateway direct|recursive</tag>
 	For received routes, their <cf/gw/ (immediate next hop) attribute is
 	computed from received <cf/bgp_next_hop/ attribute. This option
@@ -2902,6 +2989,13 @@ be used in explicit configuration.
 	Enabling <cf/import table/ allows to store unprocessed routes, which can
 	be examined later by <cf/show route/, and can be used to reconfigure
 	import filters without full route refresh. Default: off.
+
+	Note that currently the import table breaks routes with recursive
+	nexthops (e.g. ones from IBGP, see <ref id="bgp-gateway" name="gateway
+	recursive">), they are not properly updated after next hop change. For
+	the same reason, it also breaks re-evaluation of flowspec routes with
+	<ref id="bgp-validate" name="flowspec validation"> option enabled on
+	flowspec channels.
 
 	<tag><label id="bgp-export-table">export table <m/switch/</tag>
 	A BGP export table contains all routes sent to given BGP neighbor, after
@@ -3107,6 +3201,11 @@ some of them (marked with `<tt/O/') are optional.
 	This attribute contains accumulated IGP metric, which is a total
 	distance to the destination through multiple autonomous systems.
 	Currently, the attribute is not accessible from filters.
+
+	<tag><label id="bgp-otc">int bgp_otc [O]</tag>
+	This attribute is defined in <rfc id="9234">. OTC is a flag that marks
+	routes that should be sent only to customers. If <ref id="bgp-role"
+	name="local Role"> is configured it set automatically.
 </descrip>
 
 <sect1>Example

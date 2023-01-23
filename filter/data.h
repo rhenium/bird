@@ -100,7 +100,9 @@ enum f_sa_code {
   SA_IFNAME,
   SA_IFINDEX,
   SA_WEIGHT,
+  SA_PREF,
   SA_GW_MPLS,
+  SA_ONLINK,
 } PACKED;
 
 /* Static attribute definition (members of struct rta) */
@@ -140,8 +142,15 @@ struct f_tree {
   void *data;
 };
 
+#ifdef ENABLE_COMPACT_TRIES
+/* Compact 4-way tries */
+#define TRIE_STEP		2
+#define TRIE_STACK_LENGTH	65
+#else
+/* Faster 16-way tries */
 #define TRIE_STEP		4
 #define TRIE_STACK_LENGTH	33
+#endif
 
 struct f_trie_node4
 {
@@ -190,7 +199,9 @@ struct f_trie_walk_state
 struct f_tree *f_new_tree(void);
 struct f_tree *build_tree(struct f_tree *);
 const struct f_tree *find_tree(const struct f_tree *t, const struct f_val *val);
+const struct f_tree *find_tree_linear(const struct f_tree *t, const struct f_val *val);
 int same_tree(const struct f_tree *t0, const struct f_tree *t2);
+int tree_node_count(const struct f_tree *t);
 void tree_format(const struct f_tree *t, buffer *buf);
 void tree_walk(const struct f_tree *t, void (*hook)(const struct f_tree *, void *), void *data);
 
@@ -279,9 +290,15 @@ int val_in_range(const struct f_val *v1, const struct f_val *v2);
 
 int clist_set_type(const struct f_tree *set, struct f_val *v);
 static inline int eclist_set_type(const struct f_tree *set)
-{ return set->from.type == T_EC; }
+{ return !set || set->from.type == T_EC; }
 static inline int lclist_set_type(const struct f_tree *set)
-{ return set->from.type == T_LC; }
+{ return !set || set->from.type == T_LC; }
+static inline int path_set_type(const struct f_tree *set)
+{ return !set || set->from.type == T_INT; }
+
+int clist_match_set(const struct adata *clist, const struct f_tree *set);
+int eclist_match_set(const struct adata *list, const struct f_tree *set);
+int lclist_match_set(const struct adata *list, const struct f_tree *set);
 
 const struct adata *clist_filter(struct linpool *pool, const struct adata *list, const struct f_val *set, int pos);
 const struct adata *eclist_filter(struct linpool *pool, const struct adata *list, const struct f_val *set, int pos);
@@ -297,7 +314,7 @@ undef_value(struct f_val v)
     (v.val.ad == &null_adata);
 }
 
-extern const struct f_val f_const_empty_path, f_const_empty_clist, f_const_empty_eclist, f_const_empty_lclist;
+extern const struct f_val f_const_empty_path, f_const_empty_clist, f_const_empty_eclist, f_const_empty_lclist, f_const_empty_prefix_set;
 
 enum filter_return f_eval(const struct f_line *expr, struct linpool *tmp_pool, struct f_val *pres);
 
