@@ -1,3 +1,9 @@
+bird2 (2.0.12-3) unstable; urgency=medium
+
+  * Rebuild
+
+ -- Jakub Ružička <jakub.ruzicka@nic.cz>  Tue, 24 Jan 2023 11:52:35 +0100
+
 bird2 (2.0.12-2) unstable; urgency=medium
 
   * Don't Depend on obsolete lsb-base
