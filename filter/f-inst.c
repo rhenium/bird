@@ -531,6 +531,7 @@
   INST(FI_VAR_GET, 0, 1) {
     SYMBOL;
     NEVER_CONSTANT;
+    if (fs->flags & FF_CONSTANT) runtime("Variable reference in constant expression");
     RESULT_TYPE(sym->class & 0xff);
     RESULT_VAL(fstk->vstk[curline.vbase + sym->offset]);
   }
