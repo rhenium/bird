@@ -58,6 +58,7 @@ enum f_type {
   T_LCLIST = 0x29,		/* Large community list */
   T_RD = 0x2a,		/* Route distinguisher for VPN addresses */
   T_PATH_MASK_ITEM = 0x2b,	/* Path mask item for path mask constructors */
+  T_MLS = 0x2c,
 
   T_SET = 0x80,
   T_PREFIX_SET = 0x81,
@@ -78,6 +79,7 @@ struct f_val {
     const struct adata *ad;
     const struct f_path_mask *path_mask;
     struct f_path_mask_item pmi;
+    mpls_label_stack *mls;
   } val;
 };
 
