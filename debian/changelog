@@ -1,3 +1,9 @@
+bird2 (2.0.12-6) unstable; urgency=medium
+
+  * Add upstream patch to fix bgp_med handling
+
+ -- Jakub Ružička <jakub.ruzicka@nic.cz>  Mon, 17 Apr 2023 15:18:52 +0200
+
 bird2 (2.0.12-5) unstable; urgency=medium
 
   * Add upstream patch to fix early free in config
