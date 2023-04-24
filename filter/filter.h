@@ -69,6 +69,7 @@ void filters_dump_all(void);
 #define FILTER_UNDEF  ((struct filter *) 2)	/* Used in BGP */
 
 #define FF_SILENT 2			/* Silent filter execution */
+#define FF_CONSTANT 4			/* Require constant return */
 
 /* Custom route attributes */
 struct custom_attribute {
