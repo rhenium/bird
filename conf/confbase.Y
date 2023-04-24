@@ -282,7 +282,7 @@ net_roa6_: net_ip6_ MAX NUM AS NUM
     cf_error("Invalid max prefix length %u", $3);
 };
 
-net_mpls_: MPLS NUM
+net_mpls_: MPLS expr
 {
   $$ = cfg_alloc(sizeof(net_addr_roa6));
   net_fill_mpls($$, $2);
@@ -355,7 +355,7 @@ net_or_ipa:
    }
  ;
 
-label_stack_start: NUM
+label_stack_start: expr
 {
   $$ = cfg_allocz(sizeof(mpls_label_stack));
   $$->len = 1;
@@ -364,7 +364,7 @@ label_stack_start: NUM
 
 label_stack:
     label_stack_start
-  | label_stack '/' NUM {
+  | label_stack '/' expr {
     if ($1->len >= MPLS_MAX_LABEL_STACK)
       cf_error("Too many labels in stack");
     $1->stack[$1->len++] = $3;
