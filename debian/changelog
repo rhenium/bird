@@ -1,3 +1,13 @@
+bird2 (2.0.12-7) unstable; urgency=medium
+
+  [ Miao Wang ]
+  * Fix for arm64 cross build
+
+  [ Jakub Ružička ]
+  * Add autopkgtest by upstream dev
+
+ -- Jakub Ružička <jakub.ruzicka@nic.cz>  Wed, 26 Apr 2023 17:33:46 +0200
+
 bird2 (2.0.12-6) unstable; urgency=medium
 
   * Add upstream patch to fix bgp_med handling
