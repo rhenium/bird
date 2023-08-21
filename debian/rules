@@ -30,10 +30,10 @@ override_dh_auto_install:
 	dh_auto_install --destdir=debian/tmp
 
 override_dh_installinit:
-	dh_installinit --name=bird --restart-after-upgrade
+	dh_installinit --name=bird --no-stop-on-upgrade --no-start --no-restart-after-upgrade
 
 override_dh_installsystemd:
-	dh_installsystemd --name=bird --restart-after-upgrade
+	dh_installsystemd --name=bird --no-stop-on-upgrade --no-start --no-restart-after-upgrade
 
 DB2MAN = /usr/share/sgml/docbook/stylesheet/xsl/nwalsh/manpages/docbook.xsl
 XP     = xsltproc -''-nonet -''-param man.charmap.use.subset "0"
