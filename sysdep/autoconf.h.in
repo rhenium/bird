@@ -3,6 +3,9 @@
 /* Define if building universal (internal helper macro) */
 #undef AC_APPLE_UNIVERSAL_BUILD
 
+/* Aggregator protocol */
+#undef CONFIG_AGGREGATOR
+
 /* Babel protocol */
 #undef CONFIG_BABEL
 
@@ -11,6 +14,12 @@
 
 /* BGP protocol */
 #undef CONFIG_BGP
+
+/* BMP protocol */
+#undef CONFIG_BMP
+
+/* L3VPN protocol */
+#undef CONFIG_L3VPN
 
 /* MRT protocol */
 #undef CONFIG_MRT

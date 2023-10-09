@@ -75,6 +75,9 @@ const char * const rta_src_names[RTS_MAX] = {
   [RTS_PIPE]		= "pipe",
   [RTS_BABEL]		= "Babel",
   [RTS_RPKI]		= "RPKI",
+  [RTS_PERF]		= "Perf",
+  [RTS_L3VPN]		= "L3VPN",
+  [RTS_AGGREGATED]	= "aggregated",
 };
 
 const char * rta_dest_names[RTD_MAX] = {
@@ -99,7 +102,7 @@ static struct idm src_ids;
 #define RSH_KEY(n)		n->proto, n->private_id
 #define RSH_NEXT(n)		n->next
 #define RSH_EQ(p1,n1,p2,n2)	p1 == p2 && n1 == n2
-#define RSH_FN(p,n)		p->hash_key ^ u32_hash(n)
+#define RSH_FN(p,n)		p->hash_key ^ u64_hash(n)
 
 #define RSH_REHASH		rte_src_rehash
 #define RSH_PARAMS		/2, *2, 1, 1, 8, 20
@@ -801,13 +804,27 @@ ea_free(ea_list *o)
 static int
 get_generic_attr(const eattr *a, byte **buf, int buflen UNUSED)
 {
-  if (a->id == EA_GEN_IGP_METRIC)
-    {
-      *buf += bsprintf(*buf, "igp_metric");
-      return GA_NAME;
-    }
+  switch (a->id)
+  {
+  case EA_GEN_IGP_METRIC:
+    *buf += bsprintf(*buf, "igp_metric");
+    return GA_NAME;
 
-  return GA_UNKNOWN;
+  case EA_MPLS_LABEL:
+    *buf += bsprintf(*buf, "mpls_label");
+    return GA_NAME;
+
+  case EA_MPLS_POLICY:
+    *buf += bsprintf(*buf, "mpls_policy");
+    return GA_NAME;
+
+  case EA_MPLS_CLASS:
+    *buf += bsprintf(*buf, "mpls_class");
+    return GA_NAME;
+
+  default:
+    return GA_UNKNOWN;
+  }
 }
 
 void
@@ -1272,7 +1289,8 @@ rta_dump(rta *a)
   static char *rts[] = { "", "RTS_STATIC", "RTS_INHERIT", "RTS_DEVICE",
 			 "RTS_STAT_DEV", "RTS_REDIR", "RTS_RIP",
 			 "RTS_OSPF", "RTS_OSPF_IA", "RTS_OSPF_EXT1",
-			 "RTS_OSPF_EXT2", "RTS_BGP", "RTS_PIPE", "RTS_BABEL" };
+			 "RTS_OSPF_EXT2", "RTS_BGP", "RTS_PIPE", "RTS_BABEL",
+			 "RTS_RPKI", "RTS_PERF", "RTS_AGGREGATED", };
   static char *rtd[] = { "", " DEV", " HOLE", " UNREACH", " PROHIBIT" };
 
   debug("pref=%d uc=%d %s %s%s h=%04x",

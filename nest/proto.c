@@ -18,6 +18,7 @@
 #include "conf/conf.h"
 #include "nest/route.h"
 #include "nest/iface.h"
+#include "nest/mpls.h"
 #include "nest/cli.h"
 #include "filter/filter.h"
 #include "filter/f-inst.h"
@@ -89,7 +90,6 @@ proto_log_state_change(struct proto *p)
   else
     p->last_state_name_announced = NULL;
 }
-
 
 struct channel_config *
 proto_cf_find_channel(struct proto_config *pc, uint net_type)
@@ -179,6 +179,7 @@ proto_add_channel(struct proto *p, struct channel_config *cf)
   c->merge_limit = cf->merge_limit;
   c->in_keep_filtered = cf->in_keep_filtered;
   c->rpki_reload = cf->rpki_reload;
+  c->bmp_hack = cf->bmp_hack;
 
   c->channel_state = CS_DOWN;
   c->export_state = ES_DOWN;
@@ -523,7 +524,7 @@ channel_setup_in_table(struct channel *c)
   cf->addr_type = c->net_type;
   cf->internal = 1;
 
-  c->in_table = rt_setup(c->proto->pool, cf);
+  c->in_table = cf->table = rt_setup(c->proto->pool, cf);
 
   c->reload_event = ev_new_init(c->proto->pool, channel_reload_loop, c);
 }
@@ -574,7 +575,8 @@ channel_do_up(struct channel *c)
 static void
 channel_do_flush(struct channel *c)
 {
-  rt_schedule_prune(c->table);
+  if (!c->bmp_hack)
+    rt_schedule_prune(c->table);
 
   c->gr_wait = 0;
   if (c->gr_lock)
@@ -763,7 +765,7 @@ channel_config_new(const struct channel_class *cc, const char *name, uint net_ty
     if (!net_val_match(net_type, proto->protocol->channel_mask))
       cf_error("Unsupported channel type");
 
-    if (proto->net_type && (net_type != proto->net_type))
+    if (proto->net_type && (net_type != proto->net_type) && (net_type != NET_MPLS))
       cf_error("Different channel type");
 
     tab = new_config->def_tables[net_type];
@@ -954,6 +956,81 @@ proto_configure_channel(struct proto *p, struct channel **pc, struct channel_con
   return 1;
 }
 
+/**
+ * proto_setup_mpls_map - automatically setup FEC map for protocol
+ * @p: affected protocol
+ * @rts: RTS_* value for generated MPLS routes
+ * @hooks: whether to update rte_insert / rte_remove hooks
+ *
+ * Add, remove or reconfigure MPLS FEC map of the protocol @p, depends on
+ * whether MPLS channel exists, and setup rte_insert / rte_remove hooks with
+ * default MPLS handlers. It is a convenience function supposed to be called
+ * from the protocol start and configure hooks, after reconfiguration of
+ * channels. For shutdown, use proto_shutdown_mpls_map(). If caller uses its own
+ * rte_insert / rte_remove hooks, it is possible to disable updating hooks and
+ * doing that manually.
+ */
+void
+proto_setup_mpls_map(struct proto *p, uint rts, int hooks)
+{
+  struct mpls_fec_map *m = p->mpls_map;
+  struct channel *c = p->mpls_channel;
+
+  if (!m && c)
+  {
+    /*
+     * Note that when called from a protocol start hook, it is called before
+     * mpls_channel_start(). But FEC map locks MPLS domain internally so it does
+     * not depend on lock from MPLS channel.
+     */
+    p->mpls_map = mpls_fec_map_new(p->pool, c, rts);
+  }
+  else if (m && !c)
+  {
+    /*
+     * Note that for reconfiguration, it is called after the MPLS channel has
+     * been already removed. But removal of active MPLS channel would trigger
+     * protocol restart anyways.
+     */
+    mpls_fec_map_free(m);
+    p->mpls_map = NULL;
+  }
+  else if (m && c)
+  {
+    mpls_fec_map_reconfigure(m, c);
+  }
+
+  if (hooks)
+  {
+    p->rte_insert = p->mpls_map ? mpls_rte_insert : NULL;
+    p->rte_remove = p->mpls_map ? mpls_rte_remove : NULL;
+  }
+}
+
+/**
+ * proto_shutdown_mpls_map - automatically shutdown FEC map for protocol
+ * @p: affected protocol
+ * @hooks: whether to update rte_insert / rte_remove hooks
+ *
+ * Remove MPLS FEC map of the protocol @p during protocol shutdown.
+ */
+void
+proto_shutdown_mpls_map(struct proto *p, int hooks)
+{
+  struct mpls_fec_map *m = p->mpls_map;
+
+  if (!m)
+    return;
+
+  mpls_fec_map_free(m);
+  p->mpls_map = NULL;
+
+  if (hooks)
+  {
+    p->rte_insert = NULL;
+    p->rte_remove = NULL;
+  }
+}
 
 static void
 proto_event(void *ptr)
@@ -1267,8 +1344,8 @@ protos_commit(struct config *new, struct config *old, int force_reconfig, int ty
 	  /* This is hack, we would like to share config, but we need to copy it now */
 	  new_config = new;
 	  cfg_mem = new->mem;
-	  conf_this_scope = new->root_scope;
-	  sym = cf_get_symbol(oc->name);
+	  new->current_scope = new->root_scope;
+	  sym = cf_get_symbol(new, oc->name);
 	  proto_clone_config(sym, parsym->proto);
 	  new_config = NULL;
 	  cfg_mem = NULL;

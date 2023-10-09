@@ -14,9 +14,8 @@
 /**
  * DOC: The Babel protocol
  *
- * Babel (RFC6126) is a loop-avoiding distance-vector routing protocol that is
- * robust and efficient both in ordinary wired networks and in wireless mesh
- * networks.
+ * The Babel is a loop-avoiding distance-vector routing protocol that is robust
+ * and efficient both in ordinary wired networks and in wireless mesh networks.
  *
  * The Babel protocol keeps state for each neighbour in a &babel_neighbor
  * struct, tracking received Hello and I Heard You (IHU) messages. A
@@ -33,6 +32,12 @@
  * an entry is updated by receiving updates from the network or when modified by
  * internal timers. The function selects from feasible and reachable routes the
  * one with the lowest metric to be announced to the core.
+ *
+ * Supported standards:
+ * RFC 8966 - The Babel Routing Protocol
+ * RFC 8967 - MAC Authentication for Babel
+ * RFC 9079 - Source Specific Routing for Babel
+ * RFC 9229 - IPv4 Routes with IPv6 Next Hop for Babel
  */
 
 #include <stdlib.h>
@@ -48,6 +53,10 @@
  */
 static inline int ge_mod64k(uint a, uint b)
 { return (u16)(a - b) < 0x8000; }
+
+/* Strict inequality version of the above */
+static inline int gt_mod64k(uint a, uint b)
+{ return ge_mod64k(a, b) && a != b; }
 
 static void babel_expire_requests(struct babel_proto *p, struct babel_entry *e);
 static void babel_select_route(struct babel_proto *p, struct babel_entry *e, struct babel_route *mod);
@@ -101,7 +110,8 @@ babel_find_source(struct babel_entry *e, u64 router_id)
 }
 
 static struct babel_source *
-babel_get_source(struct babel_proto *p, struct babel_entry *e, u64 router_id)
+babel_get_source(struct babel_proto *p, struct babel_entry *e, u64 router_id,
+                 u16 initial_seqno)
 {
   struct babel_source *s = babel_find_source(e, router_id);
 
@@ -111,7 +121,7 @@ babel_get_source(struct babel_proto *p, struct babel_entry *e, u64 router_id)
   s = sl_allocz(p->source_slab);
   s->router_id = router_id;
   s->expires = current_time() + BABEL_GARBAGE_INTERVAL;
-  s->seqno = 0;
+  s->seqno = initial_seqno;
   s->metric = BABEL_INFINITY;
   add_tail(&e->sources, NODE s);
 
@@ -289,7 +299,7 @@ babel_expire_routes(struct babel_proto *p)
 }
 
 /*
- * Add seqno request to the table of pending requests (RFC 6216 3.2.6) and send
+ * Add seqno request to the table of pending requests (RFC 8966 3.2.6) and send
  * it to network. Do nothing if it is already in the table.
  */
 
@@ -559,7 +569,7 @@ babel_is_feasible(struct babel_source *s, u16 seqno, u16 metric)
 {
   return !s ||
     (metric == BABEL_INFINITY) ||
-    (seqno > s->seqno) ||
+    gt_mod64k(seqno, s->seqno) ||
     ((seqno == s->seqno) && (metric < s->metric));
 }
 
@@ -586,6 +596,7 @@ babel_update_cost(struct babel_neighbor *nbr)
   switch (cf->type)
   {
   case BABEL_IFACE_TYPE_WIRED:
+  case BABEL_IFACE_TYPE_TUNNEL:
     /* k-out-of-j selection - Appendix 2.1 in the RFC. */
 
     /* Link is bad if less than cf->limit/16 of expected hellos were received */
@@ -612,6 +623,24 @@ babel_update_cost(struct babel_neighbor *nbr)
     rxcost = MIN( cf->rxcost * max / rcv, BABEL_INFINITY);
     txcost = MIN(nbr->txcost * max / rcv, BABEL_INFINITY);
     break;
+  }
+
+  if (cf->rtt_cost && nbr->srtt > cf->rtt_min)
+  {
+    uint rtt_cost = cf->rtt_cost;
+
+    if (nbr->srtt < cf->rtt_max)
+    {
+      uint rtt_interval = cf->rtt_max TO_US - cf->rtt_min TO_US;
+      uint rtt_diff = (nbr->srtt TO_US - cf->rtt_min TO_US);
+
+      rtt_cost = (rtt_cost * rtt_diff) / rtt_interval;
+    }
+
+    txcost = MIN(txcost + rtt_cost, BABEL_INFINITY);
+
+    TRACE(D_EVENTS, "Added RTT cost %u to nbr %I on %s with srtt %t ms",
+	  rtt_cost, nbr->addr, nbr->ifa->iface->name, nbr->srtt * 1000);
   }
 
 done:
@@ -844,6 +873,12 @@ babel_build_ihu(union babel_msg *msg, struct babel_iface *ifa, struct babel_neig
   msg->ihu.rxcost = n->rxcost;
   msg->ihu.interval = ifa->cf->ihu_interval;
 
+  if (n->last_tstamp_rcvd && ifa->cf->rtt_send)
+  {
+    msg->ihu.tstamp = n->last_tstamp;
+    msg->ihu.tstamp_rcvd = n->last_tstamp_rcvd TO_US;
+  }
+
   TRACE(D_PACKETS, "Sending IHU for %I with rxcost %d interval %t",
         msg->ihu.addr, msg->ihu.rxcost, (btime) msg->ihu.interval);
 }
@@ -882,6 +917,9 @@ babel_send_hello(struct babel_iface *ifa, uint interval)
   msg.type = BABEL_TLV_HELLO;
   msg.hello.seqno = ifa->hello_seqno++;
   msg.hello.interval = interval ?: ifa->cf->hello_interval;
+
+  if (ifa->cf->rtt_send)
+    msg.hello.tstamp = 1; /* real timestamp will be set on TLV write */
 
   TRACE(D_PACKETS, "Sending hello on %s with seqno %d interval %t",
 	ifa->ifname, msg.hello.seqno, (btime) msg.hello.interval);
@@ -998,8 +1036,18 @@ babel_send_update_(struct babel_iface *ifa, btime changed, struct fib *rtable)
     msg.update.router_id = e->router_id;
     net_copy(&msg.update.net, e->n.addr);
 
-    msg.update.next_hop = ((e->n.addr->type == NET_IP4) ?
-			   ifa->next_hop_ip4 : ifa->next_hop_ip6);
+    if (e->n.addr->type == NET_IP4)
+    {
+      /* Always prefer IPv4 nexthop if set */
+      if (ipa_nonzero(ifa->next_hop_ip4))
+        msg.update.next_hop = ifa->next_hop_ip4;
+
+      /* Only send IPv6 nexthop if enabled */
+      else if (ifa->cf->ext_next_hop)
+        msg.update.next_hop = ifa->next_hop_ip6;
+    }
+    else
+      msg.update.next_hop = ifa->next_hop_ip6;
 
     /* Do not send route if next hop is unknown, e.g. no configured IPv4 address */
     if (ipa_zero(msg.update.next_hop))
@@ -1007,13 +1055,13 @@ babel_send_update_(struct babel_iface *ifa, btime changed, struct fib *rtable)
 
     babel_enqueue(&msg, ifa);
 
-    /* Update feasibility distance for redistributed routes */
+    /* RFC 8966 3.7.3 - update feasibility distance for redistributed routes */
     if (e->router_id != p->router_id)
     {
-      struct babel_source *s = babel_get_source(p, e, e->router_id);
+      struct babel_source *s = babel_get_source(p, e, e->router_id, msg.update.seqno);
       s->expires = current_time() + BABEL_GARBAGE_INTERVAL;
 
-      if ((msg.update.seqno > s->seqno) ||
+      if (gt_mod64k(msg.update.seqno, s->seqno) ||
 	  ((msg.update.seqno == s->seqno) && (msg.update.metric < s->metric)))
       {
 	s->seqno = msg.update.seqno;
@@ -1179,14 +1227,26 @@ babel_handle_hello(union babel_msg *m, struct babel_iface *ifa)
 	msg->seqno, (btime) msg->interval);
 
   struct babel_neighbor *n = babel_get_neighbor(ifa, msg->sender);
+  struct babel_iface_config *cf = n->ifa->cf;
   int first_hello = !n->hello_cnt;
 
+  if (msg->tstamp)
+  {
+    n->last_tstamp = msg->tstamp;
+    n->last_tstamp_rcvd = msg->pkt_received;
+  }
   babel_update_hello_history(n, msg->seqno, msg->interval);
   babel_update_cost(n);
 
   /* Speed up session establishment by sending IHU immediately */
   if (first_hello)
-    babel_send_ihu(ifa, n);
+  {
+    /* if using RTT, all IHUs must be paired with hellos */
+    if(cf->rtt_send)
+      babel_send_hello(ifa, 0);
+    else
+      babel_send_ihu(ifa, n);
+  }
 }
 
 void
@@ -1205,6 +1265,39 @@ babel_handle_ihu(union babel_msg *m, struct babel_iface *ifa)
   struct babel_neighbor *n = babel_get_neighbor(ifa, msg->sender);
   n->txcost = msg->rxcost;
   n->ihu_expiry = current_time() + BABEL_IHU_EXPIRY_FACTOR(msg->interval);
+
+  if (msg->tstamp)
+  {
+    u32 rtt_sample = 0, pkt_received = msg->pkt_received TO_US;
+    int remote_time, full_time;
+
+    /* processing time reported by peer */
+    remote_time = (n->last_tstamp - msg->tstamp_rcvd);
+    /* time since we sent the last timestamp - RTT including remote time */
+    full_time = (pkt_received - msg->tstamp);
+
+    /* sanity checks */
+    if (remote_time < 0 || full_time < 0 ||
+        remote_time US_ > BABEL_RTT_MAX_VALUE || full_time US_ > BABEL_RTT_MAX_VALUE)
+      goto out;
+
+    if (remote_time < full_time)
+      rtt_sample = full_time - remote_time;
+
+    if (n->srtt)
+    {
+      uint decay = n->ifa->cf->rtt_decay;
+
+      n->srtt = (decay * rtt_sample + (256 - decay) * n->srtt) / 256;
+    }
+    else
+      n->srtt = rtt_sample;
+
+    TRACE(D_EVENTS, "RTT sample for neighbour %I on %s: %u us (srtt %t ms)",
+          n->addr, ifa->ifname, rtt_sample, n->srtt * 1000);
+  }
+
+out:
   babel_update_cost(n);
 }
 
@@ -1258,6 +1351,13 @@ babel_handle_update(union babel_msg *m, struct babel_iface *ifa)
     return;
   }
 
+  /* Reject IPv4 via IPv6 routes if disabled */
+  if ((msg->net.type == NET_IP4) && ipa_is_ip6(msg->next_hop) && !ifa->cf->ext_next_hop)
+  {
+    DBG("Babel: Ignoring disabled IPv4 via IPv6 route.\n");
+    return;
+  }
+
   /* Retraction */
   if (msg->metric == BABEL_INFINITY)
   {
@@ -1303,10 +1403,11 @@ babel_handle_update(union babel_msg *m, struct babel_iface *ifa)
   best = e->selected;
 
   /*
-   * RFC section 3.8.2.2 - Dealing with unfeasible updates. Generate a one-off
-   * (not retransmitted) unicast seqno request to the originator of this update
+   * RFC 8966 3.8.2.2 - dealing with unfeasible updates. Generate a one-off
+   * (not retransmitted) unicast seqno request to the originator of this update.
+   * Note: !feasible -> s exists, check for 's' is just for clarity / safety.
    */
-  if (!feasible && (metric != BABEL_INFINITY) &&
+  if (!feasible && s && (metric != BABEL_INFINITY) &&
       (!best || (r == best) || (metric < best->metric)))
     babel_generate_seqno_request(p, e, s->router_id, s->seqno + 1, nbr);
 
@@ -1347,7 +1448,7 @@ babel_handle_route_request(union babel_msg *m, struct babel_iface *ifa)
   struct babel_proto *p = ifa->proto;
   struct babel_msg_route_request *msg = &m->route_request;
 
-  /* RFC 6126 3.8.1.1 */
+  /* RFC 8966 3.8.1.1 */
 
   /* Wildcard request - full update on the interface */
   if (msg->full)
@@ -1405,7 +1506,7 @@ babel_handle_seqno_request(union babel_msg *m, struct babel_iface *ifa)
   struct babel_proto *p = ifa->proto;
   struct babel_msg_seqno_request *msg = &m->seqno_request;
 
-  /* RFC 6126 3.8.1.2 */
+  /* RFC 8966 3.8.1.2 */
 
   TRACE(D_PACKETS, "Handling seqno request for %N router-id %lR seqno %d hop count %d",
 	&msg->net, msg->router_id, msg->seqno, msg->hop_count);
@@ -1543,7 +1644,8 @@ babel_auth_check_pc(struct babel_iface *ifa, struct babel_msg_auth *msg)
     n->auth_index_len = msg->index_len;
     memcpy(n->auth_index, msg->index, msg->index_len);
 
-    n->auth_pc = msg->pc;
+    n->auth_pc_unicast = msg->pc;
+    n->auth_pc_multicast = msg->pc;
     n->auth_passed = 1;
 
     return 1;
@@ -1562,16 +1664,30 @@ babel_auth_check_pc(struct babel_iface *ifa, struct babel_msg_auth *msg)
     return 0;
   }
 
-  /* (6) Index matches; only accept if PC is greater than last */
-  if (n->auth_pc >= msg->pc)
+  /*
+   * (6) Index matches; only accept if PC is greater than last. We keep separate
+   * counters for unicast and multicast because multicast packets can be delayed
+   * significantly on wireless networks (enough to be received out of order).
+   * Separate counters are safe because the packet destination address is part
+   * of the MAC pseudo-header (so unicast packets can't be replayed as multicast
+   * and vice versa).
+   */
+  u32 auth_pc = msg->unicast ? n->auth_pc_unicast : n->auth_pc_multicast;
+  if (auth_pc >= msg->pc)
   {
     LOG_PKT_AUTH("Authentication failed for %I on %s - "
-		 "lower packet counter (rcv %u, old %u)",
-                 msg->sender, ifa->ifname, msg->pc, n->auth_pc);
+		 "lower %s packet counter (rcv %u, old %u)",
+                 msg->sender, ifa->ifname,
+		 msg->unicast ? "unicast" : "multicast",
+		 msg->pc, auth_pc);
     return 0;
   }
 
-  n->auth_pc = msg->pc;
+  if (msg->unicast)
+    n->auth_pc_unicast = msg->pc;
+  else
+    n->auth_pc_multicast = msg->pc;
+
   n->auth_passed = 1;
 
   return 1;
@@ -1723,7 +1839,7 @@ babel_iface_update_addr4(struct babel_iface *ifa)
   ip_addr addr4 = ifa->iface->addr4 ? ifa->iface->addr4->ip : IPA_NONE;
   ifa->next_hop_ip4 = ipa_nonzero(ifa->cf->next_hop_ip4) ? ifa->cf->next_hop_ip4 : addr4;
 
-  if (ipa_zero(ifa->next_hop_ip4) && p->ip4_channel)
+  if (ipa_zero(ifa->next_hop_ip4) && p->ip4_channel && !ifa->cf->ext_next_hop)
     log(L_WARN "%s: Missing IPv4 next hop address for %s", p->p.name, ifa->ifname);
 
   if (ifa->up)
@@ -1800,8 +1916,8 @@ babel_add_iface(struct babel_proto *p, struct iface *new, struct babel_iface_con
   ifa->next_hop_ip4 = ipa_nonzero(ic->next_hop_ip4) ? ic->next_hop_ip4 : addr4;
   ifa->next_hop_ip6 = ipa_nonzero(ic->next_hop_ip6) ? ic->next_hop_ip6 : ifa->addr;
 
-  if (ipa_zero(ifa->next_hop_ip4) && p->ip4_channel)
-    log(L_WARN "%s: Missing IPv4 next hop address for %s", p->p.name, new->name);
+  if (ipa_zero(ifa->next_hop_ip4) && p->ip4_channel && !ic->ext_next_hop)
+    log(L_WARN "%s: Missing IPv4 next hop address for %s", p->p.name, ifa->ifname);
 
   init_list(&ifa->neigh_list);
   ifa->hello_seqno = 1;
@@ -1921,7 +2037,7 @@ babel_reconfigure_iface(struct babel_proto *p, struct babel_iface *ifa, struct b
   if ((new->auth_type != BABEL_AUTH_NONE) && (new->auth_type != old->auth_type))
     babel_auth_reset_index(ifa);
 
-  if (ipa_zero(ifa->next_hop_ip4) && p->ip4_channel)
+  if (ipa_zero(ifa->next_hop_ip4) && p->ip4_channel && !new->ext_next_hop)
     log(L_WARN "%s: Missing IPv4 next hop address for %s", p->p.name, ifa->ifname);
 
   if (ifa->next_hello > (current_time() + new->hello_interval))
@@ -1946,7 +2062,7 @@ babel_reconfigure_ifaces(struct babel_proto *p, struct babel_config *cf)
 
   WALK_LIST(iface, iface_list)
   {
-    if (p->p.vrf_set && p->p.vrf != iface->master)
+    if (p->p.vrf_set && !if_in_vrf(iface, p->p.vrf))
       continue;
 
     if (!(iface->flags & IF_UP))
@@ -2156,8 +2272,8 @@ babel_show_neighbors(struct proto *P, const char *iff)
   }
 
   cli_msg(-1024, "%s:", p->p.name);
-  cli_msg(-1024, "%-25s %-10s %6s %6s %6s %7s %4s",
-	  "IP address", "Interface", "Metric", "Routes", "Hellos", "Expires", "Auth");
+  cli_msg(-1024, "%-25s %-10s %6s %6s %6s %7s %4s %9s",
+	  "IP address", "Interface", "Metric", "Routes", "Hellos", "Expires", "Auth", "RTT (ms)");
 
   WALK_LIST(ifa, p->interfaces)
   {
@@ -2172,9 +2288,10 @@ babel_show_neighbors(struct proto *P, const char *iff)
 
       uint hellos = u32_popcount(n->hello_map);
       btime timer = (n->hello_expiry ?: n->init_expiry) - current_time();
-      cli_msg(-1024, "%-25I %-10s %6u %6u %6u %7t %-4s",
+      cli_msg(-1024, "%-25I %-10s %6u %6u %6u %7t %-4s %9t",
 	      n->addr, ifa->iface->name, n->cost, rts, hellos, MAX(timer, 0),
-              n->auth_passed ? "Yes" : "No");
+              n->auth_passed ? "Yes" : "No",
+              n->srtt * 1000);
     }
   }
 }

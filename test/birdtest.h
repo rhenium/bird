@@ -37,10 +37,14 @@ int bt_test_suite_base(int (*test_fn)(const void *), const char *test_id, const 
 static inline u64 bt_random(void)
 { return ((u64) random() & 0xffffffff) | ((u64) random() << 32); }
 
+static inline u32 bt_random_n(u32 max)
+{ return random() % max; }
+
+
 void bt_log_suite_result(int result, const char *fmt, ...);
 void bt_log_suite_case_result(int result, const char *fmt, ...);
 
-#define BT_TIMEOUT 			5	/* Default timeout in seconds */
+#define BT_TIMEOUT 			60	/* Default timeout in seconds */
 #define BT_FORKING 			1	/* Forking is enabled in default */
 
 #define BT_RANDOM_SEED 			0x5097d2bb

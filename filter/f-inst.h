@@ -19,6 +19,7 @@
 #include "filter/data.h"
 #include "lib/buffer.h"
 #include "lib/flowspec.h"
+#include "lib/string.h"
 
 /* Flags for instructions */
 enum f_instruction_flags {
@@ -35,6 +36,16 @@ const char *f_instruction_name_(enum f_instruction_code fi);
 static inline const char *f_instruction_name(enum f_instruction_code fi)
 { return f_instruction_name_(fi) + 3; }
 
+
+int f_const_promotion_(struct f_inst *arg, enum f_type want, int update);
+
+static inline int f_const_promotion(struct f_inst *arg, enum f_type want)
+{ return f_const_promotion_(arg, want, 1); }
+
+static inline int f_try_const_promotion(struct f_inst *arg, enum f_type want)
+{ return f_const_promotion_(arg, want, 0); }
+
+
 struct f_arg {
   struct symbol *arg;
   struct f_arg *next;
@@ -47,6 +58,7 @@ struct f_line {
   u8 args;				/* Function: Args required */
   u8 vars;
   u8 results;				/* Results left on stack: cmd -> 0, term -> 1 */
+  u8 return_type;			/* Type which the function returns */
   struct f_arg *arg_list;
   struct f_line_item items[0];		/* The items themselves */
 };
@@ -94,14 +106,32 @@ void f_add_lines(const struct f_line_item *what, struct filter_iterator *fit);
 
 
 struct filter *f_new_where(struct f_inst *);
+struct f_inst *f_dispatch_method(struct symbol *sym, struct f_inst *obj, struct f_inst *args, int skip);
+struct f_inst *f_dispatch_method_x(const char *name, enum f_type t, struct f_inst *obj, struct f_inst *args);
+struct f_inst *f_for_cycle(struct symbol *var, struct f_inst *term, struct f_inst *block);
+struct f_inst *f_print(struct f_inst *vars, int flush, enum filter_return fret);
+
 static inline struct f_dynamic_attr f_new_dynamic_attr(u8 type, enum f_type f_type, uint code) /* Type as core knows it, type as filters know it, and code of dynamic attribute */
 { return (struct f_dynamic_attr) { .type = type, .f_type = f_type, .ea_code = code }; }   /* f_type currently unused; will be handy for static type checking */
 static inline struct f_dynamic_attr f_new_dynamic_attr_bit(u8 bit, enum f_type f_type, uint code) /* Type as core knows it, type as filters know it, and code of dynamic attribute */
 { return (struct f_dynamic_attr) { .type = EAF_TYPE_BITFIELD, .bit = bit, .f_type = f_type, .ea_code = code }; }   /* f_type currently unused; will be handy for static type checking */
 static inline struct f_static_attr f_new_static_attr(int f_type, int code, int readonly)
 { return (struct f_static_attr) { .f_type = f_type, .sa_code = code, .readonly = readonly }; }
-struct f_inst *f_generate_complex(enum f_instruction_code fi_code, struct f_dynamic_attr da, struct f_inst *argument);
-struct f_inst *f_generate_roa_check(struct rtable_config *table, struct f_inst *prefix, struct f_inst *asn);
+
+static inline int f_type_attr(int f_type) {
+  switch (f_type) {
+    case T_INT:		return EAF_TYPE_INT;
+    case T_IP:		return EAF_TYPE_IP_ADDRESS;
+    case T_QUAD:	return EAF_TYPE_ROUTER_ID;
+    case T_PATH:	return EAF_TYPE_AS_PATH;
+    case T_CLIST:	return EAF_TYPE_INT_SET;
+    case T_ECLIST:	return EAF_TYPE_EC_SET;
+    case T_LCLIST:	return EAF_TYPE_LC_SET;
+    case T_BYTESTRING:	return EAF_TYPE_OPAQUE;
+    default:
+      cf_error("Custom route attribute of unsupported type");
+  }
+}
 
 /* Hook for call bt_assert() function in configuration */
 extern void (*bt_assert_hook)(int result, const struct f_line_item *assert);

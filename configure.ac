@@ -312,7 +312,7 @@ if test "$enable_mpls_kernel" != no ; then
   fi
 fi
 
-all_protocols="$proto_bfd babel bgp mrt ospf perf pipe radv rip rpki static"
+all_protocols="aggregator $proto_bfd babel bgp l3vpn mrt ospf perf pipe radv rip rpki static"
 
 all_protocols=`echo $all_protocols | sed 's/ /,/g'`
 
@@ -320,9 +320,12 @@ if test "$with_protocols" = all ; then
   with_protocols="$all_protocols"
 fi
 
+AH_TEMPLATE([CONFIG_AGGREGATOR],[Aggregator protocol])
 AH_TEMPLATE([CONFIG_BABEL], 	[Babel protocol])
 AH_TEMPLATE([CONFIG_BFD],	[BFD protocol])
 AH_TEMPLATE([CONFIG_BGP],	[BGP protocol])
+AH_TEMPLATE([CONFIG_BMP],	[BMP protocol])
+AH_TEMPLATE([CONFIG_L3VPN],	[L3VPN protocol])
 AH_TEMPLATE([CONFIG_MRT],	[MRT protocol])
 AH_TEMPLATE([CONFIG_OSPF],	[OSPF protocol])
 AH_TEMPLATE([CONFIG_PIPE],	[Pipe protocol])

@@ -1,3 +1,1699 @@
+commit 0e1fbaa5b21db8e5c64a732dbaf0b8afe707a147
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Oct 6 18:53:25 2023 +0200
+
+    NEWS and version update
+
+commit 23f94b1368b71faa0a03e50b9e9d0cf8535cff3a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Oct 6 18:52:02 2023 +0200
+
+    Doc: Minor fixes
+
+commit c5c3a22bccda5454775b48ad318a7fd4bf197f86
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Oct 6 02:36:59 2023 +0200
+
+    Conf: Bytestrings with hex: should use the same general format as ones without.
+    
+    Either hex:01234567, or hex:01:23:45:67. No confusing formats like
+    hex:0123:4567:ab:cdef, which looks like there is an implicit zero byte.
+
+commit e83beb70bd14923cece5b35411606ade6fb8fbee
+Author: Pavel Šorejs <mail@sorejs.eu>
+Date:   Fri Oct 6 04:31:19 2023 +0200
+
+    KRT: Allow to learn routes with RTPROT_KERNEL
+    
+    The Kernel protocol, even with the option 'learn' enabled, ignores
+    direct routes created by the OS kernel (on Linux these are routes
+    with rtm_protocol == RTPROT_KERNEL).
+    
+    Implement optional behavior where both OS kernel and third-party routes
+    are learned, it can be enabled by 'learn all' option.
+    
+    Minor changes by committer.
+
+commit 57aa077227d1f2440dc1b2bb6cbbebd418a6b898
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Oct 5 21:29:04 2023 +0200
+
+    BGP: Improve custom BGP attributes
+    
+     - Implement EA_GET for custom BGP attributes
+     - Forbid EA_SET on existing opaque attributes
+     - Forbid redefining existing attributes
+     - Document possible compatibility problems
+
+commit ba01a6f2e66d03eb5d9426fdf4973f30e09c5710
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Oct 5 17:54:43 2023 +0200
+
+    MPLS: Handle compatibility with old configs
+    
+    Old configs do not define MPLS domains and may use a static protocol
+    to define static MPLS routes.
+    
+    When MPLS channel is the only channel of static protocol, handle it
+    as a main channel. Also, define implicit MPLS domain if needed and
+    none is defined.
+
+commit de09fda5dcef16bf50663f7ffb56074e6ad20b5a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Oct 5 14:26:22 2023 +0200
+
+    Filter: Fix scope handling in for loops
+    
+    Changes in scope implementation broke scope handling in for loops.
+    The term in for loops is supposed to be parsed in the parent scope.
+
+commit abae806efdf6ac5f919c93057dd8df1faff1058c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 4 20:14:12 2023 +0200
+
+    Conf: Fix 'show symbols'
+    
+    Seems like the root scope was not marked as active.
+
+commit ab47c2ae466f785212f0519388417ebb31b2cf24
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 4 19:45:00 2023 +0200
+
+    BGP: Custom attribute definitions should use cfg_alloc(), not malloc()
+    
+    Otherwise we would get memory leaks.
+
+commit d41b06238dc2167f8e470aa2fb31cb937ff8fb3e
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Oct 4 19:57:55 2023 +0200
+
+    Filter: explicitly forbidden for-loop with pre-defined variable
+
+commit 6a242b3ec66f2ab89f9277e67125eab3e3676644
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 4 17:36:03 2023 +0200
+
+    IO: Fix race condition in event processing
+    
+    When regular event was added from work event, we did remember that
+    regular event list was empty and therefore we did not use zero time
+    in poll(). This leads to ~3 s latency in route reload during
+    reconfiguration.
+
+commit 0bfa216f496279905b843abcfb1242477b86783c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 4 15:25:05 2023 +0200
+
+    Doc: Fix syntax errors in SGML
+
+commit be09b030ed40c76ee0727dd3980df77094fdc907
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 4 15:00:24 2023 +0200
+
+    MPLS: Update to support and use 64bit source id
+
+commit cab5fce2b6822b7f3a892103077f26e197fecfbc
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 4 13:00:06 2023 +0200
+
+    Doc: L3VPN documentation
+
+commit 8a70885694c5a3b384deba0f8cd25b7f63b99fcd
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Oct 3 16:11:18 2023 +0200
+
+    Doc: MPLS documentation
+
+commit 8f5511dafb54b5788546065c9b572f9b4f9d47ee
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Oct 1 05:02:46 2023 +0200
+
+    L3VPN: Import/export target reconfiguration
+
+commit d8130da86bda6244e1f5c06eb9b9033625b781e6
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Sep 30 23:18:04 2023 +0200
+
+    BGP, L3VPN: Fix MPLS channel reload
+    
+    When a MPLS channel is reloaded, it should reload all regular MPLS-aware
+    channels. This causes re-evaluation of routes in FEC map and possibly
+    reannouncement of MPLS routes.
+
+commit a7a9df8639c701dd020cf61d19b205230742a17e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Sep 30 20:07:40 2023 +0200
+
+    MPLS: Implement FEC map reconfiguration
+    
+    This allows changing label policy or label range without restart.
+
+commit 9b775859cd7fd54a6fe2bd88359955fce079999d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Sep 26 18:50:20 2023 +0200
+
+    MPLS: Handle label allocation failures
+
+commit e915f99e1cd4f6c90e640f7290c201633ab992f0
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Sep 24 00:24:50 2023 +0200
+
+    L3VPN: Fix bug in reconfiguration
+    
+    Fields import_target / export_target link to config structures, must be
+    updated during reconfiguration.
+
+commit b6385decb3f9f4d4029ee7bfc2f013b495a725f8
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Sep 23 17:55:01 2023 +0200
+
+    MPLS: Improve handling of static label allocations
+    
+    Use mpls_new_label() / mpls_free_label() also for static labels, to keep
+    track of allocated labels and to enforce label ranges.
+    
+    Static label allocations always use static label range, regardless of
+    configured label range.
+
+commit 81a20ca5d8508f7317f2e023a3be5e5da454d740
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Sep 22 19:49:15 2023 +0200
+
+    Static: Add syntax for static MPLS labels
+    
+    Instead of just using route attributes, static routes with
+    static MPLS labels can be defined just by e.g.:
+    
+      route 10.1.1.0/24 mpls 100 via 10.1.2.1 mpls 200;
+
+commit 35726051517aaf1869458caed03c7ee1c516721c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Sep 22 15:47:48 2023 +0200
+
+    MPLS: Label range non-intersection check
+
+commit fcf22586200000f0d19ffed339524d2530ed0d6f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Sep 18 17:47:17 2023 +0200
+
+    MPLS: Improve label range reconfiguration
+    
+    Allow to shorten label range over unused area.
+
+commit 8e9e013b0ddec438151c9d12fd4bac079c350310
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Sep 18 17:32:24 2023 +0200
+
+    MPLS: Add command 'show mpls ranges'
+    
+    Add command to show MPLS label ranges and their stats.
+
+commit 3397ca51f8a33e6ef97ab5ec7209dfce7051bc5d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Sep 18 14:19:20 2023 +0200
+
+    Nest: Fix missing RTS_* values in filters
+
+commit e338c4b63c6a9258d858f158049943e1e8f00e6f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Sep 18 14:12:22 2023 +0200
+
+    Lib: Extend MPLS label allocator bitmap
+    
+    Add function lmap_last_one_in_range() for finding the last active label
+    in a label range.
+
+commit bcff3ae79acfd938459869ac98db4f83e3d422b6
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Oct 3 20:06:13 2022 +0200
+
+    L3VPN: BGP/MPLS VPNs using MPLS backbone
+    
+    The L3VPN protocol implements RFC 4364 BGP/MPLS VPNs using MPLS backbone.
+    It works similarly to pipe. It connects IP table (one per VRF) with (global)
+    VPN table. Routes passed from VPN table to IP table are stripped of RD and
+    filtered by import targets, routes passed in the other direction are extended
+    with RD, MPLS labels and export targets in extended communities. A separate
+    MPLS channel is used to announce MPLS routes for the labels.
+
+commit 9ca86ef69cc56cb75e48e6f46bfdbe1b1e3e99b6
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Oct 1 22:38:49 2022 +0200
+
+    MPLS: Add support for per-VRF labeling policy
+    
+    The new labeling policy MPLS_POLICY_VRF assigns one label to all routes
+    (from the same FEC map associated with one VRF), while replaces their
+    next hops with a lookup to a VRF table. This is useful for L3VPN
+    protocol.
+
+commit 9d456d5366593c7b0ebfde003be0517adb554541
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Sep 15 02:30:15 2022 +0200
+
+    BGP: Add MPLS support
+    
+    When MPLS is active, received routes on MPLS-aware SAFIs (ipvX-mpls,
+    vpnX-mpls) are automatically labeled according to active label policy and
+    corresponding MPLS routes are automatically generated. Also routes sent
+    on MPLS-aware SAFIs announce local labels when it should be done.
+
+commit 15c86ed061d3dbc7e4ef863e396cda5ec3ed0d4c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Sep 15 02:29:12 2022 +0200
+
+    Static: Add MPLS support
+    
+    When MPLS is active, static IP/VPN routes are automatically labeled
+    according to active label policy and corresponding MPLS routes are
+    automatically generated.
+
+commit 333ddd4f981b90d5d3dff166b6abf9bf40bede9f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Sep 15 01:38:18 2022 +0200
+
+    MPLS subsystem
+    
+    The MPLS subsystem manages MPLS labels and handles their allocation to
+    MPLS-aware routing protocols. These labels are then attached to IP or VPN
+    routes representing label switched paths -- LSPs.
+    
+    There was already a preliminary MPLS support consisting of MPLS label
+    net_addr, MPLS routing tables with static MPLS routes, remote labels in
+    next hops, and kernel protocol support.
+    
+    This patch adds the MPLS domain as a basic structure representing local
+    label space with dynamic label allocator and configurable label ranges.
+    To represent LSPs, allocated local labels can be attached as route
+    attributes to IP or VPN routes with local labels as attributes.
+    
+    There are several steps for handling LSP routes in routing protocols --
+    deciding to which forwarding equivalence class (FEC) the LSP route
+    belongs, allocating labels for new FECs, announcing MPLS routes for new
+    FECs, attaching labels to LSP routes. The FEC map structure implements
+    basic code for managing FECs in routing protocols, therefore existing
+    protocols can be made MPLS-aware by adding FEC map and delegating
+    most work related to local label management to it.
+
+commit e55696a4f88b63c622bb3a0360f9114d01253e53
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sat May 22 12:31:47 2021 +0200
+
+    Lib: Indirect bitmap for MPLS label allocator
+
+commit 21213be523baa7f2cbf0feaa617f265c55e9b17a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Oct 2 15:09:30 2023 +0200
+
+    Nest: Expand rte_src.private_id to u64
+    
+    In general, private_id is sparse and protocols may want to map some
+    internal values directly into it. For example, L3VPN needs to
+    map VPN route discriminators to private_id.
+    
+    OTOH, u32 is enough for global_id, as these identifiers are dense.
+
+commit 8ad9c4bb339172d445d1346876b2c9f3c27199c1
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Sep 27 12:51:55 2023 +0200
+
+    BGP config: Splitting Route Refresh and Enhanced Route Refresh
+    
+    Both toggles are on by default but if some implementation needs one or
+    another to be switched off separately, then it's possible now.
+
+commit a4adb09f5a5c3806488fb121eafc0e6c969135e7
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Sep 22 15:10:45 2023 +0200
+
+    Aggregator: brief documentation
+
+commit 018a77fc0bc90f74e7267b40ce3bc82074ec8582
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Sep 22 14:21:21 2023 +0200
+
+    Aggregator: Forbidden dangerous filter computations
+
+commit 8674d7ab4bf76cadc256ca24609ffe4b1e8fcbf4
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Jul 12 15:11:00 2023 +0200
+
+    Aggregator: Fixed hashing of adata
+
+commit 977b82fba49b22d9548546d88b105945921efaed
+Author: Igor Putovny <igor.putovny@nic.cz>
+Date:   Wed Jun 21 13:15:07 2023 +0200
+
+    Basic route aggregation
+    
+    Add a new protocol offering route aggregation.
+    
+    User can specify list of route attributes in the configuration file and
+    run route aggregation on the export side of the pipe protocol. Routes are
+    sorted and for every group of equivalent routes new route is created and
+    exported to the routing table. It is also possible to specify filter
+    which will run for every route before aggregation.
+    
+    Furthermore, it will be possible to set attributes of new routes
+    according to attributes of the aggregated routes.
+    
+    This is a work in progress.
+    
+    Original work by Igor Putovny, subsequent cleanups and finalization by
+    Maria Matejka.
+
+commit 0a729b509c2c4476cbf66c64620a863e6a381c8c
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Jun 23 09:05:48 2023 +0200
+
+    Simple testing of reconfiguration to a slightly different one
+
+commit a0fb0eaa6780e60b7c5434dfe0e2ed402e5a4ea4
+Author: katerina.kubecova <katerina.kubecova@nic.cz>
+Date:   Tue Sep 19 11:11:24 2023 +0200
+
+    BGP: Setting and unsetting unknown attributes
+    
+    All these must be declared as bytestring. Allows operators to delete
+    unwanted attributes breaking the Internet:
+    
+        https://blog.benjojo.co.uk/post/bgp-path-attributes-grave-error-handling
+
+commit cc122bf0c295207a909061a365eccd49462b1b16
+Author: katerina.kubecova <katerina.kubecova@nic.cz>
+Date:   Mon Sep 18 14:07:59 2023 +0200
+
+    Attributes declared in config can be bytestrings
+
+commit 8cc9d198c7ab906e176a7926484ea85d4f53cab6
+Author: katerina.kubecova <katerina.kubecova@nic.cz>
+Date:   Wed Sep 20 09:50:22 2023 +0200
+
+    Filter: Function unset() accepts attributes declared in config
+
+commit bb8e28248be0ad1f728433e4884dfe2db3772b30
+Author: katerina.kubecova <katerina.kubecova@nic.cz>
+Date:   Mon Sep 18 14:43:58 2023 +0200
+
+    Structures bytestring and adata merged into adata.
+
+commit 9ffea830b673a8b8506877a371e0c9fc52c99b94
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Sep 14 17:24:09 2023 +0200
+
+    Conf: Move definition of struct keyword to conf.h
+
+commit a3dc26455d125310ddf3c903208b0168dbbd81d4
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Sep 13 06:21:26 2023 +0200
+
+    Filter: Use common initializer for undefined variables and eattrs.
+    
+    Undefined paths and clists should use typed f_val with empty adata
+    instead of just void f_val. Use common initializer to handle both
+    variables and eattrs.
+
+commit 7395b97daf529cab1065f107c924bed310a8ad75
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Sep 12 18:44:20 2023 +0200
+
+    Filter: Minor updates to methods
+    
+    Remove warning when function-like syntax is used for calling
+    add/remove/... methods.
+    
+    Fix argument offset in error messages for function-like syntax.
+
+commit 132f1edaf402aba79ae3983966795b2f1220afbb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jul 25 19:33:51 2023 +0200
+
+    Filter: Split clist add/delete operations to multiple methods
+
+commit f0d1396073dc7c3a6ab5f88baa07f2494cbd5328
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jul 25 17:43:52 2023 +0200
+
+    Filter: Implement constant promotion for multiple dispatch methods
+
+commit e88695913148ae63e1f8c8ac64f7b039dd3fc286
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jul 12 20:11:34 2023 +0200
+
+    Filter: Print proper error response in multiple method dispatch
+    
+    When no matching method is found, print an error response containing
+    position and type of infringing argument and a set of expected types.
+
+commit e4ce88cc50a7af21e0b7042f60abd11e4288c6fe
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jul 12 20:01:03 2023 +0200
+
+    Filter: Move argument list reversal from function_call to var_list
+    
+    List of arguments for function calls is constructed in reverse and then
+    reverted. This was done in function_call grammar rule. Do the reverse
+    directly in var_list grammar rule. This fixes reverse order of arguments
+    in method calls.
+
+commit fc4398b4e1d18142a5c428a7c90484071a81ab9c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jul 4 19:07:30 2023 +0200
+
+    Filter: Better syntax for function return types
+    
+    The C-style syntax does not really fit into rest of our syntax.
+
+commit cc1099a04169b768cb4803686ee20423a6d3fede
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jul 3 17:00:58 2023 +0200
+
+    Filter: Implement multiple dispatch for methods
+    
+     - Extend method descriptors with type signature
+     - Daisy chain method descriptors for the same symbol
+     - Dispatch methods for same symbol based on type signature
+     - Split add/delete/filter operations to multiple methods
+     - Replace ad-hoc dispatch of old-style syntax with scope-based dispatch
+     - Also change method->arg_num to count initial arg
+    
+    It still needs some improvements, like better handling of untyped
+    expressions and better error reporting when no dispatch can be done.
+    
+    The multiple dispatch could also be extended to dispatch regular
+    function-like expressions in a uniform way.
+
+commit c696e3cb8e53229a438a8509a05e9d0ff27b8b4a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jun 28 01:21:23 2023 +0200
+
+    Filter: Make f_method_call_*() usage symmetric
+
+commit ab61476ebf2b8873d542f77069ec111030329268
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jun 27 21:38:05 2023 +0200
+
+    Filter: Convert more methods to use METHOD_R()
+
+commit 4cdd6f2ea0af64843082c05147c307eb62165352
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jun 27 21:16:11 2023 +0200
+
+    Filter: Remove number of args from METHOD_R()
+    
+    Macro METHOD_R() is used for simplest methods, there is no place to
+    define argument types, so let's force it to be 0.
+
+commit c0231b092960c66dd17119f75ce3d2b4101f42aa
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jun 27 14:49:28 2023 +0200
+
+    Conf: Remove toksym from symbol_known
+    
+    No need to have toksym in symbol_known, as defined symbols are preferred
+    (by scope) to keywords anyway. Adding it just creates grammar conflicts.
+
+commit fdd39c81bd4cb04dc9f0f5e5cc8db95909b76cbf
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jun 19 17:24:30 2023 +0200
+
+    Filter: Print instructions take only one value (simplification)
+
+commit 6d411fc7bdd82ee40a96fee1ded228fa102b62c9
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jun 19 15:49:51 2023 +0200
+
+    Filter: Shortened method declarations
+
+commit 21faa54ec3251cb730a23a663ebf7775834ee7a8
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Sun Jun 18 22:50:45 2023 +0200
+
+    Filter: The for loop uses the method system for type dispatch
+
+commit 1d38726c646ee3a4b6431d55f921fa6ede92fca1
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Sat Jun 17 13:05:23 2023 +0200
+
+    Removing unused terminals from filter config
+
+commit fc9d471b36b91429e5d86aa794716683a5281449
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Jun 16 17:35:37 2023 +0200
+
+    Filter: Methods rework
+    
+    Methods can now be called as x.m(y), as long as x can have its type
+    inferred in config time. If used as a command, it modifies the object,
+    if used as a value, it keeps the original object intact.
+    
+    Also functions add(x,y), delete(x,y), filter(x,y) and prepend(x,y) now
+    spit a warning and are considered deprecated.
+    
+    It's also possible to call a method on a constant, see filter/test.conf
+    for examples like bgp_path = +empty+.prepend(1).
+    
+    Inside instruction definitions (filter/f-inst.c), a METHOD_CONSTRUCTOR()
+    call is added, which registers the instruction as a method for the type
+    of its first argument. Each type has its own method symbol table and
+    filter parser switches between them based on the inferred type of the
+    object calling the method.
+    
+    Also FI_CLIST_(ADD|DELETE|FILTER) instructions have been split to allow
+    for this method dispatch. With type inference, it's now possible.
+
+commit 39f8f46d81203ebd6b976da56e83930f972dccab
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Sat Jun 17 10:16:28 2023 +0200
+
+    Uninitialized filter variables of path/[el]?clist types are now explicitly empty
+
+commit 6f798683a34aa87f5e4f590be4c90253a1135e08
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Jun 16 22:11:03 2023 +0200
+
+    Conf: config warnings show the file position
+
+commit 062ff656830f89bd3bca5b39a86c4d41b535a7bf
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Jun 15 13:25:40 2023 +0200
+
+    Filter: functions can and should have typed return values
+
+commit f86c86b7913f55c1221d8c5e1ff27700aa663a6e
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Jun 13 09:39:29 2023 +0200
+
+    Filter/Conf: Method names have their own keyword hash
+    
+    To allow for future dynamic method definition, parsing method names is
+    done via a dedicated keyword hash/scope.
+
+commit 6b95353ebdaa724252492f941ebe75f80e9e545a
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Jun 13 11:09:41 2023 +0200
+
+    Conf: Allowing conf scope to be explicitly read only
+
+commit 51f2e7afaf069508685281e8c1b8bb1ceda79d8f
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Jun 13 10:51:03 2023 +0200
+
+    Conf: Symbol manipulation gets its context explicitly
+
+commit 5951dfbd5ed21d973e7627740c069d6612d7b899
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jun 12 11:37:50 2023 +0200
+
+    Filter: any lvalue can get its methods called
+
+commit ae8ecafda9e28bfd417795fbb43408d6857df76d
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jun 12 11:20:49 2023 +0200
+
+    Filter: split out dot-notation methods to separate targets
+    
+    This is just a preparationary refactoring to allow type-based method
+    tables.
+
+commit 58efa94460381309c754a3162df257ae043c2cbd
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Jun 9 12:49:19 2023 +0200
+
+    Conf: Keywords have their default symbols
+    
+    This avoids unnecessary collapsed soft scopes caused by keyword symbol multiallocation.
+
+commit 8e177cf35b582ec973c1abce4709c80847adb711
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon May 2 20:29:03 2022 +0200
+
+    Conf: Symbol hashes for all scopes
+    
+    This is a backport cherry-pick of commits
+      165156beeb2926472bbceca3c103aacc3f81a8cc
+      cce974e8ea992d0e6d2f649eca7880b436d91d71
+    
+    from the v3.0 branch as we need symbol hashes directly inside their
+    scopes for more general usage than before.
+
+commit a5a6de581b79641b21b26277580cb4cc118da7ea
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Jun 9 11:02:05 2023 +0200
+
+    Dropping empty-type const f_vals, they were copied anyway
+
+commit 86598183917cd9ff1d21900e0d8cc18dd1e791e1
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Jun 9 13:49:17 2023 +0200
+
+    Conf: Adding dummy thread-number setting for easier sharing of configuration between v2 and v3
+
+commit aa70e14c9e4cfeb70d2dc9cee497c40057dc105e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Aug 29 18:23:29 2023 +0200
+
+    BFD: Improve handling of AdminDown
+    
+    According to RFC 5882, system should not interpret the local or remote
+    session state transition to AdminDown as failure. We followed that for
+    the local session state but not for the remote session state (which
+    just triggered a transition of the local state to Down). The patch
+    fixes that.
+    
+    We do not properly generate AdminDown on our side, so the patch is
+    relevant just for interoperability with other systems.
+    
+    Thanks to Sunnat Samadov for the bugreport.
+
+commit f5140d1027f514bc59d46ab8aa09181f5870afbd
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Dec 13 19:31:46 2022 +0100
+
+    Conf: Allow keywords to be redefined by user symbols
+    
+    Most syntactic constructs in BIRD configuration (e.g. protocol options)
+    are defined as keywords, which are distinct from symbols (user-defined
+    names for protocols, variables, ...). That may cause backwards
+    compatibility issue when a new feature is added, as it may collide with
+    existing user names.
+    
+    We can allow keywords to be shadowed by symbols in almost all cases to
+    avoid this issue.
+    
+    This replaces the previous mechanism, where shadowable symbols have to be
+    explictly added to kw_syms.
+
+commit cce48c6cdd9484c606879ea76d4c633fce12ba36
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Aug 25 23:14:36 2023 +0200
+
+    Filter: Add separate instruction for uninitialized variable declaration
+    
+    The previous approach (use VOID constant for variable initialization)
+    failed due to dynamic type check failure.
+    
+    Thanks to Alexander Zubkov <green@qrator.net> for the bugreport.
+
+commit 116285f2b000a4b78044f1bcf1eb1d6655f1d2fe
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Aug 25 04:32:01 2023 +0200
+
+    RPKI: Fix conflict in config grammar
+
+commit 32427c9ce119df5457d3d2c6e677429e31a5edad
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Aug 25 04:29:32 2023 +0200
+
+    Nest: Fix missing bar in kw_sym
+    
+    Thanks to Alexander Zubkov for the notice.
+
+commit 9d8e4b01bc53d684f5a5b3230c371382860de58b
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Thu Aug 24 18:04:33 2023 +0200
+
+    Doc: Document bytestring type
+
+commit cbb43d6ff31fcae8a682659ec514cbea21ee4e25
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Thu Aug 24 17:41:51 2023 +0200
+
+    Doc: Document RAdv "custom option" configuration definition
+
+commit f411a19bb0467cfc421f8aa6f5ead49972bab058
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Aug 24 16:59:23 2023 +0200
+
+    Conf: Use nonterminal bytestring instead of BYTETEXT
+    
+    Nonterminal bytestring allows to provide expressions to be evaluated in
+    places where BYTETEXT is used now: passwords, radv custom option.
+    
+    Based on the patch from Alexander Zubkov <green@qrator.net>, thanks!
+
+commit 0dbcc927260c6da918fa1bd78c86800e41ab05a8
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Thu Aug 24 04:45:55 2023 +0200
+
+    Filter: Use more generic approach for intra-config expressions
+    
+    Replace f_eval_int() function with a type-generic variant: cf_eval().
+    Implement similar fuction: cf_eval_int() via inline call to cf_eval().
+
+commit fc3547880aafad726509f0514df2d5e0bb140728
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Thu Aug 24 04:30:42 2023 +0200
+
+    Filter: Add bytestring type
+    
+     - Rename BYTESTRING lexem to BYTETEXT, not to collide with 'bytestring' type name
+     - Add bytestring type with id T_BYTESTRING (0x2c)
+     - Add from_hex() filter function to create bytestring from hex string
+     - Add filter test cases for bytestring type
+    
+    Minor changes by committer.
+
+commit eddc0ffdab239c61cc0e064b6ebd33dfadcef3cd
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Aug 24 03:04:58 2023 +0200
+
+    Lib: Add functions for reading and writing of bytestrings
+    
+    Based on patch from Alexander Zubkov, thanks!
+
+commit e3c0eca95642a846ab65261424a51dd99d954017
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Aug 23 15:55:31 2023 +0200
+
+    Nest: Treat VRF interfaces as inside respective VRFs
+    
+    Despite not having defined 'master interface', VRF interfaces should be
+    treated as being inside respective VRFs. They behave as a loopback for
+    respective VRFs. Treating the VRF interface as inside the VRF allows
+    e.g. OSPF to pick up IP addresses defined on the VRF interface.
+    
+    For this, we also need to tell apart VRF interfaces and regular interfaces.
+    Extend Netlink code to parse interface type and mark VRF interfaces with
+    IF_VRF flag.
+    
+    Based on the patch from Erin Shepherd, thanks!
+
+commit 5121101136cb80151a9361c63dc4822afeb44eef
+Merge: d2dbe854 4558adab
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Aug 22 15:28:05 2023 +0200
+
+    Merge branch 'bmp'
+
+commit d2dbe854631813eae9fbf3e264ced4460ea4c432
+Author: Jakub Ružička <jakub.ruzicka@nic.cz>
+Date:   Tue Aug 22 14:13:55 2023 +0200
+
+    RPM: Sync bird.spec from Fedora dist-git
+    
+    It seems all Fedora packages are built from epel7 branch.
+
+commit 31ef5645e9155365db96705b847968008d378658
+Author: Jakub Ružička <jakub.ruzicka@nic.cz>
+Date:   Wed Apr 26 17:26:30 2023 +0200
+
+    Distro: Add apkg packaging test
+    
+    The test was written by Maria Matejka, thanks!
+    
+    Run this using
+    
+        apkg test
+
+commit 215f7161c426975ca821f5d3c1866889287dcdbc
+Author: Jakub Ružička <jakub.ruzicka@nic.cz>
+Date:   Fri May 21 04:48:27 2021 +0200
+
+    Distro: Add apkg compat level
+    
+    This will allow compatibility on future apkg config updates.
+
+commit 5fb871def46c9fc0d0e02d5bf1f2c8f76c40dc30
+Author: Jakub Ružička <jakub.ruzicka@nic.cz>
+Date:   Wed May 3 14:13:21 2023 +0200
+
+    Debian: Fix for arm64 cross build
+    
+    Mirrors debian patch.
+
+commit 5fe00df693a7a06888d6fba2a967fe0ca04f29ae
+Author: Jakub Ružička <jakub.ruzicka@nic.cz>
+Date:   Thu Oct 20 18:47:09 2022 +0200
+
+    Debian: Use {{ now }} in changelog
+
+commit 2b4ab79de1f5afdfd821689e81883db662f433c6
+Author: Jakub Ružička <jakub.ruzicka@nic.cz>
+Date:   Wed Feb 22 19:01:31 2023 +0100
+
+    Debian: Bump compat level to 11
+    
+    Current is 13, remaining blockers:
+    
+    - Debian 9 @ 11 (EOL)
+    - Ubuntu 18.04 @ 12 (EOL 2023-04-02)
+
+commit b983b5916594731b5af1ed8f7ef12c64ce36e7fb
+Author: Jakub Ružička <jakub.ruzicka@nic.cz>
+Date:   Tue Feb 7 19:20:52 2023 +0100
+
+    Debian: Sync packaging with Debian
+
+commit b0c3c286a54050b56af0c0fe398e0761cc320581
+Author: Jakub Ružička <jakub.ruzicka@nic.cz>
+Date:   Tue Feb 7 19:19:57 2023 +0100
+
+    Debian: Add birdcl manpage
+    
+    Mirrors Debian package change.
+
+commit ad514e603329807e28ddda6beaaa3ebc8f36b069
+Author: Jakub Ružička <jakub.ruzicka@nic.cz>
+Date:   Thu May 20 18:07:46 2021 +0200
+
+    RPM: Add missing BuildRequires: autoconf
+
+commit fea04d7c34b92d854cfcd4cc3db2dcba60caba7b
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Tue Aug 22 14:44:18 2023 +0200
+
+    Use more proper pointers to constant bytestrings
+
+commit 9bf20484764364b9f32bef0a3a7f877abbc29914
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Aug 22 14:20:59 2023 +0200
+
+    BGP: Update RFC reference
+    
+    RFC 5549 was obsoleted by RFC 8950.
+
+commit 4558adabfbbe3696156d20767168010d6238f434
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Aug 22 01:24:21 2023 +0200
+
+    BMP: Improve peer_down handling
+    
+    Move all bmp_peer_down() calls to one place and make it synchronous with
+    BGP session down, ensuring that BMP receives peer_down before route
+    withdraws from flushing.
+    
+    Also refactor bmp_peer_down_() message generating code.
+
+commit 52641e086675832e9f43f86237b0cddbd5ec551e
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Aug 21 04:20:32 2023 +0200
+
+    BMP: Use generic channel feed instead of direct walk over rtable
+    
+    Now we use rt_notify() and channels for both feed and notifications,
+    in both import tables (pre-policy) and regular tables (post-policy).
+    
+    Remove direct walk in bmp_route_monitor_snapshot().
+
+commit ef6ab5ce86af925ee10687fde4e62912fb892433
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Aug 21 04:17:21 2023 +0200
+
+    Nest: Use generic rte_announce() also for import tables
+    
+    Remove special rte_announce_in(), so we can use generic rte_announce()
+    for bot feed and notifications.
+
+commit c40f29a79035b54a8b48ece0e91d38d9066529e3
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Aug 18 15:39:08 2023 +0200
+
+    BMP: Fix route timestamps
+
+commit f4deef89bebae6e41654217e20f2a7531c65bf49
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Aug 18 03:53:58 2023 +0200
+
+    BMP: Refactor route monitoring
+    
+     - Manage BMP state through bmp_peer, bmp_stream, bmp_table structures
+     - Use channels and rt_notify() hook for route announcements
+     - Add support for post-policy monitoring
+     - Send End-of-RIB even when there is no routes
+     - Remove rte_update_in_notify() hook from import tables
+     - Update import tables to support channels
+     - Add bmp_hack (no feed / no flush) flag to channels
+
+commit aec21cda249f9460d63c14ca83a9fa4210bcc20d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Aug 1 18:39:38 2023 +0200
+
+    BMP: Remove useless buffer
+
+commit 8ded8baba2a95cec81f20b10160c81d229f8fae8
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Aug 1 17:56:56 2023 +0200
+
+    BMP: Simplify route monitoring hooks
+    
+    No need for *_begin(), *_commit(), and *_end() hooks. The hook *_notify()
+    is sufficient for everything.
+
+commit ecbae010bf057dbaf0ec46e888fb7446fee9c736
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Fri Jun 30 13:16:09 2023 +0200
+
+    Fixed a typo in documentation
+    
+    The problem was the "/" symbol in the prefix mask that finished the formatting definition prematurely.
+
+commit ccfa48a24aea64d1a844fb97cfe15965197c0908
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Mon Jun 26 15:35:22 2023 +0200
+
+    RAdv: Use new syntax for custom options
+    
+    And use WALK_LIST macro
+
+commit 9c81250c04798fd274ae9d77380e93b941ac2d7f
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Fri Jun 23 17:21:05 2023 +0200
+
+    RAdv: Add custom options
+    
+    Currently one can use only a predefined set of advertised options in RAdv
+    protocol, which are supported by BIRD configuration. It would be convenient
+    to be able to specify other possible options at least manually as a blob
+    so one should not wait until it is supported in the code, released, etc.
+    
+    This idea is inspired by presentation by Ondřej Caletka at CSNOG, in which
+    he noticed the lack of either PREF64 option or possibility to add custom
+    options in various software.
+    
+    The patch makes it possible to define such options with the syntax:
+    
+      other type <num> <bytestring>
+
+commit 65d6a525944faa3f77041419991d77106d8f0a0d
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Fri Jun 23 16:47:37 2023 +0200
+
+    Add hex:XYZ syntax for short hex strings
+    
+    Hexadecimal bytestring literals have minimal length to not collide
+    with IP addresses or regular (hexadecimal) number literals.
+    
+    Allow to use shorter literals with explicit hex: prefix.
+
+commit 5f2ecb2298a6fe4b2fcd9efc0b39c36202496c2c
+Merge: f8bcb037 52bae235
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Jun 22 17:25:18 2023 +0200
+
+    Merge tag 'v2.13.1'
+
+commit 52bae235b716a3c8d629ddf1306178568c69833f
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Jun 22 16:14:12 2023 +0200
+
+    NEWS and version update
+
+commit 1499a335f6f44a0fd85365e404c2a11842d7f75c
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Jun 22 16:07:28 2023 +0200
+
+    Filter: Fixed segfault when a case option had an empty block
+    
+    Thanks to Kobayashi_Bairuo <noc@tohunet.com> for reporting.
+
+commit ac7341a18146bf0f0b2c60477c4292a9cd428a87
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 19 01:02:57 2023 +0200
+
+    BGP: Fix role check when no capability option is present
+    
+    When an OPEN message without capability options was parsed, the remote
+    role field was not initialized with the proper (non-zero) default value,
+    so it was interpreted as if 'provider' was announced.
+    
+    Thanks to Mikhail Grishin for the bugreport.
+
+commit f8bcb037b5b71a19209f1b63d52895c8c34c675b
+Author: Luiz Amaral <email@luiz.eng.br>
+Date:   Thu Jun 15 15:01:50 2023 +0200
+
+    Netlink: Allow RTA_VIA even without MPLS support
+    
+    It is necessary for IPv4 over IPv6 nexthop support on FreeBSD,
+    and RTA_VIA is not really related to MPLS.
+    
+    It breaks build for some very old systems like Debian 8 and CentOS 7,
+    but we generally do not support older kernels than 4.14 LTS anyway.
+
+commit 90f417604518cbaa6f5b8a833352d73c51e53e57
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 15 15:50:18 2023 +0200
+
+    CI: Remove obsolete CI targets
+    
+    Remove build-debian-8, build-ubuntu-14_04, build-centos-7, pkg-debian-9,
+    and pkg-centos-7 targets.
+    
+    Debian 8, Ubuntu 14.04, and CentOS 7 have unsupported kernels, Debian 9
+    has okay kernel, but is EOL.
+
+commit 43d41d8449a4eb196422d6d309dbea998d920541
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 8 05:10:05 2023 +0200
+
+    BMP: Ensure that bmp_fire_tx() does nothing when not up
+
+commit e8838d930cd5c875f32aa2b7da5d84995b14ccac
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Jun 8 04:56:41 2023 +0200
+
+    BMP: Support multiple instances of BMP protocol
+    
+    Add internal BMP functions with plicit bmp_proto *p as first argument,
+    which allows using TRACE() macro. Keep list of BMP instances and call
+    internal functions. Old BMP functions are wrappers that call internal
+    functions for all enabled BMP instances.
+    
+    Extract End-of-RIB mark into separate function.
+    
+    Based on patch from Michal Zagorski <mzagorsk@akamai.com>. Thanks!
+
+commit 69372dc9aa8b234b79999c4cdcdfa3aa05e3a672
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Jun 2 02:34:05 2023 +0200
+
+    Babel: Minor changes to RTT formatting
+    
+    Use existing %t printf code and move 'ms' in CLI output to table header.
+
+commit f08abcb8dda6ff488fa1b52314a67d97aee059d7
+Author: Toke Høiland-Jørgensen <toke@toke.dk>
+Date:   Fri Jun 2 00:31:53 2023 +0200
+
+    Babel: Add support for the RTT extension
+    
+    This adds support to the Babel protocol for the RTT extension specified
+    in draft-ietf-babel-rtt-extension. While this extension is not yet at the
+    RFC stage, it is one of the more useful extensions to Babel[0], so it
+    seems worth having in Bird as well.
+    
+    The extension adds timestamps to Hello and IHU TLVs and uses these to
+    compute an RTT to each neighbour. An extra per-neighbour cost is then
+    computed from the RTT based on a minimum and maximum interval and cost
+    value specified in the configuration. The primary use case for this is
+    improving routing in a geographically distributed tunnel-based overlay
+    network.
+    
+    The implementation follows the babeld implementation when picking
+    constants and default configuration values. It also uses the same RTT
+    smoothing algorithm as babeld, and follows it in adding a new 'tunnel'
+    interface type which enables RTT by default.
+    
+    [0] https://alioth-lists.debian.net/pipermail/babel-users/2022-April/003932.html
+
+commit d8cf3cad5104ab7a9887397b2a34d94c8a5f2aef
+Author: Toke Høiland-Jørgensen <toke@toke.dk>
+Date:   Fri Jun 2 00:26:41 2023 +0200
+
+    IO: Add current_time_now() function for immediate timestamp
+    
+    Add a current_time_now() function which gets an immediate monotonic
+    timestamp instead of using the cached value from the event loop. This is
+    useful for callers that need precise times, such as the Babel RTT
+    measurement code.
+    
+    Minor changes by committer.
+
+commit 0799fc99abb523432bc3f903f6a32eafbe37d043
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed May 31 18:32:53 2023 +0200
+
+    BMP: Fix bug in buffer resize
+    
+    The buffer code in bmp_buffer_grow(), reuse the MRT buffer handling code.
+    
+    Based on comments by Michal Zagorski <mzagorsk@akamai.com>, Thanks!
+
+commit e8be7a7080be2ffd800ead5377b06c7a535b564a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed May 31 17:41:53 2023 +0200
+
+    BMP: Proper reconfiguration and protocol status
+    
+    Based on patches from Michal Zagorski <mzagorsk@akamai.com> co-authored
+    with Pawel Maslanka <pmaslank@akamai.com>. Thanks!
+
+commit 1e45e2aa4e173869be071bfa28057d8b52e8948c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue May 30 17:23:56 2023 +0200
+
+    BMP: Add station address check
+    
+    Also, do not initialize it to IPA_NONE4, use regular IPA_NONE.
+
+commit 62d8fbdc1cb3d358b0d20d7b10bd3f17f357d567
+Author: Michal Zagorski <mzagorsk@akamai.com>
+Date:   Tue May 30 17:09:25 2023 +0200
+
+    BMP: Add local address option
+    
+    Also remove unused local and ip_post_policy options.
+    
+    Co-authored with Pawel Maslanka <pmaslank@akamai.com>.
+    
+    Minor changes by committer.
+
+commit ae4d934c53cdc4cc5ec3d4535cd5138fdf9b25cb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue May 30 15:52:01 2023 +0200
+
+    BMP: Minor formatting cleanups
+    
+    Based on patches from Michal Zagorski <mzagorsk@akamai.com> co-authored
+    with Pawel Maslanka <pmaslank@akamai.com>. Thanks!
+
+commit c1821a9aba3c7fbdb48cee7d86e4661317900a0a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue May 30 15:37:52 2023 +0200
+
+    BGP: Improve bgp_create_update_bmp()
+    
+    Fix issue with missing AF cap (e.g. IPv4 unicast when no capabilities
+    are announced).
+    
+    Add Linpool save/restore action similar to bgp_create_update().
+    
+    Based on patch from Michal Zagorski <mzagorsk@akamai.com> co-authored
+    with Pawel Maslanka <pmaslank@akamai.com>. Thanks!
+
+commit f8ba82804faba5cc1520d4545330502e29b9e920
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri May 19 01:02:57 2023 +0200
+
+    BGP: Fix role check when no capability option is present
+    
+    When an OPEN message without capability options was parsed, the remote
+    role field was not initialized with the proper (non-zero) default value,
+    so it was interpreted as if 'provider' was announced.
+    
+    Thanks to Mikhail Grishin for the bugreport.
+
+commit b0e97617d98ed02235de37b7e498d81f01330b50
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu May 18 15:55:45 2023 +0200
+
+    Lib: Improve IP/net hashing
+    
+    Backport some changes from branch oz-parametric-hashes. Replace naive
+    hash function for IPv6 addresses, fix hashing of VPNx (where upper half
+    of RD was ignored), fix hashing of MPLS labels (where identity was used).
+
+commit 3cf91fb9eb5e6aa51e63edcd237ee266373aec79
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue May 16 13:25:48 2023 +0200
+
+    Nest: Add tests and benchmark for FIB
+    
+    Basic fib_get() / fib_find() test for random prefixes, FIB_WALK() test,
+    and benchmark for fib_find(). Also generalize and reuse some code from
+    trie tests.
+
+commit aa3c35498d3c5ae7ec7fd34bf8758652fc2748f1
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon May 1 03:35:21 2023 +0200
+
+    BMP: Use OPEN messages stored in BGP
+    
+    The BMP protocol needs OPEN messages of established BGP sessions to
+    construct appropriate Peer Up messages. Instead of saving them internally
+    we use OPEN messages stored in BGP instances. This allows BMP instances
+    to be restarted or enabled later.
+    
+    Because of this change, we can simplify BMP data structures. No need to
+    keep track of BGP sessions when we are not started. We have to iterate
+    over all (established) BGP sessions when the BMP session is established.
+    This is just a scaffolding now, but some kind of iteration would be
+    necessary anyway.
+    
+    Also, the commit cleans up handling of msg/msg_length arguments to be
+    body/body_length consistently in both rx/tx and peer_up/peer_down calls.
+
+commit 1be0be1b71f0127740a4aa6f35d4a256d6c34fb9
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Apr 28 19:13:56 2023 +0200
+
+    BGP: Save sent and received OPEN messages
+    
+    These are necessary for BMP Peer UP message and it is better to keep them
+    in BGP than in BMP (so BMP could be restarted or added later).
+
+commit a8a64ca0fed41c78376b27880e934296bd3c3a7f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Apr 27 18:20:49 2023 +0200
+
+    Conf: Improve handling of keywords
+    
+    For whatever reason, parser allocated a symbol for every parsed keyword
+    in each scope. That wasted time and memory. The effect is worsened with
+    recent changes allowing local scopes, so keywords often promote soft
+    scopes (with no symbols) to real scopes.
+    
+    Do not allocate a symbol for a keyword. Take care of keywords that could
+    be promoted to symbols (kw_sym) and do it explicitly.
+
+commit 9b471e72d75c154f3b8c4fa134c7c9f1a55fe27f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Apr 27 17:09:00 2023 +0200
+
+    Conf: Fix symbol lookup
+    
+    The symbol table used just symbol name as a key, and used a trick with
+    active flag to find symbols in active scopes with one hash table lookup.
+    
+    The disadvantage is that it can degenerate to O(n) for negative queries
+    in situations where are many symbols with the same name in different
+    scopes.
+    
+    Thanks to Yanko Kaneti for the bugreport.
+
+commit ca0f239c72486cebfe171e335e3b8a86f5999714
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Apr 21 20:24:43 2023 +0200
+
+    NEWS and version update
+
+commit 1a1e13cc2fc2df82e2319b7beeb18bb8eb92fbd2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Apr 21 19:29:17 2023 +0200
+
+    Filter: Disable some trie formatting tests
+    
+    Trie formatting works slightly different with 4-way tries than with
+    16-way ones, so these tests generated false error. Block them for now.
+
+commit 52450bc96dcedbc30cbb2e282c6706ad9e5e5774
+Merge: d61505b0 f3b599af
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Apr 21 04:47:55 2023 +0200
+
+    Merge branch 'bmp'
+
+commit f3b599afe5bde0c7f232421743041b305bb8afa7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Apr 21 04:42:13 2023 +0200
+
+    BMP: Add some basic documentation
+
+commit d61505b039bf0aa6697e28b2a4e07907c89ba1fb
+Author: Luiz Amaral <email@luiz.eng.br>
+Date:   Fri Apr 21 01:37:30 2023 +0200
+
+    BSD: IPv4 over IPv6 nexthop support on FreeBSD
+    
+    The support for IPv4 routes with IPv6 nexthops was implemented in FreeBSD
+    13.1, this patch allows to import and export such routes from/to kernel.
+    
+    Minor change from committer.
+
+commit 335409248ea932e93ce4361564b8e92d0b83b071
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Apr 20 19:33:00 2023 +0200
+
+    Linpool: Fix lp_restore()
+    
+    When lp_save() is called on an empty linpool, then some allocation is
+    done, then lp_restore() is called, the linpool is restored but the used
+    chunks are inaccessible. Fix it.
+
+commit 976dec048a25fc22efb07fa73be1316c95046420
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Apr 20 17:14:45 2023 +0200
+
+    BMP: Silence some log messages
+    
+    Hooks called from BGP to BMP should not log warning when BMP is not
+    connected, that is not an error (and we do not want to flood logs with
+    a ton of messages).
+    
+    Blocked sk_send() should not log warning, that is expected situation.
+    Error during sk_send() is handled in error hook anyway.
+
+commit 2c7d2141ac86b0d482d3221447d1ad920c557108
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Apr 20 16:13:58 2023 +0200
+
+    BMP: Fix connection management
+    
+    Replace broken TCP connection management with a simple state machine.
+    Handle failed attempts properly with a timeout, detect and handle TCP
+    connection close and try to reconnect after that. Remove useless
+    'station_connected' flag.
+    
+    Keep open messages saved even after the BMP session establishment,
+    so they can be used after BMP session flaps.
+    
+    Use proper log messages for session events.
+
+commit 010df43519b12e83b0ff2cba9e344cba698586bb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 18 18:57:54 2023 +0200
+
+    BMP: Fix reconfiguration
+    
+    It is not supported, but at least it must update internal config
+    pointer to not keep old one.
+
+commit 02164814b49a3385caae0ea10aa042487c6002d2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 18 17:21:13 2023 +0200
+
+    BMP: Allow build without BMP and disable BMP build by default
+    
+    It has still several important issues to be enabled by default.
+
+commit fbeef4b74dfd73fb86b1ccc5dd1c6109e3c21624
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 18 15:13:24 2023 +0200
+
+    BMP: Move initialization to bmp_start()
+    
+    That fixes BMP socket allocation from an invalid pool.
+
+commit 04e3a76c9417d35acdfba96a11327e99000fe47d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 18 15:09:21 2023 +0200
+
+    BMP: Fix missing template
+    
+    It is mandatory for protocol.
+
+commit 3925e65938e7c778f650d62a721dec7a66c19ab3
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Thu Apr 15 18:32:47 2021 +0200
+
+    BMP: Add some missing bmp_buffer_free() calls
+    
+    They were inadvertently removed during recent code refactoring.
+    
+    Thanks to Dawid Macek for the bugreport and patch.
+
+commit 4d56b70dc5facdf4b839b76bf80c93856bcbb121
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Mon Mar 29 04:43:04 2021 +0200
+
+    BMP: Remove duplicate functions for update encoding
+    
+    Use existing BGP functions also for BMP update encoding.
+
+commit 568fd666136fcf7a37eb445d18b478b6464536c4
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Mar 28 16:41:53 2021 +0200
+
+    BMP: Integrate bmp_conn to bmp_proto
+    
+    There is only one socket per BMP instance, no need to have separate
+    struct (like in BGP).
+
+commit 4adebdf198d6e2ca1afcd7cb9bfac81725e7b24e
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Mar 28 15:36:59 2021 +0200
+
+    BMP: Minor cleanups
+    
+    Remove redundant 'disable' option, simplify IP address serialization,
+    and remove useless macros.
+
+commit a995ed43860eb139a13456242aa12486179fac86
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Mar 28 15:13:23 2021 +0200
+
+    BMP: Do not use global instance ptr internally
+    
+    Use local variable to refence relevant instance instead of using global
+    instance ptr. Also, use 'p' variable instead of 'bmp' so we can use
+    common macros like TRACE().
+
+commit ad16e351773f4b606dd8b4dbbe77c2cb35bf5133
+Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
+Date:   Sun Mar 28 04:30:11 2021 +0200
+
+    BMP: Remove superfluous error handling
+    
+    Most error handling code was was for cases that cannot happen,
+    or they would be code bugs (and should use ASSERT()). Keep error
+    handling for just for I/O errors, like in rest of BIRD.
+
+commit a848dad40aa618e5e24417e4ef46b62c860de679
+Author: Pawel Maslanka <pmaslank@akamai.com>
+Date:   Mon Mar 29 22:45:21 2021 +0200
+
+    BMP protocol support
+    
+    Initial implementation of a basic subset of the BMP (BGP Monitoring
+    Protocol, RFC 7854) from Akamai team. Submitted for further review
+    and improvement.
+
+commit 9e44ace3928a19560058dc713fcbff3a8bad3b3c
+Author: Trisha Biswas <tbiswas@fastly.com>
+Date:   Fri Apr 14 04:28:37 2023 +0200
+
+    BGP: Add 'allow bgp_med' option for EBGP sessions
+    
+    This option allows to treat bgp_med as regular transitive attribute
+    on EBGP sessions (without hacks in filters).
+    
+    Minor changes from committer.
+
+commit dc139fb6438f0864e83a9dc71e7c212c5acaf3ef
+Author: Jakub Ružička <jakub.ruzicka@nic.cz>
+Date:   Thu Apr 13 20:06:55 2023 +0200
+
+    Increase tests timeout
+    
+    Tests may take longer than 5 s to complete on slow/virtual machines.
+
+commit f881b98d9b48e7a60c46dffc29009a86dac63233
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Apr 4 05:20:49 2023 +0200
+
+    BGP: Fix bgp_med handling
+    
+    Missing translation from BGP attribute ID to eattr ID in bgp_unset_attr()
+    broke automatic removal of bgp_med during export to EBGP peers.
+    
+    Thanks to Edward Sun for the bugreport.
+
+commit 231c63851e3a56201dd02abfbf3fce47a80f8ae0
+Author: Johannes Moos <johannes.moos@de-cix.net>
+Date:   Sat Mar 18 15:33:48 2023 +0100
+
+    Add missing references to "show route in" in the cli-help and doc.
+    
+    The feature of showing all prefixes inside the given one has been added
+    in v2.0.9 but not well documented. Fixing it by this update.
+    
+    Text in doc and commit message added by commiter.
+
+commit 2b712554d18dfb09274c003315a573f8578270ec
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Mar 16 19:23:19 2023 +0100
+
+    BGP: Free bind applies also to outbound connections
+    
+    Even though the free bind option is primarily meant to alleviate problems
+    with addresses assigned too late, it's also possible to use BIRD with AnyIP
+    configuration, assigning whole ranges to the machine. Therefore free bind
+    allows also to create an outbound connection from specific address even though
+    such address is not assigned.
+
+commit 6b38285f587be9d4b128ae816bc25cb338f7f07c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Mar 6 11:57:40 2023 +0100
+
+    Net: Replace runtime checks with STATIC_ASSERT()
+
+commit 0f679438f36d8c2a31dfe490007e983b085caef6
+Author: Petr Vaněk <arkamar@atlas.cz>
+Date:   Mon Mar 6 11:19:30 2023 +0100
+
+    Printf test suite fails on systems with musl libc because tests for "%m"
+    and "%M" formats expect "Input/output error" message but musl returns
+    "I/O error". Proposed change compares the printf output with string
+    returned from strerror function for EIO constant.
+    
+    See-also: https://bugs.gentoo.org/836713
+    
+    Minor change from committer.
+
+commit 2f080b543296aa2fa18bf7451b5174d942b0a952
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Feb 16 14:22:23 2023 +0100
+
+    Config: Dropping filter instruction trees after linearization
+
+commit 6c058ae40cf33d6d36c0159d0c40c9925c8e60d8
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Feb 22 14:45:20 2023 +0100
+
+    Linpool flush drops all the allocated pages but one
+    
+    When a linpool is used to allocate a one-off big load of memory, it
+    makes no sense to keep that amount of memory for future use inside the
+    linpool. Contrary to previous implementations where the memory was
+    directly free()d, we now use the page allocator which has an internal
+    cache which keeps the released pages for us and subsequent allocations
+    simply get these released pages back.
+    
+    And even if the page cleanup routine kicks in inbetween, the pages get
+    only madvise()d, not munmap()ed so performance aspects are negligible.
+    
+    This may fix some memory usage peaks in extreme cases.
+
+commit 913ec57f27b06845e3698e8ea08821d39b9575cf
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Feb 19 15:35:07 2023 +0100
+
+    BGP: Update RFC references
+
+commit 501256cfc8c1fb5e225c81c4d3300b7c219baf63
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Feb 19 15:34:43 2023 +0100
+
+    Babel: Update RFC references
+
+commit eefb29679957fed3724e6d5db2ddf112e28f646f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Feb 19 03:59:10 2023 +0100
+
+    Conf: Fix too early free of old configuration
+    
+    The change 371eb49043d225d2bab8149187b813a14b4b86d2 introduced early free
+    of old_config. Unfortunately, it did not properly check whether it is not
+    still in use (blocked by obstacle during reconfiguration). Fix that.
+    
+    It also means that we still could have a short peak when three configs
+    are in use (when a new reconfig is requeste while the previous one is
+    still active).
+
+commit ee919658948772105d0bd3b4535ba28883484f2c
+Author: Toke Høiland-Jørgensen <toke@toke.dk>
+Date:   Tue Feb 14 18:18:32 2023 +0100
+
+    Babel: Keep separate auth PC counters for unicast and multicast
+    
+    The babel protocol normally sends all its messages as multicast packets,
+    but the protocol specification allows most messages to be sent as either
+    unicast or multicast, and the two can be mixed freely. In particular, the
+    babeld implementation can be configured to unicast updates to all peers
+    instead of sending them as unicast.
+    
+    Daniel discovered that this can cause problems with the packet counter
+    checks in the MAC extension due to packet reordering. This happens on WiFi
+    networks where clients have power save enabled (which is quite common in
+    infrastructure networks): in this case, the access point will buffer all
+    multicast traffic and only send it out along with its beacons, leading to a
+    maximum buffering in default Linux-based access point configuration of up
+    to 200 ms.
+    
+    This means that a Babel sender that mixes unicast and multicast messages
+    can have the unicast messages overtake the multicast messages because of
+    this buffering; when authentication is enabled, this causes the receiver to
+    discard the multicast message when it does arrive because it now has a
+    packet counter value less than the unicast message that arrived before it.
+    Daniel observed that this happens frequently enough that Babel ceases to
+    work entirely when runner over a WiFi network.
+    
+    The issue has been described in draft-ietf-babel-mac-relaxed, which is
+    currently pending RFC publication. That also describes two mitigation
+    mechanisms: Keeping separate PC counters for unicast and multicast, and
+    using a reorder window for PC values. This patch implements the former as
+    that is the simplest, and resolves the particular issue seen on WiFi.
+    
+    Thanks to Daniel Gröber for the bugreport.
+    
+    Minor changes from committer.
+
+commit eecc3f02e41bcb91d463c4c1189fd56bc44e6514
+Author: Andreas Rammhold <andreas@rammhold.de>
+Date:   Tue Feb 14 16:17:03 2023 +0100
+
+    Babel: Implement IPv4 via IPv6 extension (RFC 9229)
+    
+    The patch implements an IPv4 via IPv6 extension (RFC 9229) to the Babel
+    routing protocol (RFC 8966) that allows annoncing routes to an IPv4
+    prefix with an IPv6 next hop, which makes it possible for IPv4 traffic
+    to flow through interfaces that have not been assigned an IPv4 address.
+    
+    The implementation is compatible with the current Babeld version.
+    
+    Thanks to Toke Høiland-Jørgensen for early review on this work.
+    
+    Minor changes from committer.
+
+commit 0851fcde651301a886fefc574a4f739bf68119b9
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Feb 3 09:12:34 2023 +0100
+
+    Documentation: Adding roadmap as decided in January 2023
+
+commit 0ab62f267449d6496e753625e37924357fb0aa95
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Feb 1 19:30:21 2023 +0100
+
+    Build: Partial revert of one of previous changes
+    
+    There are many compatibility issues with echo -e, scratch that.
+
+commit ba348b2029f3c51559bed0bd752c4365793f0ea9
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Feb 1 17:46:48 2023 +0100
+
+    Build: Minor improvement to build output
+
+commit 23f3dd5cfbe8681b4e71c8d7345bdeaafc86e077
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Feb 1 16:15:13 2023 +0100
+
+    Nest: Minor cleanup in buildsystem
+    
+    There ware missing dependencies for proto-build.c generation, which
+    sometimes lead to failed builds, and ignores changes in the set of
+    built protocols. Fix that, and also improve formatting of proto-build.c
+
+commit dc4c5f51f83f97100b207136ecfde8ff94e597e6
+Author: Toke Høiland-Jørgensen <toke@toke.dk>
+Date:   Tue Jan 31 15:52:14 2023 +0100
+
+    Babel: Initialise source seqno from incoming message
+    
+    When creating a new babel_source object we initialise the seqno to 0. The
+    caller will update the source object with the right metric and seqno value,
+    for both newly created and old source objects. However if we initialise the
+    source object seqno to 0 that may actually turn out to be a valid (higher)
+    seqno than the one in the routing table, because of seqno wrapping. In this
+    case the source metric will not be set properly, which breaks feasibility
+    tracking for subsequent updates.
+    
+    To fix this, add a new initial_seqno argument to babel_get_source() which
+    is used when allocating a new object, and set that to the seqno value of
+    the update we're sending.
+    
+    Thanks to Juliusz Chroboczek for the bugreport.
+
+commit 96d7c4679df49b34be004177b10a99210af5f141
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jan 30 23:49:20 2023 +0100
+
+    Babel: Improve clarity of unfeasible update handling.
+    
+    Add a comment and (unnecessary) check to make correctness obvious.
+
+commit 3e7e4a71868bc519aacc0eb785471b46fc345a5c
+Author: Toke Høiland-Jørgensen <toke@toke.dk>
+Date:   Mon Jan 30 23:36:39 2023 +0100
+
+    Babel: Fix missing modulo comparison of seqnos
+    
+    Juliusz noticed there were a couple of places we were doing straight
+    inequality comparisons of seqnos in Babel. This is wrong because seqnos can
+    wrap: so we need to use the modulo-64k comparison function for these cases
+    as well.
+    
+    Introduce a strict-inequality version of the modulo-comparison for this
+    purpose.
+
+commit 72230d3ca37d34cafa0442c23f83121ae1fc41be
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Mon Jan 23 14:23:00 2023 +0100
+
+    Small fix of indenting
+
 commit 5437104afad90f2a74ce52946f06da607d021e2b
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Jan 23 02:23:19 2023 +0100

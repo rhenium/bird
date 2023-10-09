@@ -24,7 +24,7 @@ CF_KEYWORDS(BGP, LOCAL, NEIGHBOR, AS, HOLD, TIME, CONNECT, RETRY, KEEPALIVE,
 	BGP_AGGREGATOR, BGP_COMMUNITY, BGP_EXT_COMMUNITY, BGP_LARGE_COMMUNITY,
 	SOURCE, ADDRESS, PASSWORD, RR, RS, CLIENT, CLUSTER, ID, AS4, ADVERTISE,
 	IPV4, CAPABILITIES, LIMIT, PASSIVE, PREFER, OLDER, MISSING, LLADDR,
-	DROP, IGNORE, ROUTE, REFRESH, INTERPRET, COMMUNITIES, BGP_ORIGINATOR_ID,
+	DROP, IGNORE, ENHANCED, ROUTE, REFRESH, INTERPRET, COMMUNITIES, BGP_ORIGINATOR_ID,
 	BGP_CLUSTER_LIST, IGP, TABLE, GATEWAY, DIRECT, RECURSIVE, MED, TTL,
 	SECURITY, DETERMINISTIC, SECONDARY, ALLOW, BFD, ADD, PATHS, RX, TX,
 	GRACEFUL, RESTART, AWARE, CHECK, LINK, PORT, EXTENDED, MESSAGES, SETKEY,
@@ -45,9 +45,6 @@ CF_KEYWORDS(CEASE, PREFIX, LIMIT, HIT, ADMINISTRATIVE, SHUTDOWN, RESET, PEER,
 
 CF_GRAMMAR
 
-/* Workaround for collisions between keywords and symbols */
-symbol: ROLE | PEER | PROVIDER | CUSTOMER | RS_SERVER | RS_CLIENT ;
-
 proto: bgp_proto '}'  ;
 
 bgp_proto_start: proto_start BGP {
@@ -65,6 +62,7 @@ bgp_proto_start: proto_start BGP {
      BGP_CFG->error_delay_time_min = 60;
      BGP_CFG->error_delay_time_max = 300;
      BGP_CFG->enable_refresh = 1;
+     BGP_CFG->enable_enhanced_refresh = 1;
      BGP_CFG->enable_as4 = 1;
      BGP_CFG->enable_hostname = 0;
      BGP_CFG->capabilities = 2;
@@ -131,6 +129,7 @@ bgp_proto:
    bgp_proto_start proto_name '{'
  | bgp_proto proto_item ';'
  | bgp_proto bgp_proto_channel ';'
+ | bgp_proto mpls_channel ';'
  | bgp_proto LOCAL bgp_loc_opts ';'
  | bgp_proto LOCAL ipa ipa_scope bgp_loc_opts ';' {
      BGP_CFG->local_ip = $3;
@@ -178,7 +177,7 @@ bgp_proto:
  | bgp_proto DEFAULT BGP_MED expr ';' { BGP_CFG->default_med = $4; }
  | bgp_proto DEFAULT BGP_LOCAL_PREF expr ';' { BGP_CFG->default_local_pref = $4; }
  | bgp_proto SOURCE ADDRESS ipa ';' { BGP_CFG->local_ip = $4; }
- | bgp_proto START DELAY TIME expr ';' { BGP_CFG->connect_delay_time = $5; log(L_WARN "%s: Start delay time option is deprecated, use connect delay time", this_proto->name); }
+ | bgp_proto START DELAY TIME expr ';' { BGP_CFG->connect_delay_time = $5; cf_warn("%s: Start delay time option is deprecated, use connect delay time", this_proto->name); }
  | bgp_proto CONNECT DELAY TIME expr ';' { BGP_CFG->connect_delay_time = $5; }
  | bgp_proto CONNECT RETRY TIME expr ';' { BGP_CFG->connect_retry_time = $5; }
  | bgp_proto KEEPALIVE TIME expr ';' { BGP_CFG->keepalive_time = $4; if (($4<1) || ($4>65535)) cf_error("Keepalive time must be in range 1-65535"); }
@@ -188,6 +187,7 @@ bgp_proto:
  | bgp_proto DISABLE AFTER ERROR bool ';' { BGP_CFG->disable_after_error = $5; }
  | bgp_proto DISABLE AFTER CEASE bgp_cease_mask ';' { BGP_CFG->disable_after_cease = $5; }
  | bgp_proto ENABLE ROUTE REFRESH bool ';' { BGP_CFG->enable_refresh = $5; }
+ | bgp_proto ENABLE ENHANCED ROUTE REFRESH bool ';' { BGP_CFG->enable_enhanced_refresh = $6; }
  | bgp_proto ENABLE AS4 bool ';' { BGP_CFG->enable_as4 = $4; }
  | bgp_proto ENABLE EXTENDED MESSAGES bool ';' { BGP_CFG->enable_extended_messages = $5; }
  | bgp_proto ADVERTISE HOSTNAME bool ';' { BGP_CFG->enable_hostname = $4; }
@@ -199,6 +199,7 @@ bgp_proto:
  | bgp_proto ALLOW LOCAL AS ';' { BGP_CFG->allow_local_as = -1; }
  | bgp_proto ALLOW LOCAL AS expr ';' { BGP_CFG->allow_local_as = $5; }
  | bgp_proto ALLOW BGP_LOCAL_PREF bool ';' { BGP_CFG->allow_local_pref = $4; }
+ | bgp_proto ALLOW BGP_MED bool ';' { BGP_CFG->allow_med = $4; }
  | bgp_proto ALLOW AS SETS bool ';' { BGP_CFG->allow_as_sets = $5; }
  | bgp_proto GRACEFUL RESTART bool ';' { BGP_CFG->gr_mode = $4; }
  | bgp_proto GRACEFUL RESTART AWARE ';' { BGP_CFG->gr_mode = BGP_GR_AWARE; }
@@ -270,7 +271,7 @@ bgp_channel_item:
  | NEXT HOP KEEP bgp_nh { BGP_CC->next_hop_keep = $4; }
  | NEXT HOP PREFER GLOBAL { BGP_CC->next_hop_prefer = NHP_GLOBAL; }
  | MANDATORY bool { BGP_CC->mandatory = $2; }
- | MISSING LLADDR bgp_lladdr { log(L_WARN "%s.%s: Missing lladdr option is deprecated and ignored, remove it", this_proto->name, this_channel->name); }
+ | MISSING LLADDR bgp_lladdr { cf_warn("%s.%s: Missing lladdr option is deprecated and ignored, remove it", this_proto->name, this_channel->name); }
  | GATEWAY DIRECT { BGP_CC->gw_mode = GW_DIRECT; }
  | GATEWAY RECURSIVE { BGP_CC->gw_mode = GW_RECURSIVE; }
  | SECONDARY bool { BGP_CC->secondary = $2; }
@@ -364,7 +365,19 @@ dynamic_attr: BGP_LARGE_COMMUNITY
 dynamic_attr: BGP_OTC
 	{ $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_CODE(PROTOCOL_BGP, BA_ONLY_TO_CUSTOMER)); } ;
 
+custom_attr: ATTRIBUTE BGP expr type symbol ';' {
+  if ($3 > 255 || $3 < 1)
+    cf_error("Invalid attribute number (Given %i, must be 1-255)", $3);
+  if ($4 != T_BYTESTRING)
+    cf_error("Attribute type must be bytestring, not %s", f_type_name($4));
+  if (bgp_attr_name($3))
+    cf_error("Attribute BGP.%d already known as %s", $3, bgp_attr_name($3));
 
+  struct f_dynamic_attr *a = cfg_alloc(sizeof(struct f_dynamic_attr));
+  *a = f_new_dynamic_attr(f_type_attr($4), T_BYTESTRING, EA_CODE(PROTOCOL_BGP, $3));
+  a->flags = BAF_TRANSITIVE | BAF_OPTIONAL;
+  cf_define_symbol(new_config, $5, SYM_ATTRIBUTE, attribute, a);
+};
 
 CF_ENUM(T_ENUM_BGP_ORIGIN, ORIGIN_, IGP, EGP, INCOMPLETE)
 

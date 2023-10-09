@@ -26,6 +26,7 @@
 #include "nest/cli.h"
 
 #include "bgp.h"
+#include "proto/bmp/bmp.h"
 
 
 #define BGP_RR_REQUEST		0
@@ -213,6 +214,13 @@ bgp_af_caps_cmp(const void *X, const void *Y)
   return (x->afi < y->afi) ? -1 : (x->afi > y->afi) ? 1 : 0;
 }
 
+struct bgp_caps *
+bgp_alloc_capabilities(struct bgp_proto *p, int n)
+{
+  struct bgp_caps *caps = mb_allocz(p->p.pool, sizeof(struct bgp_caps) + n * sizeof(struct bgp_af_caps));
+  caps->role = BGP_ROLE_UNDEFINED;
+  return caps;
+}
 
 void
 bgp_prepare_capabilities(struct bgp_conn *conn)
@@ -225,19 +233,19 @@ bgp_prepare_capabilities(struct bgp_conn *conn)
   if (!p->cf->capabilities)
   {
     /* Just prepare empty local_caps */
-    conn->local_caps = mb_allocz(p->p.pool, sizeof(struct bgp_caps));
+    conn->local_caps = bgp_alloc_capabilities(p, 0);
     return;
   }
 
   /* Prepare bgp_caps structure */
   int n = list_length(&p->p.channels);
-  caps = mb_allocz(p->p.pool, sizeof(struct bgp_caps) + n * sizeof(struct bgp_af_caps));
+  caps = bgp_alloc_capabilities(p, n);
   conn->local_caps = caps;
 
   caps->as4_support = p->cf->enable_as4;
   caps->ext_messages = p->cf->enable_extended_messages;
   caps->route_refresh = p->cf->enable_refresh;
-  caps->enhanced_refresh = p->cf->enable_refresh;
+  caps->enhanced_refresh = p->cf->enable_refresh && p->cf->enable_enhanced_refresh;
   caps->role = p->cf->local_role;
 
   if (caps->as4_support)
@@ -462,10 +470,7 @@ bgp_read_capabilities(struct bgp_conn *conn, byte *pos, int len)
   u32 af;
 
   if (!conn->remote_caps)
-  {
-    caps = mb_allocz(p->p.pool, sizeof(struct bgp_caps) + sizeof(struct bgp_af_caps));
-    caps->role = BGP_ROLE_UNDEFINED;
-  }
+    caps = bgp_alloc_capabilities(p, 1);
   else
   {
     caps = conn->remote_caps;
@@ -501,7 +506,7 @@ bgp_read_capabilities(struct bgp_conn *conn, byte *pos, int len)
       caps->route_refresh = 1;
       break;
 
-    case  5: /* Extended next hop encoding capability, RFC 5549 */
+    case  5: /* Extended next hop encoding capability, RFC 8950 */
       if (cl % 6)
 	goto err;
 
@@ -518,7 +523,7 @@ bgp_read_capabilities(struct bgp_conn *conn, byte *pos, int len)
       }
       break;
 
-    case  6: /* Extended message length capability, RFC draft */
+    case  6: /* Extended message length capability, RFC 8654 */
       if (cl != 0)
 	goto err;
 
@@ -711,7 +716,7 @@ bgp_read_options(struct bgp_conn *conn, byte *pos, uint len, uint rest)
   struct bgp_proto *p = conn->bgp;
   int ext = 0;
 
-  /* Handle extended length (draft-ietf-idr-ext-opt-param-07) */
+  /* Handle extended length, RFC 9072 */
   if ((len > 0) && (rest > 0) && (pos[0] == 255))
   {
     if (rest < 3)
@@ -761,13 +766,21 @@ bgp_read_options(struct bgp_conn *conn, byte *pos, uint len, uint rest)
 
   /* Prepare empty caps if no capability option was announced */
   if (!conn->remote_caps)
-    conn->remote_caps = mb_allocz(p->p.pool, sizeof(struct bgp_caps));
+    conn->remote_caps = bgp_alloc_capabilities(p, 0);
 
   return 0;
 
 err:
   bgp_error(conn, 2, 0, NULL, 0);
   return -1;
+}
+
+static byte *
+bgp_copy_open(struct bgp_proto *p, const byte *pkt, uint len)
+{
+  char *buf = mb_alloc(p->p.pool, len - BGP_HEADER_LENGTH);
+  memcpy(buf, pkt + BGP_HEADER_LENGTH, len - BGP_HEADER_LENGTH);
+  return buf;
 }
 
 static byte *
@@ -796,7 +809,7 @@ bgp_create_open(struct bgp_conn *conn, byte *buf)
       buf[10] = 2;		/* Option 2: Capability list */
       buf[11] = len;		/* Option data length */
     }
-    else /* draft-ietf-idr-ext-opt-param-07 */
+    else /* Extended length, RFC 9072 */
     {
       /* Move capabilities 4 B forward */
       memmove(buf + 16, pos, len);
@@ -843,6 +856,9 @@ bgp_rx_open(struct bgp_conn *conn, byte *pkt, uint len)
   hold = get_u16(pkt+22);
   id = get_u32(pkt+24);
   BGP_TRACE(D_PACKETS, "Got OPEN(as=%d,hold=%d,id=%R)", asn, hold, id);
+
+  conn->remote_open_msg = bgp_copy_open(p, pkt, len);
+  conn->remote_open_length = len - BGP_HEADER_LENGTH;
 
   if (bgp_read_options(conn, pkt+29, pkt[28], len-29) < 0)
     return;
@@ -1163,7 +1179,7 @@ bgp_use_gateway(struct bgp_export_state *s)
     return 0;
 
   /* Do not use gateway from different VRF */
-  if (p->p.vrf_set && ra->nh.iface && (p->p.vrf != ra->nh.iface->master))
+  if (p->p.vrf_set && ra->nh.iface && !if_in_vrf(ra->nh.iface, p->p.vrf))
     return 0;
 
   /* Use it when exported to internal peers */
@@ -1201,11 +1217,10 @@ bgp_update_next_hop_ip(struct bgp_export_state *s, eattr *a, ea_list **to)
       bgp_set_attr_data(to, s->pool, BA_NEXT_HOP, 0, nh, ipa_nonzero(nh[1]) ? 32 : 16);
       s->local_next_hop = 1;
 
-      /* TODO: Use local MPLS assigned label */
       if (s->mpls)
       {
-	u32 implicit_null = BGP_MPLS_NULL;
-	bgp_set_attr_data(to, s->pool, BA_MPLS_LABEL_STACK, 0, &implicit_null, 4);
+	u32 label = ea_get_int(s->route->attrs->eattrs, EA_MPLS_LABEL, BGP_MPLS_NULL);
+	bgp_set_attr_data(to, s->pool, BA_MPLS_LABEL_STACK, 0, &label, 4);
       }
       else
 	bgp_unset_attr(to, s->pool, BA_MPLS_LABEL_STACK);
@@ -1250,7 +1265,7 @@ bgp_encode_next_hop_ip(struct bgp_write_state *s, eattr *a, byte *buf, uint size
 
   /*
    * Both IPv4 and IPv6 next hops can be used (with ext_next_hop enabled). This
-   * is specified in RFC 5549 for IPv4 and in RFC 4798 for IPv6. The difference
+   * is specified in RFC 8950 for IPv4 and in RFC 4798 for IPv6. The difference
    * is that IPv4 address is directly encoded with IPv4 NLRI, but as IPv4-mapped
    * IPv6 address with IPv6 NLRI.
    */
@@ -1325,7 +1340,7 @@ bgp_encode_next_hop_vpn(struct bgp_write_state *s, eattr *a, byte *buf, uint siz
 
   /*
    * Both IPv4 and IPv6 next hops can be used (with ext_next_hop enabled). This
-   * is specified in RFC 5549 for VPNv4 and in RFC 4659 for VPNv6. The difference
+   * is specified in RFC 8950 for VPNv4 and in RFC 4659 for VPNv6. The difference
    * is that IPv4 address is directly encoded with VPNv4 NLRI, but as IPv4-mapped
    * IPv6 address with VPNv6 NLRI.
    */
@@ -1563,7 +1578,10 @@ bgp_encode_nlri_ip4(struct bgp_write_state *s, struct bgp_bucket *buck, byte *bu
     memcpy(pos, &a, b);
     ADVANCE(pos, size, b);
 
-    bgp_free_prefix(s->channel, px);
+    if (!s->sham)
+      bgp_free_prefix(s->channel, px);
+    else
+      rem_node(&px->buck_node);
   }
 
   return pos - buf;
@@ -1648,7 +1666,10 @@ bgp_encode_nlri_ip6(struct bgp_write_state *s, struct bgp_bucket *buck, byte *bu
     memcpy(pos, &a, b);
     ADVANCE(pos, size, b);
 
-    bgp_free_prefix(s->channel, px);
+    if (!s->sham)
+      bgp_free_prefix(s->channel, px);
+    else
+      rem_node(&px->buck_node);
   }
 
   return pos - buf;
@@ -1736,7 +1757,10 @@ bgp_encode_nlri_vpn4(struct bgp_write_state *s, struct bgp_bucket *buck, byte *b
     memcpy(pos, &a, b);
     ADVANCE(pos, size, b);
 
-    bgp_free_prefix(s->channel, px);
+    if (!s->sham)
+      bgp_free_prefix(s->channel, px);
+    else
+      rem_node(&px->buck_node);
   }
 
   return pos - buf;
@@ -1833,7 +1857,10 @@ bgp_encode_nlri_vpn6(struct bgp_write_state *s, struct bgp_bucket *buck, byte *b
     memcpy(pos, &a, b);
     ADVANCE(pos, size, b);
 
-    bgp_free_prefix(s->channel, px);
+    if (!s->sham)
+      bgp_free_prefix(s->channel, px);
+    else
+      rem_node(&px->buck_node);
   }
 
   return pos - buf;
@@ -1920,7 +1947,10 @@ bgp_encode_nlri_flow4(struct bgp_write_state *s, struct bgp_bucket *buck, byte *
     memcpy(pos, net->data, flen);
     ADVANCE(pos, size, flen);
 
-    bgp_free_prefix(s->channel, px);
+    if (!s->sham)
+      bgp_free_prefix(s->channel, px);
+    else
+      rem_node(&px->buck_node);
   }
 
   return pos - buf;
@@ -2012,7 +2042,10 @@ bgp_encode_nlri_flow6(struct bgp_write_state *s, struct bgp_bucket *buck, byte *
     memcpy(pos, net->data, flen);
     ADVANCE(pos, size, flen);
 
-    bgp_free_prefix(s->channel, px);
+    if (!s->sham)
+      bgp_free_prefix(s->channel, px);
+    else
+      rem_node(&px->buck_node);
   }
 
   return pos - buf;
@@ -2256,7 +2289,8 @@ bgp_create_ip_reach(struct bgp_write_state *s, struct bgp_bucket *buck, byte *bu
   if (la < 0)
   {
     /* Attribute list too long */
-    bgp_withdraw_bucket(s->channel, buck);
+    if (!s->sham)
+      bgp_withdraw_bucket(s->channel, buck);
     return NULL;
   }
 
@@ -2303,7 +2337,8 @@ bgp_create_mp_reach(struct bgp_write_state *s, struct bgp_bucket *buck, byte *bu
   if (la < 0)
   {
     /* Attribute list too long */
-    bgp_withdraw_bucket(s->channel, buck);
+    if (!s->sham)
+      bgp_withdraw_bucket(s->channel, buck);
     return NULL;
   }
 
@@ -2383,6 +2418,100 @@ bgp_create_mp_unreach(struct bgp_write_state *s, struct bgp_bucket *buck, byte *
 
   return buf+11+len;
 }
+
+
+#ifdef CONFIG_BMP
+
+static byte *
+bgp_create_update_bmp(struct bgp_channel *c, byte *buf, struct bgp_bucket *buck, bool update)
+{
+  struct bgp_proto *p = (void *) c->c.proto;
+  byte *end = buf + (BGP_MAX_EXT_MSG_LENGTH - BGP_HEADER_LENGTH);
+  byte *res = NULL;
+  /* FIXME: must be a bit shorter */
+
+  struct lp_state tmpp;
+  lp_save(tmp_linpool, &tmpp);
+
+  struct bgp_caps *peer = p->conn->remote_caps;
+  const struct bgp_af_caps *rem = bgp_find_af_caps(peer, c->afi);
+
+  struct bgp_write_state s = {
+    .proto = p,
+    .channel = c,
+    .pool = tmp_linpool,
+    .mp_reach = (c->afi != BGP_AF_IPV4) || (rem && rem->ext_next_hop),
+    .as4_session = 1,
+    .add_path = c->add_path_rx,
+    .mpls = c->desc->mpls,
+    .sham = 1,
+  };
+
+  if (!update)
+  {
+    res = !s.mp_reach ?
+      bgp_create_ip_unreach(&s, buck, buf, end):
+      bgp_create_mp_unreach(&s, buck, buf, end);
+  }
+  else
+  {
+    res = !s.mp_reach ?
+      bgp_create_ip_reach(&s, buck, buf, end):
+      bgp_create_mp_reach(&s, buck, buf, end);
+  }
+
+  lp_restore(tmp_linpool, &tmpp);
+
+  return res;
+}
+
+static byte *
+bgp_bmp_prepare_bgp_hdr(byte *buf, const u16 msg_size, const u8 msg_type)
+{
+  memset(buf + BGP_MSG_HDR_MARKER_POS, 0xff, BGP_MSG_HDR_MARKER_SIZE);
+  put_u16(buf + BGP_MSG_HDR_LENGTH_POS, msg_size);
+  put_u8(buf + BGP_MSG_HDR_TYPE_POS, msg_type);
+
+  return buf + BGP_MSG_HDR_TYPE_POS + BGP_MSG_HDR_TYPE_SIZE;
+}
+
+byte *
+bgp_bmp_encode_rte(struct bgp_channel *c, byte *buf, const net_addr *n,
+		   const struct rte *new, const struct rte_src *src)
+{
+//  struct bgp_proto *p = (void *) c->c.proto;
+  byte *pkt = buf + BGP_HEADER_LENGTH;
+
+  ea_list *attrs = new ? new->attrs->eattrs : NULL;
+  uint ea_size = new ? (sizeof(ea_list) + attrs->count * sizeof(eattr)) : 0;
+  uint bucket_size = sizeof(struct bgp_bucket) + ea_size;
+  uint prefix_size = sizeof(struct bgp_prefix) + n->length;
+
+  /* Sham bucket */
+  struct bgp_bucket *b = alloca(bucket_size);
+  *b = (struct bgp_bucket) { };
+  init_list(&b->prefixes);
+
+  if (attrs)
+    memcpy(b->eattrs, attrs, ea_size);
+
+  /* Sham prefix */
+  struct bgp_prefix *px = alloca(prefix_size);
+  *px = (struct bgp_prefix) { };
+  px->path_id = (u32) src->private_id;
+  net_copy(px->net, n);
+  add_tail(&b->prefixes, &px->buck_node);
+
+  byte *end = bgp_create_update_bmp(c, pkt, b, !!new);
+
+  if (end)
+    bgp_bmp_prepare_bgp_hdr(buf, end - buf, PKT_UPDATE);
+
+  return end;
+}
+
+#endif /* CONFIG_BMP */
+
 
 static byte *
 bgp_create_update(struct bgp_channel *c, byte *buf)
@@ -2484,6 +2613,14 @@ bgp_create_mp_end_mark(struct bgp_channel *c, byte *buf)
   return buf+10;
 }
 
+byte *
+bgp_create_end_mark_(struct bgp_channel *c, byte *buf)
+{
+  return (c->afi == BGP_AF_IPV4) ?
+    bgp_create_ip_end_mark(c, buf):
+    bgp_create_mp_end_mark(c, buf);
+}
+
 static byte *
 bgp_create_end_mark(struct bgp_channel *c, byte *buf)
 {
@@ -2492,9 +2629,7 @@ bgp_create_end_mark(struct bgp_channel *c, byte *buf)
   BGP_TRACE(D_PACKETS, "Sending END-OF-RIB");
   p->stats.tx_updates++;
 
-  return (c->afi == BGP_AF_IPV4) ?
-    bgp_create_ip_end_mark(c, buf):
-    bgp_create_mp_end_mark(c, buf);
+  return bgp_create_end_mark_(c, buf);
 }
 
 static inline void
@@ -2634,7 +2769,6 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
 
   s.ip_reach_len = len - pos;
   s.ip_reach_nlri = pkt + pos;
-
 
   if (s.attr_len)
     ea = bgp_decode_attrs(&s, s.attrs, s.attr_len);
@@ -2869,7 +3003,7 @@ bgp_send(struct bgp_conn *conn, uint type, uint len)
   conn->bgp->stats.tx_messages++;
   conn->bgp->stats.tx_bytes += len;
 
-  memset(buf, 0xff, 16);		/* Marker */
+  memset(buf, 0xff, BGP_HDR_MARKER_LENGTH);
   put_u16(buf+16, len);
   buf[18] = type;
 
@@ -2917,6 +3051,10 @@ bgp_fire_tx(struct bgp_conn *conn)
   {
     conn->packets_to_send &= ~(1 << PKT_OPEN);
     end = bgp_create_open(conn, pkt);
+
+    conn->local_open_msg = bgp_copy_open(p, buf, end - buf);
+    conn->local_open_length = end - buf - BGP_HEADER_LENGTH;
+
     return bgp_send(conn, PKT_OPEN, end - buf);
   }
   else if (s & (1 << PKT_KEEPALIVE))
@@ -3197,6 +3335,11 @@ bgp_rx_notification(struct bgp_conn *conn, byte *pkt, uint len)
 
   bgp_log_error(p, BE_BGP_RX, "Received", code, subcode, pkt+21, len-21);
   bgp_store_error(p, conn, BE_BGP_RX, (code << 16) | subcode);
+
+  conn->notify_code = code;
+  conn->notify_subcode = subcode;
+  conn->notify_data = pkt+21;
+  conn->notify_size = len-21;
 
   bgp_conn_enter_close_state(conn);
   bgp_schedule_packet(conn, NULL, PKT_SCHEDULE_CLOSE);

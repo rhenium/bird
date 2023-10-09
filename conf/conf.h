@@ -16,12 +16,12 @@
 #include "lib/timer.h"
 
 /* Configuration structure */
-
 struct config {
   pool *pool;				/* Pool the configuration is stored in */
   linpool *mem;				/* Linear pool containing configuration data */
   list protos;				/* Configured protocol instances (struct proto_config) */
   list tables;				/* Configured routing tables (struct rtable_config) */
+  list mpls_domains;			/* Configured MPLS domains (struct mpls_domain_config) */
   list logfiles;			/* Configured log files (sysdep) */
   list tests;				/* Configured unit tests (f_bt_test_suite) */
   list symbols;				/* Configured symbols in config order */
@@ -53,9 +53,9 @@ struct config {
   char *err_file_name;			/* File name containing error */
   char *file_name;			/* Name of main configuration file */
   int file_fd;				/* File descriptor of main configuration file */
-  HASH(struct symbol) sym_hash;		/* Lexer: symbol hash table */
-  struct config *fallback;		/* Link to regular config for CLI parsing */
+
   struct sym_scope *root_scope;		/* Scope for root symbols */
+  struct sym_scope *current_scope;	/* Current scope where we are actually in while parsing */
   int obstacle_count;			/* Number of items blocking freeing of this config */
   int shutdown;				/* This is a pseudo-config for daemon shutdown */
   int gr_down;				/* This is a pseudo-config for graceful restart */
@@ -78,6 +78,7 @@ int config_status(void);
 btime config_timer_status(void);
 void config_init(void);
 void cf_error(const char *msg, ...) NORET;
+#define cf_warn(msg, args...)  log(L_WARN "%s:%d:%d: " msg, ifs->file_name, ifs->lino, ifs->chno - ifs->toklen + 1, ##args)
 void config_add_obstacle(struct config *);
 void config_del_obstacle(struct config *);
 void order_shutdown(int gr);
@@ -110,6 +111,11 @@ void cfg_copy_list(list *dest, list *src, unsigned node_size);
 
 extern int (*cf_read_hook)(byte *buf, uint max, int fd);
 
+struct keyword {
+  byte *name;
+  int value;
+};
+
 struct symbol {
   node n;				/* In list of symbols in config */
   struct symbol *next;
@@ -123,8 +129,12 @@ struct symbol {
     const struct filter *filter;	/* For SYM_FILTER */
     struct rtable_config *table;	/* For SYM_TABLE */
     struct f_dynamic_attr *attribute;	/* For SYM_ATTRIBUTE */
+    struct mpls_domain_config *mpls_domain;	/* For SYM_MPLS_DOMAIN */
+    struct mpls_range_config *mpls_range;	/* For SYM_MPLS_RANGE */
     struct f_val *val;			/* For SYM_CONSTANT */
     uint offset;			/* For SYM_VARIABLE */
+    const struct keyword *keyword;	/* For SYM_KEYWORD */
+    const struct f_method *method;	/* For SYM_METHOD */
   };
 
   char name[0];
@@ -133,16 +143,20 @@ struct symbol {
 struct sym_scope {
   struct sym_scope *next;		/* Next on scope stack */
   struct symbol *name;			/* Name of this scope */
+
+  HASH(struct symbol) hash;		/* Local symbol hash */
+
   uint slots;				/* Variable slots */
-  byte active;				/* Currently entered */
-  byte block;				/* No independent stack frame */
   byte soft_scopes;			/* Number of soft scopes above */
+  byte active:1;			/* Currently entered */
+  byte block:1;				/* No independent stack frame */
+  byte readonly:1;			/* Do not add new symbols */
 };
 
-struct bytestring {
-  size_t length;
-  byte data[];
-};
+extern struct sym_scope *global_root_scope;
+extern pool *global_root_scope_pool;
+extern linpool *global_root_scope_linpool;
+
 
 #define SYM_MAX_LEN 64
 
@@ -154,6 +168,10 @@ struct bytestring {
 #define SYM_FILTER 4
 #define SYM_TABLE 5
 #define SYM_ATTRIBUTE 6
+#define SYM_KEYWORD 7
+#define SYM_METHOD 8
+#define SYM_MPLS_DOMAIN 9
+#define SYM_MPLS_RANGE 10
 
 #define SYM_VARIABLE 0x100	/* 0x100-0x1ff are variable types */
 #define SYM_VARIABLE_RANGE SYM_VARIABLE ... (SYM_VARIABLE | 0xff)
@@ -181,20 +199,28 @@ struct include_file_stack {
 
 extern struct include_file_stack *ifs;
 
-extern struct sym_scope *conf_this_scope;
-
 int cf_lex(void);
 void cf_lex_init(int is_cli, struct config *c);
 void cf_lex_unwind(void);
 
-struct symbol *cf_find_symbol(const struct config *cfg, const byte *c);
+struct symbol *cf_find_symbol_scope(const struct sym_scope *scope, const byte *c);
+static inline struct symbol *cf_find_symbol_cfg(const struct config *cfg, const byte *c)
+{ return cf_find_symbol_scope(cfg->root_scope, c); }
 
-struct symbol *cf_get_symbol(const byte *c);
-struct symbol *cf_default_name(char *template, int *counter);
-struct symbol *cf_localize_symbol(struct symbol *sym);
+#define cf_find_symbol(where, what) _Generic(*(where), \
+    struct config: cf_find_symbol_cfg, \
+    struct sym_scope: cf_find_symbol_scope \
+    )((where), (what))
 
-static inline int cf_symbol_is_local(struct symbol *sym)
-{ return (sym->scope == conf_this_scope) && !conf_this_scope->soft_scopes; }
+struct symbol *cf_get_symbol(struct config *conf, const byte *c);
+struct symbol *cf_default_name(struct config *conf, char *template, int *counter);
+struct symbol *cf_localize_symbol(struct config *conf, struct symbol *sym);
+
+static inline int cf_symbol_is_local(struct config *conf, struct symbol *sym)
+{ return (sym->scope == conf->current_scope) && !conf->current_scope->soft_scopes; }
+
+/* internal */
+struct symbol *cf_new_symbol(struct sym_scope *scope, pool *p, struct linpool *lp, const byte *c);
 
 /**
  * cf_define_symbol - define meaning of a symbol
@@ -211,22 +237,25 @@ static inline int cf_symbol_is_local(struct symbol *sym)
  * Result: Pointer to the newly defined symbol. If we are in the top-level
  * scope, it's the same @sym as passed to the function.
  */
-#define cf_define_symbol(osym_, type_, var_, def_) ({ \
-    struct symbol *sym_ = cf_localize_symbol(osym_); \
+#define cf_define_symbol(conf_, osym_, type_, var_, def_) ({ \
+    struct symbol *sym_ = cf_localize_symbol(conf_, osym_); \
     sym_->class = type_; \
     sym_->var_ = def_; \
     sym_; })
 
-void cf_push_scope(struct symbol *);
-void cf_pop_scope(void);
-void cf_push_soft_scope(void);
-void cf_pop_soft_scope(void);
+#define cf_create_symbol(conf_, name_, type_, var_, def_) \
+  cf_define_symbol(conf_, cf_get_symbol(conf_, name_), type_, var_, def_)
 
-static inline void cf_push_block_scope(void)
-{ cf_push_scope(NULL); conf_this_scope->block = 1; }
+void cf_push_scope(struct config *, struct symbol *);
+void cf_pop_scope(struct config *);
+void cf_push_soft_scope(struct config *);
+void cf_pop_soft_scope(struct config *);
 
-static inline void cf_pop_block_scope(void)
-{ ASSERT(conf_this_scope->block); cf_pop_scope(); }
+static inline void cf_push_block_scope(struct config *conf)
+{ cf_push_scope(conf, NULL); conf->current_scope->block = 1; }
+
+static inline void cf_pop_block_scope(struct config *conf)
+{ ASSERT(conf->current_scope->block); cf_pop_scope(conf); }
 
 char *cf_symbol_class_name(struct symbol *sym);
 
