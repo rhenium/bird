@@ -187,10 +187,17 @@ lp_flush(linpool *m)
 {
   struct lp_chunk *c;
 
-  /* Move ptr to the first chunk and free all large chunks */
+  /* Move ptr to the first chunk and free all other chunks */
   m->current = c = m->first;
   m->ptr = c ? c->data : NULL;
   m->end = c ? c->data + LP_DATA_SIZE : NULL;
+
+  while (c && c->next)
+  {
+    struct lp_chunk *d = c->next;
+    c->next = d->next;
+    free_page(d);
+  }
 
   while (c = m->first_large)
     {
@@ -233,9 +240,9 @@ lp_restore(linpool *m, lp_state *p)
   struct lp_chunk *c;
 
   /* Move ptr to the saved pos and free all newer large chunks */
-  m->current = c = p->current;
-  m->ptr = p->ptr;
-  m->end = c ? c->data + LP_DATA_SIZE : NULL;
+  m->current = c = p->current ?: m->first;
+  m->ptr = p->ptr ?: (c ? c->data : NULL);
+  m->end = c ? (c->data + LP_DATA_SIZE) : NULL;
   m->total_large = p->total_large;
 
   while ((c = m->first_large) && (c != p->large))

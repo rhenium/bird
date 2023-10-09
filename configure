@@ -5621,13 +5621,16 @@ printf "%s\n" "#define HAVE_MPLS_KERNEL 1" >>confdefs.h
   fi
 fi
 
-all_protocols="$proto_bfd babel bgp mrt ospf perf pipe radv rip rpki static"
+all_protocols="aggregator $proto_bfd babel bgp l3vpn mrt ospf perf pipe radv rip rpki static"
 
 all_protocols=`echo $all_protocols | sed 's/ /,/g'`
 
 if test "$with_protocols" = all ; then
   with_protocols="$all_protocols"
 fi
+
+
+
 
 
 

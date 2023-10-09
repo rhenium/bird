@@ -63,6 +63,7 @@ static_proto:
    static_proto_start proto_name '{'
  | static_proto proto_item ';'
  | static_proto proto_channel ';' { this_proto->net_type = $2->net_type; }
+ | static_proto mpls_channel ';'
  | static_proto CHECK LINK bool ';' { STATIC_CFG->check_link = $4; }
  | static_proto IGP TABLE rtable ';' {
     if ($4->addr_type == NET_IP4)
@@ -106,15 +107,21 @@ stat_nexthops:
   | stat_nexthops stat_nexthop
 ;
 
+stat_mpls:
+   /* empty */
+ | MPLS expr { this_srt->mpls_label = $2; if ($2 >= MPLS_MAX_LABEL) cf_error("MPLS label must be less than 2^20"); }
+ ;
+
 stat_route0: ROUTE net_any {
      this_srt = cfg_allocz(sizeof(struct static_route));
      add_tail(&STATIC_CFG->routes, &this_srt->n);
      this_srt->net = $2;
+     this_srt->mpls_label = (uint) -1;
      this_srt_cmds = NULL;
      this_srt_last_cmd = NULL;
      this_srt->mp_next = NULL;
      this_snh = NULL;
-  }
+  } stat_mpls
  ;
 
 stat_route:

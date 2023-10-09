@@ -32,7 +32,8 @@ rip_check_auth(void)
 
 CF_DECLS
 
-CF_KEYWORDS(RIP, NG, ECMP, LIMIT, WEIGHT, INFINITY, METRIC, UPDATE, TIMEOUT,
+CF_KEYWORDS_EXCLUSIVE(NG)
+CF_KEYWORDS(RIP, ECMP, LIMIT, WEIGHT, INFINITY, METRIC, UPDATE, TIMEOUT,
 	    GARBAGE, RETRANSMIT, PORT, ADDRESS, MODE, BROADCAST, MULTICAST,
 	    PASSIVE, VERSION, SPLIT, HORIZON, POISON, REVERSE, CHECK, ZERO,
 	    TIME, BFD, AUTHENTICATION, NONE, PLAINTEXT, CRYPTOGRAPHIC, MD5,
@@ -116,7 +117,7 @@ rip_iface_finish:
   RIP_IFACE->passwords = get_passwords();
 
   if (!RIP_IFACE->auth_type != !RIP_IFACE->passwords)
-    log(L_WARN "Authentication and password options should be used together");
+    cf_warn("Authentication and password options should be used together");
 
   if (RIP_IFACE->passwords)
   {

@@ -171,6 +171,19 @@ times_update_real_time(struct timeloop *loop)
   loop->real_time = ts.tv_sec S + ts.tv_nsec NS;
 }
 
+btime
+current_time_now(void)
+{
+  struct timespec ts;
+  int rv;
+
+  rv = clock_gettime(CLOCK_MONOTONIC, &ts);
+  if (rv < 0)
+    die("clock_gettime: %m");
+
+  return ts.tv_sec S + ts.tv_nsec NS;
+}
+
 
 /**
  * DOC: Sockets
@@ -2213,12 +2226,12 @@ io_loop(void)
   for(;;)
     {
       times_update(&main_timeloop);
-      events = ev_run_list(&global_event_list);
-      events = ev_run_list_limited(&global_work_list, WORK_EVENTS_MAX) || events;
+      ev_run_list(&global_event_list);
+      ev_run_list_limited(&global_work_list, WORK_EVENTS_MAX);
       timers_fire(&main_timeloop);
       io_close_event();
 
-      // FIXME
+      events = !EMPTY_LIST(global_event_list) || !EMPTY_LIST(global_work_list);
       poll_tout = (events ? 0 : 3000); /* Time in milliseconds */
       if (t = timers_first(&main_timeloop))
       {

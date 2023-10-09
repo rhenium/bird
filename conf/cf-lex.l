@@ -51,12 +51,6 @@
 #include "lib/string.h"
 #include "lib/hash.h"
 
-struct keyword {
-  byte *name;
-  int value;
-  struct keyword *next;
-};
-
 #include "conf/keywords.h"
 
 /* Could be defined by Bison in cf-parse.tab.h, inteferes with SYM hash */
@@ -67,28 +61,21 @@ struct keyword {
 
 static uint cf_hash(const byte *c);
 
-#define KW_KEY(n)		n->name
-#define KW_NEXT(n)		n->next
-#define KW_EQ(a,b)		!strcmp(a,b)
-#define KW_FN(k)		cf_hash(k)
-#define KW_ORDER		8 /* Fixed */
-
-#define SYM_KEY(n)		n->name, n->scope->active
+#define SYM_KEY(n)		n->name
 #define SYM_NEXT(n)		n->next
-#define SYM_EQ(a,s1,b,s2)	!strcmp(a,b) && s1 == s2
-#define SYM_FN(k,s)		cf_hash(k)
-#define SYM_ORDER		6 /* Initial */
+#define SYM_EQ(a,b)		!strcmp(a,b)
+#define SYM_FN(k)		cf_hash(k)
+#define SYM_ORDER		4 /* Initial */
 
 #define SYM_REHASH		sym_rehash
-#define SYM_PARAMS		/8, *1, 2, 2, 6, 20
+#define SYM_PARAMS		/8, *1, 2, 2, 4, 20
 
 
 HASH_DEFINE_REHASH_FN(SYM, struct symbol)
 
-HASH(struct keyword) kw_hash;
-
-
-struct sym_scope *conf_this_scope;
+struct sym_scope *global_root_scope;
+pool *global_root_scope_pool;
+linpool *global_root_scope_linpool;
 
 linpool *cfg_mem;
 
@@ -255,35 +242,24 @@ WHITE [ \t]
   return IP4;
 }
 
-{XIGIT}{2}((:{XIGIT}{2}){15,}|({XIGIT}{2}){15,}) {
+({XIGIT}{2}){16,}|{XIGIT}{2}(:{XIGIT}{2}){15,}|hex:({XIGIT}{2}*|{XIGIT}{2}(:{XIGIT}{2})*) {
   char *s = yytext;
-  size_t len = 0, i;
-  struct bytestring *bytes;
-  byte *b;
+  struct adata *bs;
 
-  while (*s) {
-    len++;
-    s += 2;
-    if (*s == ':')
-      s++;
-  }
-  bytes = cfg_allocz(sizeof(*bytes) + len);
+  /* Skip 'hex:' prefix */
+  if (s[0] == 'h' && s[1] == 'e' && s[2] == 'x' && s[3] == ':')
+    s += 4;
 
-  bytes->length = len;
-  b = &bytes->data[0];
-  s = yytext;
-  errno = 0;
-  for (i = 0; i < len; i++) {
-    *b = bstrtobyte16(s);
-    if (errno == ERANGE)
-      cf_error("Invalid hex string");
-    b++;
-    s += 2;
-    if (*s == ':')
-      s++;
-  }
-  cf_lval.bs = bytes;
-  return BYTESTRING;
+  int len = bstrhextobin(s, NULL);
+  if (len < 0)
+    cf_error("Invalid hex string");
+
+  bs = cfg_allocz(sizeof(struct adata) + len);
+  bs->length = bstrhextobin(s, bs->data);
+  ASSERT(bs->length == len);
+
+  cf_lval.bs = bs;
+  return BYTETEXT;
 }
 
 ({XIGIT}*::|({XIGIT}*:){3,})({XIGIT}*|{DIGIT}+\.{DIGIT}+\.{DIGIT}+\.{DIGIT}+) {
@@ -399,6 +375,7 @@ else: {
 \>\= return GEQ;
 \&\& return AND;
 \|\| return OR;
+\-\> return IMP;
 
 \[\= return PO;
 \=\] return PC;
@@ -574,58 +551,57 @@ check_eof(void)
   return 0;
 }
 
-static inline void cf_swap_soft_scope(void);
+static inline void cf_swap_soft_scope(struct config *conf);
 
-static struct symbol *
-cf_new_symbol(const byte *c)
+struct symbol *
+cf_new_symbol(struct sym_scope *scope, pool *p, struct linpool *lp, const byte *c)
 {
+  if (scope->readonly)
+    cf_error("Unknown symbol %s", c);
+
   struct symbol *s;
 
   uint l = strlen(c);
   if (l > SYM_MAX_LEN)
     cf_error("Symbol too long");
 
-  cf_swap_soft_scope();
-
-  s = cfg_allocz(sizeof(struct symbol) + l + 1);
-  *s = (struct symbol) { .scope = conf_this_scope, .class = SYM_VOID, };
+  s = lp_alloc(lp, sizeof(struct symbol) + l + 1);
+  *s = (struct symbol) { .scope = scope, .class = SYM_VOID, };
   strcpy(s->name, c);
 
-  if (!new_config->sym_hash.data)
-    HASH_INIT(new_config->sym_hash, new_config->pool, SYM_ORDER);
+  if (!scope->hash.data)
+    HASH_INIT(scope->hash, p, SYM_ORDER);
 
-  HASH_INSERT2(new_config->sym_hash, SYM, new_config->pool, s);
+  HASH_INSERT2(scope->hash, SYM, p, s);
 
-  add_tail(&(new_config->symbols), &(s->n));
+  if (new_config && (scope == new_config->root_scope))
+    add_tail(&(new_config->symbols), &(s->n));
 
   return s;
 }
 
 /**
- * cf_find_symbol - find a symbol by name
- * @cfg: specificed config
+ * cf_find_symbol_scope - find a symbol by name
+ * @scope: config scope
  * @c: symbol name
  *
- * This functions searches the symbol table in the config @cfg for a symbol of
- * given name. First it examines the current scope, then the second recent one
+ * This functions searches the symbol table in the scope @scope for a symbol of
+ * given name. First it examines the current scope, then the underlying one
  * and so on until it either finds the symbol and returns a pointer to its
  * &symbol structure or reaches the end of the scope chain and returns %NULL to
  * signify no match.
  */
 struct symbol *
-cf_find_symbol(const struct config *cfg, const byte *c)
+cf_find_symbol_scope(const struct sym_scope *scope, const byte *c)
 {
   struct symbol *s;
 
-  if (cfg->sym_hash.data &&
-      (s = HASH_FIND(cfg->sym_hash, SYM, c, 1)))
-    return s;
-
-  /* In CLI command parsing, fallback points to the current config, otherwise it is NULL. */
-  if (cfg->fallback &&
-      cfg->fallback->sym_hash.data &&
-      (s = HASH_FIND(cfg->fallback->sym_hash, SYM, c, 1)))
-    return s;
+  /* Find the symbol here or anywhere below */
+  while (scope)
+    if (scope->hash.data && (s = HASH_FIND(scope->hash, SYM, c)))
+      return s;
+    else
+      scope = scope->next;
 
   return NULL;
 }
@@ -640,9 +616,12 @@ cf_find_symbol(const struct config *cfg, const byte *c)
  * existing symbol is found.
  */
 struct symbol *
-cf_get_symbol(const byte *c)
+cf_get_symbol(struct config *conf, const byte *c)
 {
-  return cf_find_symbol(new_config, c) ?: cf_new_symbol(c);
+  return cf_find_symbol_scope(conf->current_scope, c) ?: (
+      cf_swap_soft_scope(conf),
+      cf_new_symbol(conf->current_scope, conf->pool, conf->mem, c)
+      );
 }
 
 /**
@@ -653,22 +632,23 @@ cf_get_symbol(const byte *c)
  * for purposes of cf_define_symbol().
  */
 struct symbol *
-cf_localize_symbol(struct symbol *sym)
+cf_localize_symbol(struct config *conf, struct symbol *sym)
 {
   /* If the symbol type is void, it has been recently allocated just in this scope. */
   if (!sym->class)
     return sym;
 
   /* If the scope is the current, it is already defined in this scope. */
-  if (cf_symbol_is_local(sym))
+  if (cf_symbol_is_local(conf, sym))
     cf_error("Symbol '%s' already defined", sym->name);
 
   /* Not allocated here yet, doing it now. */
-  return cf_new_symbol(sym->name);
+  cf_swap_soft_scope(conf);
+  return cf_new_symbol(conf->current_scope, conf->pool, conf->mem, sym->name);
 }
 
 struct symbol *
-cf_default_name(char *template, int *counter)
+cf_default_name(struct config *conf, char *template, int *counter)
 {
   char buf[SYM_MAX_LEN];
   struct symbol *s;
@@ -677,7 +657,7 @@ cf_default_name(char *template, int *counter)
   for(;;)
     {
       bsprintf(buf, template, ++(*counter));
-      s = cf_get_symbol(buf);
+      s = cf_get_symbol(conf, buf);
       if (s->class == SYM_VOID)
 	return s;
       if (!perc)
@@ -690,39 +670,28 @@ static enum yytokentype
 cf_lex_symbol(const char *data)
 {
   /* Have we defined such a symbol? */
-  struct symbol *sym = cf_get_symbol(data);
+  struct symbol *sym = cf_get_symbol(new_config, data);
   cf_lval.s = sym;
 
-  if (sym->class != SYM_VOID)
-    return CF_SYM_KNOWN;
-
-  /* Is it a keyword? */
-  struct keyword *k = HASH_FIND(kw_hash, KW, data);
-  if (k)
+  switch (sym->class)
   {
-    if (k->value > 0)
-      return k->value;
-    else
+    case SYM_KEYWORD:
     {
-      cf_lval.i = -k->value;
+      int val = sym->keyword->value;
+      if (val > 0) return val;
+      cf_lval.i = -val;
       return ENUM;
     }
+    case SYM_METHOD:
+      return (sym->method->arg_num > 1) ? CF_SYM_METHOD_ARGS : CF_SYM_METHOD_BARE;
+    case SYM_VOID:
+      return CF_SYM_UNDEFINED;
+    default:
+      return CF_SYM_KNOWN;
   }
-
-  /* OK, undefined symbol */
-  cf_lval.s = sym;
-  return CF_SYM_UNDEFINED;
 }
 
-static void
-cf_lex_init_kh(void)
-{
-  HASH_INIT(kw_hash, config_pool, KW_ORDER);
-
-  struct keyword *k;
-  for (k=keyword_list; k->name; k++)
-    HASH_INSERT(kw_hash, KW, k);
-}
+void f_type_methods_register(void);
 
 /**
  * cf_lex_init - initialize the lexer
@@ -735,8 +704,23 @@ cf_lex_init_kh(void)
 void
 cf_lex_init(int is_cli, struct config *c)
 {
-  if (!kw_hash.data)
-    cf_lex_init_kh();
+  if (!global_root_scope_pool)
+  {
+    global_root_scope_pool = rp_new(&root_pool, "Keywords pool");
+    global_root_scope_linpool = lp_new(global_root_scope_pool);
+    global_root_scope = lp_allocz(global_root_scope_linpool, sizeof(*global_root_scope));
+
+    for (const struct keyword *k = keyword_list; k->name; k++)
+    {
+      struct symbol *sym = cf_new_symbol(global_root_scope, global_root_scope_pool, global_root_scope_linpool, k->name);
+      sym->class = SYM_KEYWORD;
+      sym->keyword = k;
+    }
+
+    global_root_scope->readonly = 1;
+
+    f_type_methods_register();
+  }
 
   ifs_head = ifs = push_ifs(NULL);
   if (!is_cli)
@@ -754,9 +738,13 @@ cf_lex_init(int is_cli, struct config *c)
   else
     BEGIN(INITIAL);
 
-  c->root_scope = cfg_allocz(sizeof(struct sym_scope));
-  conf_this_scope = c->root_scope;
-  conf_this_scope->active = 1;
+  c->root_scope = c->current_scope = cfg_allocz(sizeof(struct sym_scope));
+  c->root_scope->active = 1;
+
+  if (is_cli)
+    c->current_scope->next = config->root_scope;
+  else
+    c->current_scope->next = global_root_scope;
 }
 
 /**
@@ -770,12 +758,12 @@ cf_lex_init(int is_cli, struct config *c)
  * in all scopes stored on the stack.
  */
 void
-cf_push_scope(struct symbol *sym)
+cf_push_scope(struct config *conf, struct symbol *sym)
 {
   struct sym_scope *s = cfg_allocz(sizeof(struct sym_scope));
 
-  s->next = conf_this_scope;
-  conf_this_scope = s;
+  s->next = conf->current_scope;
+  conf->current_scope = s;
   s->active = 1;
   s->name = sym;
   s->slots = 0;
@@ -789,14 +777,14 @@ cf_push_scope(struct symbol *sym)
  * invisible to the rest of the config.
  */
 void
-cf_pop_scope(void)
+cf_pop_scope(struct config *conf)
 {
-  ASSERT(!conf_this_scope->soft_scopes);
+  ASSERT(!conf->current_scope->soft_scopes);
 
-  conf_this_scope->active = 0;
-  conf_this_scope = conf_this_scope->next;
+  conf->current_scope->active = 0;
+  conf->current_scope = conf->current_scope->next;
 
-  ASSERT(conf_this_scope);
+  ASSERT(conf->current_scope);
 }
 
 /**
@@ -807,12 +795,12 @@ cf_pop_scope(void)
  * Such scope will be converted to a regular scope on first use.
  */
 void
-cf_push_soft_scope(void)
+cf_push_soft_scope(struct config *conf)
 {
-  if (conf_this_scope->soft_scopes < 0xfe)
-    conf_this_scope->soft_scopes++;
+  if (conf->current_scope->soft_scopes < 0xfe)
+    conf->current_scope->soft_scopes++;
   else
-    cf_push_block_scope();
+    cf_push_block_scope(conf);
 }
 
 /**
@@ -821,12 +809,12 @@ cf_push_soft_scope(void)
  * Leave a soft scope entered by cf_push_soft_scope().
  */
 void
-cf_pop_soft_scope(void)
+cf_pop_soft_scope(struct config *conf)
 {
-  if (conf_this_scope->soft_scopes)
-    conf_this_scope->soft_scopes--;
+  if (conf->current_scope->soft_scopes)
+    conf->current_scope->soft_scopes--;
   else
-    cf_pop_block_scope();
+    cf_pop_block_scope(conf);
 }
 
 /**
@@ -836,12 +824,12 @@ cf_pop_soft_scope(void)
  * on first use. It is done automatically by cf_new_symbol().
  */
 static inline void
-cf_swap_soft_scope(void)
+cf_swap_soft_scope(struct config *conf)
 {
-  if (conf_this_scope->soft_scopes)
+  if (conf->current_scope->soft_scopes)
   {
-    conf_this_scope->soft_scopes--;
-    cf_push_block_scope();
+    conf->current_scope->soft_scopes--;
+    cf_push_block_scope(conf);
   }
 }
 
@@ -871,6 +859,10 @@ cf_symbol_class_name(struct symbol *sym)
       return "routing table";
     case SYM_ATTRIBUTE:
       return "custom attribute";
+    case SYM_MPLS_DOMAIN:
+      return "MPLS domain";
+    case SYM_MPLS_RANGE:
+      return "MPLS label range";
     case SYM_CONSTANT_RANGE:
       return "constant";
     case SYM_VARIABLE_RANGE:

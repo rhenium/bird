@@ -32,7 +32,9 @@ CF_DECLS
 CF_KEYWORDS(KERNEL, PERSIST, SCAN, TIME, LEARN, DEVICE, ROUTES, GRACEFUL, RESTART, KRT_SOURCE, KRT_METRIC, MERGE, PATHS)
 CF_KEYWORDS(INTERFACE, PREFERRED)
 
+%type <i> kern_learn
 %type <i> kern_mp_limit
+%type <cc> kern_channel
 
 CF_GRAMMAR
 
@@ -48,20 +50,31 @@ kern_proto_start: proto_start KERNEL {
 kern_proto: kern_proto_start proto_name '{' ;
 kern_proto: kern_proto kern_item ';' ;
 
+kern_learn:
+   bool { $$ = $1 ? KRT_LEARN_ALIEN : KRT_LEARN_NONE; }
+ | ALL  { $$ = KRT_LEARN_ALL; }
+ ;
+
 kern_mp_limit:
    /* empty */ { $$ = KRT_DEFAULT_ECMP_LIMIT; }
  | LIMIT expr  { $$ = $2; if (($2 <= 0) || ($2 > 255)) cf_error("Merge paths limit must be in range 1-255"); }
  ;
 
+
+kern_channel:
+   proto_channel
+ | mpls_channel
+ ;
+
 kern_item:
    proto_item
- | proto_channel { this_proto->net_type = $1->net_type; }
+ | kern_channel { this_proto->net_type = $1->net_type; }
  | PERSIST bool { THIS_KRT->persist = $2; }
  | SCAN TIME expr {
       /* Scan time of 0 means scan on startup only */
       THIS_KRT->scan_time = $3 S_;
    }
- | LEARN bool {
+ | LEARN kern_learn {
       THIS_KRT->learn = $2;
 #ifndef KRT_ALLOW_LEARN
       if ($2)

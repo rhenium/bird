@@ -200,6 +200,7 @@ typedef struct rtable {
   struct timer *settle_timer;		/* Settle time for notifications */
   list flowspec_links;			/* List of flowspec links, src for NET_IPx and dst for NET_FLOWx */
   struct f_trie *flowspec_trie;		/* Trie for evaluation of flowspec notifications */
+  // struct mpls_domain *mpls_domain;	/* Label allocator for MPLS */
 } rtable;
 
 struct rt_subscription {
@@ -342,6 +343,8 @@ void rt_prune_sync(rtable *t, int all);
 int rte_update_out(struct channel *c, const net_addr *n, rte *new, rte *old0, int refeed);
 struct rtable_config *rt_new_table(struct symbol *s, uint addr_type);
 
+int rte_same(rte *x, rte *y);
+
 static inline int rt_is_ip(rtable *tab)
 { return (tab->addr_type == NET_IP4) || (tab->addr_type == NET_IP6); }
 
@@ -437,7 +440,7 @@ struct nexthop {
 struct rte_src {
   struct rte_src *next;			/* Hash chain */
   struct proto *proto;			/* Protocol the source is based on */
-  u32 private_id;			/* Private ID, assigned by the protocol */
+  u64 private_id;			/* Private ID, assigned by the protocol */
   u32 global_id;			/* Globally unique ID of the source */
   unsigned uc;				/* Use count */
 };
@@ -474,7 +477,9 @@ typedef struct rta {
 #define RTS_BABEL 13			/* Babel route */
 #define RTS_RPKI 14			/* Route Origin Authorization */
 #define RTS_PERF 15			/* Perf checker */
-#define RTS_MAX 16
+#define RTS_L3VPN 16			/* MPLS L3VPN */
+#define RTS_AGGREGATED 17		/* Aggregated route */
+#define RTS_MAX 18
 
 #define RTD_NONE 0			/* Undefined next hop */
 #define RTD_UNICAST 1			/* Next hop is neighbor router */
@@ -524,7 +529,10 @@ typedef struct eattr {
 
 const char *ea_custom_name(uint ea);
 
-#define EA_GEN_IGP_METRIC EA_CODE(PROTOCOL_NONE, 0)
+#define EA_GEN_IGP_METRIC	EA_CODE(PROTOCOL_NONE, 0)
+#define EA_MPLS_LABEL		EA_CODE(PROTOCOL_NONE, 1)
+#define EA_MPLS_POLICY		EA_CODE(PROTOCOL_NONE, 2)
+#define EA_MPLS_CLASS		EA_CODE(PROTOCOL_NONE, 3)
 
 #define EA_CODE_MASK 0xffff
 #define EA_CUSTOM_BIT 0x8000
@@ -684,7 +692,7 @@ static inline int nexthop_same(struct nexthop *x, struct nexthop *y)
 { return (x == y) || nexthop__same(x, y); }
 struct nexthop *nexthop_merge(struct nexthop *x, struct nexthop *y, int rx, int ry, int max, linpool *lp);
 struct nexthop *nexthop_sort(struct nexthop *x);
-static inline void nexthop_link(struct rta *a, struct nexthop *from)
+static inline void nexthop_link(struct rta *a, const struct nexthop *from)
 { memcpy(&a->nh, from, nexthop_size(from)); }
 void nexthop_insert(struct nexthop **n, struct nexthop *y);
 int nexthop_is_sorted(struct nexthop *x);
@@ -752,6 +760,8 @@ int rt_flowspec_check(rtable *tab_ip, rtable *tab_flow, const net_addr *n, rta *
 #define DEF_PREF_RIP		120	/* RIP */
 #define DEF_PREF_BGP		100	/* BGP */
 #define DEF_PREF_RPKI		100	/* RPKI */
+#define DEF_PREF_L3VPN_IMPORT	 80	/* L3VPN import -> lower than BGP */
+#define DEF_PREF_L3VPN_EXPORT	120	/* L3VPN export -> higher than BGP */
 #define DEF_PREF_INHERITED	10	/* Routes inherited from other routing daemons */
 
 /*

@@ -98,6 +98,7 @@
 #include "nest/route.h"
 #include "nest/protocol.h"
 #include "nest/iface.h"
+#include "nest/mpls.h"
 #include "lib/resource.h"
 #include "lib/event.h"
 #include "lib/timer.h"
@@ -117,7 +118,7 @@
 pool *rt_table_pool;
 
 static slab *rte_slab;
-static linpool *rte_update_pool;
+linpool *rte_update_pool;
 
 list routing_tables;
 
@@ -675,7 +676,7 @@ rte_mergable(rte *pri, rte *sec)
 static void
 rte_trace(struct channel *c, rte *e, int dir, char *msg)
 {
-  log(L_TRACE "%s.%s %c %s %N %uL %uG %s",
+  log(L_TRACE "%s.%s %c %s %N %luL %uG %s",
       c->proto->name, c->name ?: "?", dir, msg, e->net->n.addr, e->src->private_id, e->src->global_id,
       rta_dest_name(e->attrs->dest));
 }
@@ -975,7 +976,6 @@ rt_export_merged(struct channel *c, net *net, rte **rt_free, linpool *pool, int 
   return best;
 }
 
-
 static void
 rt_notify_merged(struct channel *c, net *net, rte *new_changed, rte *old_changed,
 		 rte *new_best, rte *old_best, int refeed)
@@ -1206,7 +1206,7 @@ rte_free_quick(rte *e)
   sl_free(e);
 }
 
-static int
+int
 rte_same(rte *x, rte *y)
 {
   /* rte.flags / rte.pflags are not checked, as they are internal to rtable */
@@ -1560,9 +1560,10 @@ rte_update_unlock(void)
 void
 rte_update2(struct channel *c, const net_addr *n, rte *new, struct rte_src *src)
 {
-  // struct proto *p = c->proto;
+  struct proto *p = c->proto;
   struct proto_stats *stats = &c->stats;
   const struct filter *filter = c->in_filter;
+  struct mpls_fec *fec = NULL;
   net *nn;
 
   ASSERT(c->channel_state == CS_UP);
@@ -1611,6 +1612,17 @@ rte_update2(struct channel *c, const net_addr *n, rte *new, struct rte_src *src)
 	    new->flags |= REF_FILTERED;
 	  }
 	}
+
+      if (p->mpls_map)
+        {
+	  if (mpls_handle_rte(p->mpls_map, n, new, rte_update_pool, &fec) < 0)
+	    {
+	      rte_trace_in(D_FILTERS, c, new, "invalid");
+	      stats->imp_updates_invalid++;
+	      goto drop;
+	    }
+	}
+
       if (!rta_is_cached(new->attrs)) /* Need to copy attributes */
 	new->attrs = rta_lookup(new->attrs);
       new->flags |= REF_COW;
@@ -1634,6 +1646,9 @@ rte_update2(struct channel *c, const net_addr *n, rte *new, struct rte_src *src)
  recalc:
   /* And recalculate the best route */
   rte_recalculate(c, nn, new, src);
+
+  if (p->mpls_map)
+    mpls_handle_rte_cleanup(p->mpls_map, &fec);
 
   rte_update_unlock();
   return;
@@ -2148,11 +2163,11 @@ rt_setup(pool *pp, struct rtable_config *cf)
   init_list(&t->flowspec_links);
   init_list(&t->subscribers);
 
+  hmap_init(&t->id_map, p, 1024);
+  hmap_set(&t->id_map, 0);
+
   if (!(t->internal = cf->internal))
   {
-    hmap_init(&t->id_map, p, 1024);
-    hmap_set(&t->id_map, 0);
-
     t->rt_event = ev_new_init(p, rt_event, t);
     t->prune_timer = tm_new_init(p, rt_prune_timer, t, 0, 0);
     t->last_rt_change = t->gc_time = current_time();
@@ -2409,8 +2424,8 @@ rt_preconfig(struct config *c)
 {
   init_list(&c->tables);
 
-  rt_new_table(cf_get_symbol("master4"), NET_IP4);
-  rt_new_table(cf_get_symbol("master6"), NET_IP6);
+  rt_new_table(cf_get_symbol(c, "master4"), NET_IP4);
+  rt_new_table(cf_get_symbol(c, "master6"), NET_IP6);
 }
 
 void
@@ -2838,7 +2853,7 @@ rt_new_table(struct symbol *s, uint addr_type)
 
   struct rtable_config *c = cfg_allocz(sizeof(struct rtable_config));
 
-  cf_define_symbol(s, SYM_TABLE, table, c);
+  cf_define_symbol(new_config, s, SYM_TABLE, table, c);
   c->name = s->name;
   c->addr_type = addr_type;
   c->gc_threshold = 1000;
@@ -3095,6 +3110,7 @@ rte_update_in(struct channel *c, const net_addr *n, rte *new, struct rte_src *sr
 	if (old->flags & (REF_STALE | REF_DISCARD | REF_MODIFY))
 	{
 	  old->flags &= ~(REF_STALE | REF_DISCARD | REF_MODIFY);
+
 	  return 1;
 	}
 
@@ -3107,25 +3123,15 @@ rte_update_in(struct channel *c, const net_addr *n, rte *new, struct rte_src *sr
 
       /* Remove the old rte */
       *pos = old->next;
-      rte_free_quick(old);
       tab->rt_count--;
-
       break;
     }
 
-  if (!new)
-  {
-    if (!old)
-      goto drop_withdraw;
-
-    if (!net->routes)
-      fib_delete(&tab->fib, net);
-
-    return 1;
-  }
+  if (!old && !new)
+    goto drop_withdraw;
 
   struct channel_limit *l = &c->rx_limit;
-  if (l->action && !old)
+  if (l->action && !old && new)
   {
     if (tab->rt_count >= l->limit)
       channel_notify_limit(c, l, PLD_RX, tab->rt_count);
@@ -3140,15 +3146,40 @@ rte_update_in(struct channel *c, const net_addr *n, rte *new, struct rte_src *sr
     }
   }
 
-  /* Insert the new rte */
-  rte *e = rte_do_cow(new);
-  e->flags |= REF_COW;
-  e->net = net;
-  e->sender = c;
-  e->lastmod = current_time();
-  e->next = *pos;
-  *pos = e;
-  tab->rt_count++;
+  if (new)
+  {
+    /* Insert the new rte */
+    rte *e = rte_do_cow(new);
+    e->flags |= REF_COW;
+    e->net = net;
+    e->sender = c;
+    e->lastmod = current_time();
+    e->next = *pos;
+    *pos = new = e;
+    tab->rt_count++;
+
+    if (!old)
+    {
+      new->id = hmap_first_zero(&tab->id_map);
+      hmap_set(&tab->id_map, new->id);
+    }
+    else
+      new->id = old->id;
+  }
+
+  rte_announce(tab, RA_ANY, net, new, old, NULL, NULL);
+
+  if (old)
+  {
+    if (!new)
+      hmap_clear(&tab->id_map, old->id);
+
+    rte_free_quick(old);
+  }
+
+  if (!net->routes)
+    fib_delete(&tab->fib, net);
+
   return 1;
 
 drop_update:

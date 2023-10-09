@@ -12,6 +12,7 @@ CF_HDR
 #include "nest/rt-dev.h"
 #include "nest/password.h"
 #include "nest/cmds.h"
+#include "nest/mpls.h"
 #include "lib/lists.h"
 #include "lib/mac.h"
 
@@ -118,24 +119,27 @@ CF_KEYWORDS(IPV4, IPV6, VPN4, VPN6, ROA4, ROA6, FLOW4, FLOW6, SADR, MPLS)
 CF_KEYWORDS(RECEIVE, LIMIT, ACTION, WARN, BLOCK, RESTART, DISABLE, KEEP, FILTERED, RPKI)
 CF_KEYWORDS(PASSWORD, KEY, FROM, PASSIVE, TO, ID, EVENTS, PACKETS, PROTOCOLS, CHANNELS, INTERFACES)
 CF_KEYWORDS(ALGORITHM, KEYED, HMAC, MD5, SHA1, SHA256, SHA384, SHA512, BLAKE2S128, BLAKE2S256, BLAKE2B256, BLAKE2B512)
-CF_KEYWORDS(PRIMARY, STATS, COUNT, BY, FOR, IN, COMMANDS, PREEXPORT, NOEXPORT, EXPORTED, GENERATE)
+CF_KEYWORDS(PRIMARY, STATS, COUNT, FOR, IN, COMMANDS, PREEXPORT, NOEXPORT, EXPORTED, GENERATE)
 CF_KEYWORDS(BGP, PASSWORDS, DESCRIPTION)
 CF_KEYWORDS(RELOAD, IN, OUT, MRTDUMP, MESSAGES, RESTRICT, MEMORY, IGP_METRIC, CLASS, DSCP)
 CF_KEYWORDS(TIMEFORMAT, ISO, SHORT, LONG, ROUTE, PROTOCOL, BASE, LOG, S, MS, US)
-CF_KEYWORDS(GRACEFUL, RESTART, WAIT, MAX, FLUSH, AS)
+CF_KEYWORDS(GRACEFUL, RESTART, WAIT, MAX, AS)
 CF_KEYWORDS(MIN, IDLE, RX, TX, INTERVAL, MULTIPLIER, PASSIVE)
 CF_KEYWORDS(CHECK, LINK)
 CF_KEYWORDS(SORTED, TRIE, MIN, MAX, SETTLE, TIME, GC, THRESHOLD, PERIOD)
+CF_KEYWORDS(MPLS_LABEL, MPLS_POLICY, MPLS_CLASS)
 
 /* For r_args_channel */
 CF_KEYWORDS(IPV4, IPV4_MC, IPV4_MPLS, IPV6, IPV6_MC, IPV6_MPLS, IPV6_SADR, VPN4, VPN4_MC, VPN4_MPLS, VPN6, VPN6_MC, VPN6_MPLS, ROA4, ROA6, FLOW4, FLOW6, MPLS, PRI, SEC)
 
 CF_ENUM(T_ENUM_RTS, RTS_, STATIC, INHERIT, DEVICE, STATIC_DEVICE, REDIRECT,
-	RIP, OSPF, OSPF_IA, OSPF_EXT1, OSPF_EXT2, BGP, PIPE, BABEL)
+	RIP, OSPF, OSPF_IA, OSPF_EXT1, OSPF_EXT2, BGP, PIPE, BABEL, RPKI, L3VPN,
+	AGGREGATED)
 CF_ENUM(T_ENUM_SCOPE, SCOPE_, HOST, LINK, SITE, ORGANIZATION, UNIVERSE, UNDEFINED)
 CF_ENUM(T_ENUM_RTD, RTD_, UNICAST, BLACKHOLE, UNREACHABLE, PROHIBIT)
 CF_ENUM(T_ENUM_ROA, ROA_, UNKNOWN, VALID, INVALID)
 CF_ENUM_PX(T_ENUM_AF, AF_, AFI_, IPV4, IPV6)
+CF_ENUM(T_ENUM_MPLS_POLICY, MPLS_POLICY_, NONE, STATIC, PREFIX, AGGREGATE, VRF)
 
 %type <i32> idval
 %type <f> imexport
@@ -143,7 +147,7 @@ CF_ENUM_PX(T_ENUM_AF, AF_, AFI_, IPV4, IPV6)
 %type <s> optproto
 %type <ra> r_args
 %type <sd> sym_args
-%type <i> proto_start echo_mask echo_size debug_mask debug_list debug_flag mrtdump_mask mrtdump_list mrtdump_flag export_mode limit_action net_type tos password_algorithm
+%type <i> proto_start echo_mask echo_size debug_mask debug_list debug_flag mrtdump_mask mrtdump_list mrtdump_flag export_mode limit_action net_type net_type_base tos password_algorithm
 %type <ps> proto_patt proto_patt2
 %type <cc> channel_start proto_channel
 %type <cl> limit_spec
@@ -165,7 +169,7 @@ rtrid:
 
 idval:
    NUM { $$ = $1; }
- | '(' term ')' { $$ = f_eval_int(f_linearize($2, 1)); }
+ | '(' term ')' { $$ = cf_eval_int($2); }
  | IP4 { $$ = ip4_to_u32($1); }
  | CF_SYM_KNOWN {
      if ($1->class == (SYM_CONSTANT | T_INT) || $1->class == (SYM_CONSTANT | T_QUAD))
@@ -188,7 +192,7 @@ gr_opts: GRACEFUL RESTART WAIT expr ';' { new_config->gr_wait = $4; } ;
 
 /* Network types (for tables, channels) */
 
-net_type:
+net_type_base:
    IPV4 { $$ = NET_IP4; }
  | IPV6 { $$ = NET_IP6; }
  | IPV6 SADR { $$ = NET_IP6_SADR; }
@@ -198,6 +202,10 @@ net_type:
  | ROA6 { $$ = NET_ROA6; }
  | FLOW4{ $$ = NET_FLOW4; }
  | FLOW6{ $$ = NET_FLOW6; }
+ ;
+
+net_type:
+   net_type_base
  | MPLS { $$ = NET_MPLS; }
  ;
 
@@ -255,19 +263,19 @@ proto_start:
 
 proto_name:
    /* EMPTY */ {
-     struct symbol *s = cf_default_name(this_proto->protocol->template, &this_proto->protocol->name_counter);
+     struct symbol *s = cf_default_name(new_config, this_proto->protocol->template, &this_proto->protocol->name_counter);
      s->class = this_proto->class;
      s->proto = this_proto;
      this_proto->name = s->name;
      }
  | symbol {
-     cf_define_symbol($1, this_proto->class, proto, this_proto);
+     cf_define_symbol(new_config, $1, this_proto->class, proto, this_proto);
      this_proto->name = $1->name;
    }
  | FROM CF_SYM_KNOWN {
      if (($2->class != SYM_TEMPLATE) && ($2->class != SYM_PROTO)) cf_error("Template or protocol name expected");
 
-     struct symbol *s = cf_default_name(this_proto->protocol->template, &this_proto->protocol->name_counter);
+     struct symbol *s = cf_default_name(new_config, this_proto->protocol->template, &this_proto->protocol->name_counter);
      s->class = this_proto->class;
      s->proto = this_proto;
      this_proto->name = s->name;
@@ -277,7 +285,7 @@ proto_name:
  | symbol FROM CF_SYM_KNOWN {
      if (($3->class != SYM_TEMPLATE) && ($3->class != SYM_PROTO)) cf_error("Template or protocol name expected");
 
-     cf_define_symbol($1, this_proto->class, proto, this_proto);
+     cf_define_symbol(new_config, $1, this_proto->class, proto, this_proto);
      this_proto->name = $1->name;
 
      proto_copy_config(this_proto, $3->proto);
@@ -296,7 +304,7 @@ proto_item:
  ;
 
 
-channel_start: net_type
+channel_start: net_type_base
 {
   $$ = this_channel = channel_config_get(NULL, net_label[$1], $1, this_proto);
 };
@@ -544,10 +552,15 @@ password_item:
 
 pass_key: PASSWORD | KEY;
 
-password_item_begin:
-    pass_key text { init_password_list(); init_password($2, strlen($2), password_id++); }
-  | pass_key BYTESTRING { init_password_list(); init_password($2->data, $2->length, password_id++); }
-;
+password_item_begin: pass_key bytestring_text
+{
+  init_password_list();
+  if ($2.type == T_BYTESTRING)
+    init_password($2.val.bs->data, $2.val.bs->length, password_id++);
+  else if ($2.type == T_STRING)
+    init_password($2.val.s, strlen($2.val.s), password_id++);
+  else bug("Bad bytestring_text");
+};
 
 password_item_params:
    /* empty */ { }
@@ -632,7 +645,7 @@ CF_CLI(SHOW INTERFACES SUMMARY,,, [[Show summary of network interfaces]])
 { if_show_summary(); } ;
 
 CF_CLI_HELP(SHOW ROUTE, ..., [[Show routing table]])
-CF_CLI(SHOW ROUTE, r_args, [[[<prefix>|for <prefix>|for <ip>] [table <t>] [(import|export) table <p>.<c>] [filter <f>|where <cond>] [all] [primary] [filtered] [(export|preexport|noexport) <p>] [protocol <p>] [stats|count]]], [[Show routing table]])
+CF_CLI(SHOW ROUTE, r_args, [[[<prefix>|for <prefix>|for <ip>|in <prefix>] [table <t>] [(import|export) table <p>.<c>] [filter <f>|where <cond>] [all] [primary] [filtered] [(export|preexport|noexport) <p>] [protocol <p>] [stats|count]]], [[Show routing table]])
 { rt_show($3); } ;
 
 r_args:
@@ -640,7 +653,7 @@ r_args:
      $$ = cfg_allocz(sizeof(struct rt_show_data));
      init_list(&($$->tables));
      $$->filter = FILTER_ACCEPT;
-     $$->running_on_config = new_config->fallback;
+     $$->running_on_config = config;
    }
  | r_args net_any {
      $$ = $1;
@@ -661,7 +674,7 @@ r_args:
      $$->addr = $3;
      $$->addr_mode = RSD_ADDR_IN;
    }
-| r_args TABLE CF_SYM_KNOWN {
+| r_args TABLE symbol_known {
      cf_assert_symbol($3, SYM_TABLE);
      $$ = $1;
      rt_show_add_table($$, $3->table->table);
@@ -706,7 +719,7 @@ r_args:
      $$ = $1;
      $$->filtered = 1;
    }
- | r_args export_mode CF_SYM_KNOWN {
+ | r_args export_mode symbol_known {
      cf_assert_symbol($3, SYM_PROTO);
      struct proto_config *c = (struct proto_config *) $3->proto;
      $$ = $1;
@@ -723,7 +736,7 @@ r_args:
      $$->export_channel = $3;
      $$->tables_defined_by = RSD_TDB_INDIRECT;
    }
- | r_args PROTOCOL CF_SYM_KNOWN {
+ | r_args PROTOCOL symbol_known {
      cf_assert_symbol($3, SYM_PROTO);
      struct proto_config *c = (struct proto_config *) $3->proto;
      $$ = $1;
@@ -835,7 +848,7 @@ sym_args:
  | sym_args FILTER { $$ = $1; $$->type = SYM_FILTER; }
  | sym_args PROTOCOL { $$ = $1; $$->type = SYM_PROTO; }
  | sym_args TEMPLATE { $$ = $1; $$->type = SYM_TEMPLATE; }
- | sym_args symbol { $$ = $1; $$->sym = $2; }
+ | sym_args CF_SYM_KNOWN { $$ = $1; $$->sym = $2; }
  ;
 
 
@@ -924,6 +937,10 @@ proto_patt2:
  ;
 
 dynamic_attr: IGP_METRIC { $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_GEN_IGP_METRIC); } ;
+
+dynamic_attr: MPLS_LABEL  { $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_MPLS_LABEL); } ;
+dynamic_attr: MPLS_POLICY { $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_ENUM_MPLS_POLICY, EA_MPLS_POLICY); } ;
+dynamic_attr: MPLS_CLASS  { $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_MPLS_CLASS); } ;
 
 
 CF_CODE

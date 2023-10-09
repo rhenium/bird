@@ -341,10 +341,9 @@ Configuration keywords are <cf/flow4/ and <cf/flow6/.
 <sect1>MPLS switching rules
 <label id="mpls-routes">
 
-<p>This nettype is currently a stub before implementing more support of <rfc id="3031">.
-BIRD currently does not support any label distribution protocol nor any label assignment method.
-Only the Kernel, Pipe and Static protocols can use MPLS tables.
-Configuration keyword is <cf/mpls/.
+<p>MPLS routes control MPLS forwarding in the same way as IP routes control IP
+forwarding. MPLS-aware routing protocols produce both labeled IP routes and
+corresponding MPLS routes. Configuration keyword is <cf/mpls/.
 
 <itemize>
 	<item>(PK) MPLS label
@@ -402,6 +401,79 @@ only. For planned graceful restart, BIRD must be shut down by
 regular <ref id="cli-down" name="down"> command. In this way routing neighbors
 are notified about planned graceful restart and routes are kept in kernel table
 after shutdown.
+
+<sect>MPLS
+<label id="mpls">
+
+<p>Multiprotocol Label Switching (MPLS) is a networking technology which works
+below IP routing but above the link (e.g. ethernet) layer. It is described in
+<rfc id="3031">.
+
+In regular IP forwarding, the destination address of a packet is independently
+examined in each hop, a route with longest prefix match is selected from the
+routing table, and packet is processed accordingly. In general, there is no
+difference between border routers and internal routers w.r.t. IP forwarding.
+
+In MPLS forwarding, when a packet enters the network, it is classified (based on
+destination address, ingress interface and other factors) into one of forwarding
+equivalence classes (FECs), then a header with a MPLS label identifying the FEC
+is attached to it, and the packet is forwarded. In internal routers, only the
+MPLS label is examined, the matching MPLS route is selected from the MPLS
+routing table, and the packet is processed accordingly. The specific value of
+MPLS label has local meaning only and may change between hops (that is why it is
+called label switching). When the packet leaves the network, the MPLS header is
+removed.
+
+The advantage of the MPLS approach is that other factors than the destination
+address can be considered and used consistently in the whole network, for
+example IP traffic with multiple overlapping private address ranges could be
+mixed together, or particular paths for specific flows could be defined. Another
+advantage is that MPLS forwarding by internal routers can be much simpler than
+IP forwarding, as instead of the longest prefix match algorithm it uses simpler
+exact match for MPLS route selection. The disadvantage is additional complexity
+in signaling. For further details, see <rfc id="3031">.
+
+MPLS-aware routing protocols not only distribute IP routing information, but
+they also distribute labels. Therefore, they produce labeled routes - routes
+representing label switched paths (LSPs) through the MPLS domain. Such routes
+have IP prefix and next hop address like regular (non-labeled) routes, but they
+also have local MPLS label (in route attribute <ref id="rta-mpls-label"
+name="mpls_label">) and outgoing MPLS label (as a part of the next hop). They
+are stored in regular IP routing tables.
+
+Labeled routes are used for exchange of routing information between routing
+protocols and for ingress (IP -&gt; MPLS) forwarding, but they are not directly
+used for MPLS forwarding. For that purpose <ref id="mpls-routes" name="MPLS
+routes"> are used. These are routes that have local MPLS label as a primary key
+and they are stored in the MPLS routing table.
+
+In BIRD, the whole process generally works this way: A MPLS-aware routing
+protocol (say BGP) receives routing information including remote label. It
+produces a route with attribute <ref id="rta-mpls-policy" name="mpls_policy">
+specifying desired <ref id="mpls-channel-label-policy" name="MPLS label policy">.
+Such route then passes the import filter (which could modify the MPLS label
+policy or perhaps assign a static label) and when it is accepted, a local MPLS
+label is selected (according to the label policy) and attached to the route,
+producing labeled route. When a new MPLS label is allocated, the MPLS-aware
+protocol automatically produces corresponding MPLS route. When all labeled
+routes that use specific local MPLS label are retracted, the corresponding MPLS
+route is retracted too.
+
+There are three important concepts for MPLS in BIRD: MPLS domains, MPLS tables
+and MPLS channels. MPLS domain represents an independent label space, all
+MPLS-aware protocols are associated with some MPLS domain. It is responsible for
+label management, handling label allocation requests from MPLS-aware protocols.
+MPLS table is just a routing table for MPLS routes. Routers usually have one
+MPLS domain and one MPLS table, with Kernel protocol to export MPLS routes into
+kernel FIB.
+
+MPLS channels make protocols MPLS-aware, they are responsible for keeping track
+of active FECs (and corresponding allocated labels), selecting FECs / local
+labels for labeled routes, and maintaining correspondence between labeled routes
+and MPLS routes.
+
+Note that local labels are allocated to individual MPLS-aware protocols and
+therefore it is not possible to share local labels between different protocols.
 
 
 <chapt>Configuration
@@ -539,7 +611,7 @@ include "tablename.conf";;
 	Define a filter. You can learn more about filters in the following
 	chapter.
 
-	<tag><label id="opt-function">function <m/name/ (<m/parameters/) <m/local variables/ { <m/commands/ }</tag>
+	<tag><label id="opt-function">function <m/name/ (<m/parameters/) [ -&gt; <m/return type/ ] <m/local variables/ { <m/commands/ }</tag>
 	Define a function. You can learn more about functions in the following chapter.
 
 	<tag><label id="opt-protocol">protocol rip|ospf|bgp|<m/.../ [<m/name/ [from <m/name2/]] { <m>protocol options</m> }</tag>
@@ -625,6 +697,12 @@ include "tablename.conf";;
 	<cf/master6/ are defined implicitly, other routing tables have to be
 	defined by this option. See the <ref id="rtable-opts"
 	name="routing table configuration section"> for routing table options.
+
+	<tag><label id="opt-mpls-domain">mpls domain <m/name/ [ { <m/option/; [<m/.../] } ]</tag>
+	Define a new MPLS domain. MPLS domains represent independent label
+	spaces and are responsible for MPLS label management. All MPLS-aware
+	protocols are associated with some MPLS domain. See the <ref id="mpls-opts"
+	name="MPLS configuration section"> for MPLS domain options.
 
 	<tag><label id="opt-eval">eval <m/expr/</tag>
 	Evaluates given filter expression. It is used by the developers for testing of filters.
@@ -838,7 +916,7 @@ agreement").
 	protocol packets are processed in the local TX queues. This option is
 	Linux specific. Default value is 7 (highest priority, privileged traffic).
 
-	<tag><label id="proto-pass">password "<m/password/" | <m/hex_key/ [ { <m>password options</m> } ] </tag>
+	<tag><label id="proto-pass">password "<m/password/" | <m/bytestring/ [ { <m>password options</m> } ] </tag>
 	Specifies a password that can be used by the protocol as a shared secret
 	key. Password option can be used more times to specify more passwords.
 	If more passwords are specified, it is a protocol-dependent decision
@@ -846,10 +924,8 @@ agreement").
 	authentication is enabled, authentication can be enabled by separate,
 	protocol-dependent <cf/authentication/ option.
 
-        A password can also be specified as a hexadecimal key. <m/hex_key/ is a
-        sequence of hexadecimal digit pairs, optionally colon-separated. A key
-        specified this way must be at least 16 bytes (32 digits) long (although
-        specific algorithms can impose other restrictions).
+	A password can be specified as a string or as a sequence of hexadecimal
+	digit pairs (<ref id="type-bytestring" name="bytestring">).
 
 	This option is allowed in BFD, OSPF, RIP, and Babel protocols. BGP has
 	also <cf/password/ option, but it is slightly different and described
@@ -932,7 +1008,7 @@ inherited from templates can be updated by new definitions.
 	<tag><label id="proto-export">export <m/filter/</tag>
 	This is similar to the <cf>import</cf> keyword, except that it works in
 	the direction from the routing table to the protocol. Default: <cf/none/
-	(except for EBGP).
+	(except for EBGP and L3VPN).
 
 	<tag><label id="proto-import-keep-filtered">import keep filtered <m/switch/</tag>
 	Usually, if an import filter rejects a route, the route is forgotten.
@@ -1034,6 +1110,100 @@ protocol bgp from  {
 </code>
 
 
+<sect>MPLS options
+<label id="mpls-opts">
+
+<p>The MPLS domain definition is mandatory for a MPLS router. All MPLS channels
+and MPLS-aware protocols are associated with some MPLS domain (although usually
+implicitly with the sole one). In the MPLS domain definition you can configure
+details of MPLS label allocation. Currently, there is just one option,
+<cf/label range/.
+
+<p>Note that the MPLS subsystem is experimental, it is likely that there will be
+some backward-incompatible changes in the future.
+
+<descrip>
+	<tag><label id="mpls-domain-label-range">label range <m/name/ { start <m/number/; length <m/number/; [<m/.../] }</tag>
+	Define a new label range, or redefine implicit label ranges <cf/static/
+	and <cf/dynamic/. MPLS channels use configured label ranges for dynamic
+	label allocation, while <cf/static/ label range is used for static label
+	allocation. The label range definition must specify the extent of the
+	range. By default, the range <cf/static/ is 16-1000, while the range
+	<cf/dynamic/ is 1000-10000.
+</descrip>
+
+<p>MPLS channel should be defined in each MPLS-aware protocol in addition to its
+regular channels. It is responsible for label allocation and for announcing MPLS
+routes to the MPLS routing table. Besides common <ref id="channel-opts"
+name="channel options">, MPLS channels have some specific options:
+
+<descrip>
+	<tag><label id="mpls-channel-domain">domain <m/name/</tag>
+	Specify a MPLS domain to which this channel and protocol belongs.
+	Default: The first defined MPLS domain.
+
+	<tag><label id="mpls-channel-label-range">label range <m/name/</tag>
+	Use specific label range for dynamic label allocation. Note that static
+	labels always use the range <cf/static/. Default: the range <cf/dynamic/.
+
+	<tag><label id="mpls-channel-label-policy">label policy static|prefix|aggregate|vrf</tag>
+	Label policy specifies how routes are grouped to forwarding equivalence
+	classes (FECs) and how labels are assigned to them.
+
+	The policy <cf/static/ means no dynamic label allocation is done, and
+	static labels must be set in import filters using the route attribute
+	<ref id="rta-mpls-label" name="mpls_label">.
+
+	The policy <cf/prefix/ means each prefix uses separate label associated
+	with that prefix. When a labeled route is updated, it keeps the label.
+	This policy is appropriate for IGPs.
+
+	The policy <cf/aggregate/ means routes are grouped to FECs according to
+	their next hops (including next hop labels), and one label is used for
+	all routes in the same FEC. When a labeled route is updated, it may
+	change next hop, change FEC and therefore change label. This policy is
+	appropriate for BGP.
+
+	The policy <cf/vrf/ is only valid in L3VPN protocols. It uses one label
+	for all routes from a VRF, while replacing the original next hop with
+	lookup in the VRF.
+
+	Default: <cf/prefix/.
+</descrip>
+
+<p>This is a trivial example of MPLS setup:
+<code>
+mpls domain mdom {
+	label range bgprange { start 2000; length 1000;	};
+}
+
+mpls table mtab;
+
+protocol static {
+	ipv6;
+	mpls;
+
+	route 2001:db8:1:1/64 mpls 100 via 2001:db8:1:2::1/64 mpls 200;
+}
+
+protocol bgp {
+	# regular channels
+	ipv6 mpls { ...	};
+	vpn6 mpls { ... };
+
+	# MPLS channel
+	mpls {
+		# domain mdom;
+		# table mtab;
+		label range bgprange;
+		label policy aggregate;
+	};
+
+	...
+}
+</code>
+
+
 <chapt>Remote control
 <label id="remote-control">
 
@@ -1113,14 +1283,16 @@ This argument can be omitted if there exists only a single instance.
 	Show the list of symbols defined in the configuration (names of
 	protocols, routing tables etc.).
 
-	<tag><label id="cli-show-route">show route [[for] <m/prefix/|<m/IP/] [table (<m/t/ | all)] [(import|export) table <m/p/.<m/c/] [filter <m/f/|where <m/c/] [(export|preexport|noexport) <m/p/] [protocol <m/p/] [(stats|count)] [<m/options/]</tag>
+	<tag><label id="cli-show-route">show route [[(for|in)] <m/prefix/|for <m/IP/] [table (<m/t/|all)] [(import|export) table <m/p/.<m/c/] [filter <m/f/|where <m/cond/] [(export|preexport|noexport) <m/p/] [protocol <m/p/] [(stats|count)] [<m/options/]</tag>
 	Show contents of specified routing tables, that is routes, their metrics
 	and (in case the <cf/all/ switch is given) all their attributes.
 
 	<p>You can specify a <m/prefix/ if you want to print routes for a
 	specific network. If you use <cf>for <m/prefix or IP/</cf>, you'll get
 	the entry which will be used for forwarding of packets to the given
-	destination. By default, all routes for each network are printed with
+	destination. Finally, if you use <cf>in <m/prefix/</cf>, you get all
+	prefixes covered by the given prefix.
+	By default, all routes for each network are printed with
 	the selected one at the top, unless <cf/primary/ is given in which case
 	only the selected route is shown.
 
@@ -1294,20 +1466,24 @@ can group several statements to a single compound statement by using braces
 (<cf>{ <M>statements</M> }</cf>) which is useful if you want to make a bigger
 block of code conditional.
 
-<p>BIRD supports functions, so that you don't have to repeat the same blocks of
-code over and over. Functions can have zero or more parameters and they can have
-local variables. Recursion is not allowed. Function definitions look like this:
+<p>BIRD supports functions, so that you don not have to repeat the same blocks
+of code over and over. Functions can have zero or more parameters and they can
+have local variables. If the function returns value, then you should always
+specify its return type. Direct recursion is possible. Function definitions look
+like this:
 
 <code>
-function name ()
+function name() -> int
 {
 	int local_variable;
 	int another_variable = 5;
+	return 42;
 }
 
-function with_parameters (int parameter)
+function with_parameters(int parameter) -> pair
 {
 	print parameter;
+	return (1, 2);
 }
 </code>
 
@@ -1321,7 +1497,7 @@ may return values using the <cf>return <m/[expr]/</cf> command. Returning a
 value exits from current function (this is similar to C).
 
 <p>Filters are defined in a way similar to functions except they cannot have
-explicit parameters. They get a route table entry as an implicit parameter, it
+explicit parameters and cannot return. They get a route table entry as an implicit parameter, it
 is also passed automatically to any functions called. The filter must terminate
 with either <cf/accept/ or <cf/reject/ statement. If there is a runtime error in
 filter, the route is rejected.
@@ -1384,6 +1560,23 @@ in the foot).
 	<cf/"This is a string constant"/. Additionally matching (<cf/&tilde;,
 	!&tilde;/) operators could be used to match a string value against
 	a shell pattern (represented also as a string).
+
+	<tag><label id="type-bytestring">bytestring</tag>
+	This is a sequences of arbitrary bytes. There are no ways to modify
+	bytestrings in filters. You can pass them between function, assign
+	them to variables of type <cf/bytestring/, print such values,
+	compare bytestings (<cf/=, !=/).
+
+	Bytestring literals are written as a sequence of hexadecimal digit
+	pairs, optionally colon-separated. A bytestring specified this way
+	must be either at least 16 bytes (32 digits) long, or prefixed by the
+	<cf/hex:/ prefix: <cf/01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef/,
+	<cf/0123456789abcdef0123456789abcdef/, <cf/hex:/, <cf/hex:12:34:56/,
+	<cf/hex:12345678/.
+
+	A bytestring can be made from a hex string using <cf/from_hex()/
+	function. Source strings can use any number of dots, colons, hyphens
+	and spaces as byte separators: <cf/from_hex(" 12.34 56:78 ab-cd-ef ")/.
 
 	<tag><label id="type-ip">ip</tag>
 	This type can hold a single IP address. The IPv4 addresses are stored as
@@ -1567,23 +1760,24 @@ in the foot).
 
 	<cf><m/P/.len</cf> returns the length of path <m/P/.
 
-	<cf><m/P/.empty</cf> makes the path <m/P/ empty.
+	<cf><m/P/.empty</cf> makes the path <m/P/ empty. Can't be used as a value, always modifies the object.
 
-	<cf>prepend(<m/P/,<m/A/)</cf> prepends ASN <m/A/ to path <m/P/ and
+	<cf><m/P/.prepend(<m/A/)</cf> prepends ASN <m/A/ to path <m/P/ and
 	returns the result.
 
-	<cf>delete(<m/P/,<m/A/)</cf> deletes all instances of ASN <m/A/ from
+	<cf><m/P/.delete(<m/A/)</cf> deletes all instances of ASN <m/A/ from
 	from path <m/P/ and returns the result. <m/A/ may also be an integer
 	set, in that case the operator deletes all ASNs from path <m/P/ that are
 	also members of set <m/A/.
 
-	<cf>filter(<m/P/,<m/A/)</cf> deletes all ASNs from path <m/P/ that are
-	not members of integer set <m/A/. I.e., <cf/filter/ do the same as
-	<cf/delete/ with inverted set <m/A/.
+	<cf><m/P/.filter(<m/A/)</cf> deletes all ASNs from path <m/P/ that are
+	not members of integer set <m/A/, and returns the result.
+	I.e., <cf/filter/ do the same as <cf/delete/ with inverted set <m/A/.
 
-	Statement <cf><m/P/ = prepend(<m/P/, <m/A/);</cf> can be shortened to
-	<cf><m/P/.prepend(<m/A/);</cf> if <m/P/ is appropriate route attribute
-	(for example <cf/bgp_path/). Similarly for <cf/delete/ and <cf/filter/.
+	Methods <cf>prepend</cf>, <cf>delete</cf> and <cf>filter</cf> keep the
+	original object intact as long as you use the result in any way. You can
+	also write e.g. <cf><m/P/.prepend(<m/A/);</cf> as a standalone statement.
+	This variant does modify the original object with the result of the operation.
 
 	<tag><label id="type-bgpmask">bgpmask</tag>
 	BGP masks are patterns used for BGP path matching (using <cf>path
@@ -1611,28 +1805,29 @@ in the foot).
 
 	<cf><m/C/.len</cf> returns the length of clist <m/C/.
 
-	<cf><m/C/.empty</cf> makes the list <m/C/ empty.
+	<cf><m/C/.empty</cf> makes the list <m/C/ empty. Can't be used as a value, always modifies the object.
 
-	<cf>add(<m/C/,<m/P/)</cf> adds pair (or quad) <m/P/ to clist <m/C/ and
+	<cf><m/C/.add(<m/P/)</cf> adds pair (or quad) <m/P/ to clist <m/C/ and
 	returns the result. If item <m/P/ is already in clist <m/C/, it does
 	nothing. <m/P/ may also be a clist, in that case all its members are
 	added; i.e., it works as clist union.
 
-	<cf>delete(<m/C/,<m/P/)</cf> deletes pair (or quad) <m/P/ from clist
+	<cf><m/C/.delete(<m/P/)</cf> deletes pair (or quad) <m/P/ from clist
 	<m/C/ and returns the result. If clist <m/C/ does not contain item
 	<m/P/, it does nothing. <m/P/ may also be a pair (or quad) set, in that
 	case the operator deletes all items from clist <m/C/ that are also
 	members of set <m/P/. Moreover, <m/P/ may also be a clist, which works
 	analogously; i.e., it works as clist difference.
 
-	<cf>filter(<m/C/,<m/P/)</cf> deletes all items from clist <m/C/ that are
-	not members of pair (or quad) set <m/P/. I.e., <cf/filter/ do the same
+	<cf><m/C/.filter(<m/P/)</cf> deletes all items from clist <m/C/ that are
+	not members of pair (or quad) set <m/P/, and returns the result. I.e., <cf/filter/ do the same
 	as <cf/delete/ with inverted set <m/P/. <m/P/ may also be a clist, which
 	works analogously; i.e., it works as clist intersection.
 
-	Statement <cf><m/C/ = add(<m/C/, <m/P/);</cf> can be shortened to
-	<cf><m/C/.add(<m/P/);</cf> if <m/C/ is appropriate route attribute (for
-	example <cf/bgp_community/). Similarly for <cf/delete/ and <cf/filter/.
+	Methods <cf>add</cf>, <cf>delete</cf> and <cf>filter</cf> keep the
+	original object intact as long as you use the result in any way. You can
+	also write e.g. <cf><m/P/.add(<m/A/);</cf> as a standalone statement.
+	This variant does modify the original object with the result of the operation.
 
 	<cf><m/C/.min</cf> returns the minimum element of clist <m/C/.
 
@@ -1847,6 +2042,29 @@ Common route attributes are:
 	network for routes that do not have a native protocol metric attribute
 	(like <cf/ospf_metric1/ for OSPF routes). It is used mainly by BGP to
 	compare internal distances to boundary routers (see below).
+
+	<tag><label id="rta-mpls-label"><m/int/ mpls_label</tag>
+	Local MPLS label attached to the route. This attribute is produced by
+	MPLS-aware protocols for labeled routes. It can also be set in import
+	filters to assign static labels, but that also requires static MPLS
+	label policy.
+
+	<tag><label id="rta-mpls-policy"><m/enum/ mpls_policy</tag>
+	For MPLS-aware protocols, this attribute defines which
+	<ref id="mpls-channel-label-policy" name="MPLS label policy"> will be
+	used for the route. It can be set in import filters to change it on
+	per-route basis. Valid values are <cf/MPLS_POLICY_NONE/ (no label),
+	<cf/MPLS_POLICY_STATIC/ (static label), <cf/MPLS_POLICY_PREFIX/
+	(per-prefix label), <cf/MPLS_POLICY_AGGREGATE/ (aggregated label),
+	and <cf/MPLS_POLICY_VRF/ (per-VRF label). See <ref
+	id="mpls-channel-label-policy" name="MPLS label policy"> for details.
+
+	<tag><label id="rta-mpls-class"><m/int/ mpls_class</tag>
+	When <ref id="mpls-channel-label-policy" name="MPLS label policy"> is
+	set to <cf/aggregate/, it may be useful to apply more fine-grained
+	aggregation than just one based on next hops. When routes have different
+	value of this attribute, they will not be aggregated under one local
+	label even if they have the same next hops.
 </descrip>
 
 <p>Protocol-specific route attributes are described in the corresponding
@@ -1878,6 +2096,70 @@ protocol sections.
 <chapt>Protocols
 <label id="protocols">
 
+<sect>Aggregator
+<label id="aggregator">
+
+<sect1>Introduction
+<label id="aggregator-intro">
+<p>The Aggregator protocol explicitly merges routes by the given rules. There
+   are four phases of aggregation. First routes are filtered, then sorted into buckets,
+   then buckets are merged and finally the results are filtered once again.
+   Aggregating an already aggregated route is forbidden.
+
+<p>This is an experimental protocol, use with caution.
+
+<sect1>Configuration
+<label id="aggregator-config">
+<p><descrip>
+	<tag><label id="aggregator-table">table <m/table/</tag>
+	The table from which routes are exported to get aggregated.
+
+	<tag><label id="aggregator-export">export <m/.../</tag>
+	A standard channel's <cf/export/ clause, defining which routes are accepted into aggregation.
+
+	<tag><label id="aggregator-rule">aggregate on <m/expr/ | <m/attribute/ [<m/, .../]</tag>
+	All the given filter expressions and route attributes are evaluated for each route. Then routes
+	are sorted into buckets where <em/all/ values are the same. Note: due to performance reasons,
+        all filter expressions must return a compact type, e.g. integer, a BGP
+        (standard, extended, large) community or an IP address. If you need to compare e.g. modified
+	AS Paths in the aggregation rule, you can define a custom route attribute and set this attribute
+	in the export filter. For now, it's mandatory to say <cf/net/ here, we can't merge prefixes yet.
+
+	<tag><label id="aggregation-merge">merge by { <m/filter code/ }</tag>
+	The given filter code has an extra symbol defined: <cf/routes/. By iterating over <cf/routes/,
+	you get all the routes in the bucket and you can construct your new route. All attributes
+	selected in <cf/aggregate on/ are already set to the common values. For now, it's not possible
+	to use a named filter here. You have to finalize the route by calling <cf/accept/.
+
+	<tag><label id="aggregator-import">import <m/.../</tag>
+	Filter applied to the route after <cf/merge by/. Here you can use a named filter.
+
+	<tag><label id="aggregator-peer-table">peer table <m/table/</tag>
+	The table to which aggregated routes are imported. It may be the same table
+	as <cf/table/.
+</descrip>
+
+<sect1>Example
+<label id="aggregator-example">
+
+<p><code>
+protocol aggregator {
+  table master6;
+  export where defined(bgp_path);
+  /* Merge all routes with the same AS Path length */
+  aggregate on net, bgp_path.len;
+  merge by {
+    for route r in routes do {
+      if ! defined(bgp_path) then { bgp_path = r.bgp_path }
+      bgp_community = bgp_community.add(r.bgp_community);
+    }
+    accept;
+  };
+  import all;
+  peer table agr_result;
+}
+</code>
+
 <sect>Babel
 <label id="babel">
 
@@ -1885,7 +2167,7 @@ protocol sections.
 <label id="babel-intro">
 
 <p>The Babel protocol
-(<rfc id="6126">) is a loop-avoiding distance-vector routing protocol that is
+(<rfc id="8966">) is a loop-avoiding distance-vector routing protocol that is
 robust and efficient both in ordinary wired networks and in wireless mesh
 networks. Babel is conceptually very simple in its operation and "just works"
 in its default configuration, though some configuration is possible and in some
@@ -1916,7 +2198,7 @@ protocol babel [<name>] {
 	ipv6 [sadr] { <channel config> };
         randomize router id <switch>;
 	interface <interface pattern> {
-		type <wired|wireless>;
+		type <wired|wireless|tunnel>;
 		rxcost <number>;
 		limit <number>;
 		hello interval <time>;
@@ -1929,6 +2211,12 @@ protocol babel [<name>] {
 		check link <switch>;
 		next hop ipv4 <address>;
 		next hop ipv6 <address>;
+		extended next hop <switch>;
+		rtt cost <number>;
+		rtt min <time>;
+		rtt max <time>;
+		rtt decay <number>;
+		send timestamps <switch>;
 		authentication none|mac [permissive];
 		password "&lt;text&gt;";
 		password "&lt;text&gt;" {
@@ -1959,15 +2247,16 @@ protocol babel [<name>] {
       router ID every time it starts up, which avoids this problem at the cost
       of not having stable router IDs in the network. Default: no.
 
-      <tag><label id="babel-type">type wired|wireless </tag>
-      This option specifies the interface type: Wired or wireless. On wired
-      interfaces a neighbor is considered unreachable after a small number of
-      Hello packets are lost, as described by <cf/limit/ option. On wireless
+      <tag><label id="babel-type">type wired|wireless|tunnel </tag>
+      This option specifies the interface type: Wired, wireless or tunnel. On
+      wired interfaces a neighbor is considered unreachable after a small number
+      of Hello packets are lost, as described by <cf/limit/ option. On wireless
       interfaces the ETX link quality estimation technique is used to compute
       the metrics of routes discovered over this interface. This technique will
       gradually degrade the metric of routes when packets are lost rather than
-      the more binary up/down mechanism of wired type links. Default:
-      <cf/wired/.
+      the more binary up/down mechanism of wired type links. A tunnel is like a
+      wired interface, but turns on RTT-based metrics with a default cost of 96.
+      Default: <cf/wired/.
 
       <tag><label id="babel-rxcost">rxcost <m/num/</tag>
       This option specifies the nominal RX cost of the interface. The effective
@@ -2032,6 +2321,42 @@ protocol babel [<name>] {
       interface. If not set, the same link-local address that is used as the
       source for Babel packets will be used. In normal operation, it should not
       be necessary to set this option.
+
+      <tag><label id="babel-extended-next-hop">extended next hop <m/switch/</tag>
+      If enabled, BIRD will accept and emit IPv4 routes with an IPv6 next
+      hop when IPv4 addresses are absent from the interface as described in
+      <rfc id="9229">. Default: yes.
+
+      <tag><label id="babel-rtt-cost">rtt cost <m/number/</tag>
+      The RTT-based cost that will be applied to all routes from each neighbour
+      based on the measured RTT to that neighbour. If this value is set,
+      timestamps will be included in generated Babel Hello and IHU messages, and
+      (if the neighbours also have timestamps enabled), the RTT to each
+      neighbour will be computed. An additional cost is added to a neighbour if
+      its RTT is above the <ref id="babel-rtt-min" name="rtt min"> value
+      configured on the interface. The added cost scales linearly from 0 up to
+      the RTT cost configured in this option; the full cost is applied if the
+      neighbour RTT reaches the RTT configured in the <ref id="babel-rtt-max"
+      name="rtt max"> option (and for all RTTs above this value). Default: 0
+      (disabled), except for tunnel interfaces, where it is 96.
+
+      <tag><label id="babel-rtt-min">rtt min <m/time/ s|ms</tag>
+      The minimum RTT above which the RTT cost will start to be applied (scaling
+      linearly from zero up to the full cost). Default: 10 ms
+
+      <tag><label id="babel-rtt-max">rtt max <m/time/ s|ms</tag>
+      The maximum RTT above which the full RTT cost will start be applied.
+      Default: 120 ms
+
+      <tag><label id="babel-rtt-decay">rtt decay <m/number/</tag>
+      The decay factor used for the exponentional moving average of the RTT
+      samples from each neighbour, in units of 1/256. Higher values discards old
+      RTT samples faster. Must be between 1 and 256. Default: 42
+
+      <tag><label id="babel-send-timestamps">send timestamps <m/switch/</tag>
+      Whether to send the timestamps used for RTT calculation on this interface.
+      Sending the timestamps enables peers to calculate an RTT to this node,
+      even if no RTT cost is applied to the route metrics. Default: yes.
 
       <tag><label id="babel-authentication">authentication none|mac [permissive]</tag>
       Selects authentication method to be used. <cf/none/ means that packets
@@ -2380,7 +2705,6 @@ avoid routing loops.
 <item> <rfc id="5065"> - AS confederations for BGP
 <item> <rfc id="5082"> - Generalized TTL Security Mechanism
 <item> <rfc id="5492"> - Capabilities Advertisement with BGP
-<item> <rfc id="5549"> - Advertising IPv4 NLRI with an IPv6 Next Hop
 <item> <rfc id="5575"> - Dissemination of Flow Specification Rules
 <item> <rfc id="5668"> - 4-Octet AS Specific BGP Extended Community
 <item> <rfc id="6286"> - AS-Wide Unique BGP Identifier
@@ -2394,6 +2718,9 @@ avoid routing loops.
 <item> <rfc id="8092"> - BGP Large Communities Attribute
 <item> <rfc id="8203"> - BGP Administrative Shutdown Communication
 <item> <rfc id="8212"> - Default EBGP Route Propagation Behavior without Policies
+<item> <rfc id="8654"> - Extended Message Support for BGP
+<item> <rfc id="8950"> - Advertising IPv4 NLRI with an IPv6 Next Hop
+<item> <rfc id="9072"> - Extended Optional Parameters Length for BGP OPEN Message
 <item> <rfc id="9117"> - Revised Validation Procedure for BGP Flow Specifications
 <item> <rfc id="9234"> - Route Leak Prevention and Detection Using Roles
 </itemize>
@@ -2615,12 +2942,19 @@ using the following configuration parameters:
 	keeps MED attribute). Default: disabled.
 
 	<tag><label id="bgp-allow-local-pref">allow bgp_local_pref <m/switch/</tag>
-	A standard BGP implementation do not send the Local Preference attribute
-	to eBGP neighbors and ignore this attribute if received from eBGP
+	Standard BGP implementations do not send the Local Preference attribute
+	to EBGP neighbors and ignore this attribute if received from EBGP
 	neighbors, as per <rfc id="4271">.  When this option is enabled on an
-	eBGP session, this attribute will be sent to and accepted from the peer,
+	EBGP session, this attribute will be sent to and accepted from the peer,
 	which is useful for example if you have a setup like in <rfc id="7938">.
-	The option does not affect iBGP sessions. Default: off.
+	The option does not affect IBGP sessions. Default: off.
+
+	<tag><label id="bgp-allow-med">allow bgp_med <m/switch/</tag>
+	Standard BGP implementations do not propagate the MULTI_EXIT_DESC
+	attribute unless it is configured locally. When this option is enabled
+	on an EBGP session, this attribute will be sent to the peer regardless,
+	which is useful for example if you have a setup like in <rfc id="7938">.
+	The option does not affect IBGP sessions. Default: off.
 
 	<tag><label id="bgp-allow-local-as">allow local as [<m/number/]</tag>
 	BGP prevents routing loops by rejecting received routes with the local
@@ -2656,13 +2990,20 @@ using the following configuration parameters:
 	changes its import filter, or if there is suspicion of inconsistency) it
 	is necessary to do a new complete route exchange. BGP protocol extension
 	Route Refresh (<rfc id="2918">) allows BGP speaker to request
-	re-advertisement of all routes from its neighbor. BGP protocol
-	extension Enhanced Route Refresh (<rfc id="7313">) specifies explicit
-	begin and end for such exchanges, therefore the receiver can remove
-	stale routes that were not advertised during the exchange. This option
-	specifies whether BIRD advertises these capabilities and supports
+	re-advertisement of all routes from its neighbor. This option
+	specifies whether BIRD advertises this capability and supports
 	related procedures. Note that even when disabled, BIRD can send route
-	refresh requests.  Default: on.
+	refresh requests. Disabling Route Refresh also disables Enhanced Route Refresh.
+	Default: on.
+
+	<tag><label id="bgp-enable-enhanced-route-refresh">enable enhanced route refresh <m/switch/</tag>
+	BGP protocol extension Enhanced Route Refresh (<rfc id="7313">) specifies explicit
+	begin and end for Route Refresh (see previous option),
+	therefore the receiver can remove
+	stale routes that were not advertised during the exchange. This option
+	specifies whether BIRD advertises this capability and supports
+	related procedures.
+	Default: on.
 
 	<tag><label id="bgp-graceful-restart">graceful restart <m/switch/|aware</tag>
 	When a BGP speaker restarts or crashes, neighbors will discard all
@@ -2901,6 +3242,18 @@ together with their appropriate channels follows.
 </tabular>
 </table>
 
+<p>The BGP protocol can be configured as MPLS-aware (by defining both AFI/SAFI
+channels and the MPLS channel). In such case the BGP protocol assigns labels to
+routes imported from MPLS-aware SAFIs (i.e. <cf/ipvX mpls/ and <cf/vpnX mpls/)
+and automatically announces corresponding MPLS route for each labeled route. As
+BGP generally processes a large amount of routes, it is suggested to set MPLS
+label policy to <cf/aggregate/.
+
+<p>Note that even BGP instances without MPLS channel and without local MPLS
+configuration can still propagate third-party MPLS labels, e.g. as route
+reflectors, they just will not assign local labels to imported routes and will
+not announce MPLS routes for local MPLS forwarding.
+
 <p>Due to <rfc id="8212">, external BGP protocol requires explicit configuration
 of import and export policies (in contrast to other protocols, where default
 policies of <cf/import all/ and <cf/export none/ are used in absence of explicit
@@ -3046,7 +3399,7 @@ be used in explicit configuration.
 	associated network prefixes. This option provides an extension to use
 	IPv4 next hops with IPv6 prefixes and vice versa. For IPv4 / VPNv4
 	channels, the behavior is controlled by the Extended Next Hop Encoding
-	capability, as described in <rfc id="5549">. For IPv6 / VPNv6 channels,
+	capability, as described in <rfc id="8950">. For IPv6 / VPNv6 channels,
 	just IPv4-mapped IPv6 addresses are used, as described in
 	<rfc id="4798"> and <rfc id="4659">. Default: off.
 
@@ -3204,9 +3557,20 @@ some of them (marked with `<tt/O/') are optional.
 
 	<tag><label id="bgp-otc">int bgp_otc [O]</tag>
 	This attribute is defined in <rfc id="9234">. OTC is a flag that marks
-	routes that should be sent only to customers. If <ref id="bgp-role"
-	name="local Role"> is configured it set automatically.
+	routes that should be sent only to customers. If <ref id="bgp-local-role"
+	name="local role"> is configured it set automatically.
 </descrip>
+
+<p>For attributes unknown by BIRD, the user can assign a name (on top level) to
+an attribute by its number. This defined name can be used then to get, set (as a
+bytestring, transitive) or unset the given attribute even though BIRD knows
+nothing about it.
+
+<p>Note that it is not possible to define an attribute with the same number
+as one known by BIRD, therefore use of this statement carries a risk of
+incompatibility with future BIRD versions.
+
+<tt><label id="bgp-attribute-custom">attribute bgp <m/number/ bytestring <m/name/;</tt>
 
 <sect1>Example
 <label id="bgp-exam">
@@ -3247,6 +3611,37 @@ protocol bgp {
 		table mymulticasttable4; # Another IPv4 table, dedicated for multicast
 		igp table myigptable4;
 	};
+}
+</code>
+
+
+<sect>BMP
+<label id="bmp">
+
+<p>The BGP Monitoring Protocol is used for monitoring BGP sessions and obtaining
+routing table data. The current implementation in BIRD is a preliminary release
+with a limited feature set, it will be subject to significant changes in the
+future. It is not ready for production usage and therefore it is not compiled
+by default and have to be enabled during installation by the configure option
+<tt/--with-protocols=/.
+
+<p>The implementation supports monitoring protocol state changes, pre-policy
+routes (in <ref id="bgp-import-table" name="BGP import tables">) and post-policy
+routes (in regular routing tables). All BGP protocols are monitored automatically.
+
+<sect1>Example
+<label id="bmp-exam">
+
+<p><code>
+protocol bmp {
+	# The monitoring station to connect to
+	station address ip 198.51.100.10 port 1790;
+
+	# Monitor received routes (in import table)
+	monitoring rib in pre_policy;
+
+	# Monitor accepted routes (passed import filters)
+	monitoring rib in post_policy;
 }
 </code>
 
@@ -3371,9 +3766,8 @@ on the <cf/learn/ switch, such routes are either ignored or accepted to our
 table).
 
 <p>Note that routes created by OS kernel itself, namely direct routes
-representing IP subnets of associated interfaces, are not imported even with
-<cf/learn/ enabled. You can use <ref id="direct" name="Direct protocol"> to
-generate these direct routes.
+representing IP subnets of associated interfaces, are imported only with
+<cf/learn all/ enabled.
 
 <p>If your OS supports only a single routing table, you can configure only one
 instance of the Kernel protocol. If it supports multiple tables (in order to
@@ -3404,10 +3798,12 @@ channels.
 	Time in seconds between two consecutive scans of the kernel routing
 	table.
 
-	<tag><label id="krt-learn">learn <m/switch/</tag>
+	<tag><label id="krt-learn">learn <m/switch/|all</tag>
 	Enable learning of routes added to the kernel routing tables by other
 	routing daemons or by the system administrator. This is possible only on
-	systems which support identification of route authorship.
+	systems which support identification of route authorship. By default,
+	routes created by kernel (marked as "proto kernel") are not imported.
+	Use <cf/learn all/ option to import even these routes.
 
 	<tag><label id="krt-kernel-table">kernel table <m/number/</tag>
 	Select which kernel table should this particular instance of the Kernel
@@ -3517,7 +3913,7 @@ protocol kernel {
 <p><code>
 protocol kernel {		# Primary routing table
 	learn;			# Learn alien routes from the kernel
-	persist;		# Don't remove routes on bird shutdown
+	persist;		# Do not remove routes on bird shutdown
 	scan time 10;		# Scan kernel routing table every 10 seconds
 	ipv4 {
 		import all;
@@ -3531,6 +3927,140 @@ protocol kernel {		# Secondary routing table
 		table auxtable;
 		export all;
 	};
+}
+</code>
+
+
+<sect>L3VPN
+<label id="l3vpn">
+
+<sect1>Introduction
+<label id="l3vpn-intro">
+
+<p>The L3VPN protocol serves as a translator between IP routes and VPN
+routes. It is a component for BGP/MPLS IP VPNs (<rfc id="4364">) and implements
+policies defined there. In import direction (VPN -&gt; IP), VPN routes matching
+import target specification are stripped of route distinguisher and MPLS labels
+and announced as IP routes, In export direction (IP -&gt; VPN), IP routes are
+expanded with specific route distinguisher, export target communities and MPLS
+label and announced as labeled VPN routes. Unlike the Pipe protocol, the L3VPN
+protocol propagates just the best route for each network.
+
+<p>In BGP/MPLS IP VPNs, route distribution is controlled by Route Targets (RT).
+VRFs are associated with one or more RTs. Routes are also associated with one or
+more RTs, which are encoded as route target extended communities
+in <ref id="rta-bgp-ext-community" name="bgp_ext_community">. A route is then
+imported into each VRF that shares an associated Route Target. The L3VPN
+protocol implements this mechanism through mandatory <cf/import target/ and
+<cf/export target/ protocol options.
+
+<sect1>Configuration
+<label id="l3vpn-config">
+
+<p>L3VPN configuration consists of a few mandatory options and multiple channel
+definitions. For convenience, the default export filter in L3VPN channels is
+<cf/all/, as the primary way to control import and export of routes is through
+protocol options <cf/import target/ and <cf/export target/. If custom filters
+are used, note that the export filter of the input channel is applied before
+the route translation, while the import filter of the output channel is applied
+after that.
+
+<p>In contrast to the Pipe protocol, the L3VPN protocol can handle both IPv4 and
+IPv6 routes in one instance, also both IP side and VPN side are represented as
+separate channels, although that may change in the future. The L3VPN is always
+MPLS-aware protocol, therefore a MPLS channel is mandatory. Altogether, L3VPN
+could have up to 5 channels: <cf/ipv4/, <cf/ipv6/, <cf/vpn4/, <cf/vpn6/, and
+<cf/mpls/.
+
+<p><descrip>
+	<tag><label id="l3vpn-route-distinguisher">route distinguisher <m/vpnrd/</tag>
+	The route distinguisher that is attached to routes in the export
+	direction. Mandatory.
+
+	<tag><label id="l3vpn-rd">rd <m/vpnrd/</tag>
+	A shorthand for the option <cf/route distinguisher/.
+
+	<tag><label id="l3vpn-import-target">import target <m/ec/|<m/ec-set/</tag>
+	Route target extended communities specifying which routes should be
+	imported. Either one community or a set. A route is imported if there is
+	non-empty intersection between extended communities of the route and the
+	import target of the L3VPN protocol. Mandatory.
+
+	<tag><label id="l3vpn-export-target">export target <m/ec/|<m/ec-set/</tag>
+	Route target extended communities that are attached to the route in the
+	export direction. Either one community or a set. Other route target
+	extended communities are removed. Mandatory.
+
+	<tag><label id="l3vpn-route-target">route target <m/ec/|<m/ec-set/</tag>
+	A shorthand for both <cf/import target/ and <cf/export target/.
+</descrip>
+
+<sect1>Attributes
+<label id="l3vpn-attr">
+
+<p>The L3VPN protocol does not define any route attributes.
+
+<sect1>Example
+<label id="l3vpn-exam">
+
+<p>Here is an example of L3VPN setup with one VPN and BGP uplink. IP routes
+learned from a customer in the VPN are stored in <cf/vrf0vX/ tables, which are
+mapped to kernel VRF vrf0. Routes can also be exchanged through BGP with
+different sites hosting that VPN. Forwarding of VPN traffic through the network
+is handled by MPLS.
+
+<p>Omitted from the example are some routing protocol to exchange routes with
+the customer and some sort of MPLS-aware IGP to resolve next hops for BGP VPN
+routes.
+
+<code>
+# MPLS basics
+mpls domain mdom;
+mpls table  mtab;
+
+protocol kernel krt_mpls {
+	mpls { table mtab; export all; };
+}
+
+vpn4 table vpntab4;
+vpn6 table vpntab6;
+
+# Exchange VPN routes through BGP
+protocol bgp {
+	vpn4 { table vpntab4; import all; export all; };
+	vpn6 { table vpntab6; import all; export all; };
+	mpls { label policy aggregate; };
+	local 10.0.0.1 as 10;
+	neighbor 10.0.0.2 as 10;
+}
+
+# VRF 0
+ipv4 table vrf0v4;
+ipv6 table vrf0v6;
+
+protocol kernel kernel0v4 {
+        vrf "vrf0";
+        ipv4 { table vrf0v4; export all; };
+        kernel table 100;
+}
+
+protocol kernel kernel0v6 {
+        vrf "vrf0";
+        ipv6 { table vrf0v6; export all; };
+        kernel table 100;
+}
+
+protocol l3vpn l3vpn0 {
+        vrf "vrf0";
+        ipv4 { table vrf0v4; };
+        ipv6 { table vrf0v6; };
+        vpn4 { table vpntab4; };
+        vpn6 { table vpntab6; };
+        mpls { label policy vrf; };
+
+        rd 10:12;
+        import target [(rt, 10, 32..40)];
+        export target [(rt, 10, 30), (rt, 10, 31)];
 }
 </code>
 
@@ -4466,6 +4996,21 @@ definitions, prefix definitions and DNS definitions:
 	options and there is a short variant <cf>dnssl <m/domain/</cf> that just
 	specifies one DNS search domain.
 
+	<tag><label id="radv-custom-option">custom option type <m/number/ value <m/bytestring/</tag>
+	Custom option definitions allow to define an arbitrary option to
+	advertise. You need to specify the option type number and the binary
+	payload of the option. The length field is calculated automatically.
+	Like <cf/rdnss/ above, multiple definitions are cumulative, they can
+	be used also as interface-specific options.
+
+	The following example advertises PREF64 option (<rfc id="8781">) with
+	prefix <cf>2001:db8:a:b::/96</cf> and the lifetime of <cf/1 hour/:
+
+	<label id="radv-custom-option-exam">
+<p><code>
+custom option type 38 value hex:0e:10:20:01:0d:b8:00:0a:00:0b:00:00:00:00;
+</code>
+
 	<tag><label id="radv-trigger">trigger <m/prefix/</tag>
 	RAdv protocol could be configured to change its behavior based on
 	availability of routes. When this option is used, the protocol waits in
@@ -4594,6 +5139,10 @@ definitions, prefix definitions and DNS definitions:
 
 	<tag><label id="radv-iface-dnssl-local">dnssl local <m/switch/</tag>
 	Use only local DNSSL definitions for this interface. See <cf/rdnss local/
+	option above. Default: no.
+
+	<tag><label id="radv-iface-custom-local">custom option local <m/switch/</tag>
+	Use only local custom option definitions for this interface. See <cf/rdnss local/
 	option above. Default: no.
 </descrip>
 
@@ -5238,6 +5787,11 @@ but only routes of the same network type are allowed, as the static protocol
 has just one channel. E.g., to have both IPv4 and IPv6 static routes, define two
 static protocols, each with appropriate routes and channel.
 
+<p>The Static protocol can be configured as MPLS-aware (by defining both the
+primary channel and MPLS channel). In that case the Static protocol assigns
+labels to IP routes and automatically announces corresponding MPLS route for
+each labeled route.
+
 <p>Global options:
 
 <descrip>
@@ -5261,16 +5815,20 @@ static protocols, each with appropriate routes and channel.
 <ref id="type-prefix" name="dependent on network type">.
 
 <descrip>
-	<tag>route <m/prefix/ via <m/ip/|<m/"interface"/ [<m/per-nexthop options/] [via ...]</tag>
-	Regular routes may bear one or more <ref id="route-next-hop" name="next hops">.
-	Every next hop is preceded by <cf/via/ and configured as shown.
+	<tag>route <m/prefix/ [mpls <m/number/] via <m/ip/|<m/"interface"/ [<m/per-nexthop options/] [via ...]</tag>
+	Regular routes may bear one or more <ref id="route-next-hop" name="next
+	hops">. Every next hop is preceded by <cf/via/ and configured as shown.
 
-	<tag>route <m/prefix/ recursive <m/ip/ [mpls <m/num/[/<m/num/[/<m/num/[...]]]]</tag>
+	When the Static protocol is MPLS-aware, the optional <cf/mpls/ statement
+	after <m/prefix/ specifies a static label for the labeled route, instead
+	of using dynamically allocated label.
+
+	<tag>route <m/prefix/ [mpls <m/number/] recursive <m/ip/ [mpls <m/num/[/<m/num/[/<m/num/[...]]]]</tag>
 	Recursive nexthop resolves the given IP in the configured IGP table and
 	uses that route's next hop. The MPLS stacks are concatenated; on top is
 	the IGP's nexthop stack and on bottom is this route's stack.
 
-	<tag>route <m/prefix/ blackhole|unreachable|prohibit</tag>
+	<tag>route <m/prefix/ [mpls <m/number/] blackhole|unreachable|prohibit</tag>
 	Special routes specifying to silently drop the packet, return it as
 	unreachable or return it as administratively prohibited. First two
 	targets are also known as <cf/drop/ and <cf/reject/.
@@ -5287,8 +5845,8 @@ as the destination becomes adjacent again.
 (i.e., they can be used multiple times for a route, one time for each nexthop).
 Syntactically, they are not separate options but just parts of <cf/route/
 statement after each <cf/via/ statement, not separated by semicolons. E.g.,
-statement <cf/route 10.0.0.0/8 via 192.0.2.1 bfd weight 1 via 192.0.2.2 weight
-2;/ describes a route with two nexthops, the first nexthop has two per-nexthop
+statement <cf>route 10.0.0.0/8 via 192.0.2.1 bfd weight 1 via 192.0.2.2 weight
+2;</cf> describes a route with two nexthops, the first nexthop has two per-nexthop
 options (<cf/bfd/ and <cf/weight 1/), the second nexthop has just <cf/weight 2/.
 
 <descrip>
