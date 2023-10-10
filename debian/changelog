@@ -2,8 +2,12 @@ bird2 (2.14-1) unstable; urgency=medium
 
   * New upstream version 2.14 (Closes: #1040031)
   * Remove patches now included upstream
+  * Remove ancient debian/NEWS
+  * Remove trailing whitespace from d/rules
+  * Add d/bird2-doc.doc-base
+  * Add Rules-Requires-Root: no to d/control
 
- -- Jakub Ružička <jakub.ruzicka@nic.cz>  Mon, 09 Oct 2023 17:05:34 +0200
+ -- Jakub Ružička <jakub.ruzicka@nic.cz>  Tue, 10 Oct 2023 13:14:00 +0200
 
 bird2 (2.0.12-7) unstable; urgency=medium
 
