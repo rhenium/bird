@@ -49,7 +49,7 @@ override_dh_clean:
 	-rm -f bird.8 birdc.8 birdcl.8
 
 override_dh_missing:
-	dh_missing 
+	dh_missing
 
 override_dh_compress:
 	dh_compress -X.conf
