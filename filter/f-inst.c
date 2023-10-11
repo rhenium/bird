@@ -1574,6 +1574,35 @@
     }
   }
 
+  INST(FI_ATTACH_BGP_AGGREGATOR, 2, 0) {  /* attach_bgp_aggregator(as, ip) */
+    ACCESS_RTE;
+    ACCESS_EATTRS;
+    ARG(1, T_INT);
+    ARG(2, T_IP);
+
+    uint u1 = v1.val.i;
+    ip_addr u2 = v2.val.ip;
+    if (!ipa_is_ip4(u2))
+      runtime("IPv4 address required for AGGREGATOR");
+
+    struct adata *ad = lp_alloc_adata(fs->pool, 8);
+    put_u32(ad->data + 0, u1);
+    put_u32(ad->data + 4, ipa_to_u32(u2));
+
+    f_rta_cow(fs);
+    eattr *eattr = ea_set_attr(
+      fs->eattrs,
+      fs->pool,
+#define BA_AGGREGATOR 0x07 /* proto/bgp/bgp.h */
+      EA_CODE(PROTOCOL_BGP, BA_AGGREGATOR),
+      0,
+      EAF_TYPE_OPAQUE,
+      (uintptr_t)ad
+    );
+    eattr->originated = 1;
+    eattr->fresh = 1;
+  }
+
   INST(FI_FORMAT, 1, 1) {	/* Format */
     ARG_ANY(1);
     RESULT(T_STRING, s, val_format_str(fpool, &v1));
