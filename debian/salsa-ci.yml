@@ -1,0 +1,12 @@
+---
+include:
+  - https://salsa.debian.org/salsa-ci-team/pipeline/raw/master/salsa-ci.yml
+  - https://salsa.debian.org/salsa-ci-team/pipeline/raw/master/pipeline-jobs.yml
+
+blhc:
+  # NONVERBOSE BUILD makes blhc fail
+  allow_failure: true
+
+reprotest:
+  # don't require reproducible build
+  allow_failure: true
