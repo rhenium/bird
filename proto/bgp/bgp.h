@@ -552,7 +552,7 @@ bgp_parse_error(struct bgp_parse_state *s, uint subcode)
 }
 
 
-void bgp_start_timer(timer *t, uint value);
+void bgp_start_timer(timer *t, uint value, int use_randomize);
 void bgp_check_config(struct bgp_config *c);
 void bgp_error(struct bgp_conn *c, unsigned code, unsigned subcode, byte *data, int len);
 void bgp_close_conn(struct bgp_conn *c);
