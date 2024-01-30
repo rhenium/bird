@@ -1,4 +1,4 @@
-bird2 (200:2.14.0.23+22-20240131-1) unstable; urgency=medium
+bird2 (200:2.14.0.23+22-20240131-2) unstable; urgency=medium
 
   * Rebased 200:2.14+21-20231011-1 on top of current master. Conflicting
     patches have been rebased.
@@ -12,8 +12,9 @@ bird2 (200:2.14.0.23+22-20240131-1) unstable; urgency=medium
   * Fix jitter application to BGP filters as specified in RFC 4271 section 10.
   * Added "soft hold time on" configuration to BGP for debugging my other BGP
     speaker.
+  * Temporary fix for OSPF errors (what is this?).
 
- -- Kazuki Yamaguchi <k@rhe.jp>  Wed, 31 Jan 2024 02:21:13 +0900
+ -- Kazuki Yamaguchi <k@rhe.jp>  Wed, 31 Jan 2024 02:53:27 +0900
 
 bird2 (2.14-1) unstable; urgency=medium
 
