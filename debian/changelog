@@ -1,3 +1,9 @@
+bird2 (2.15-1) unstable; urgency=medium
+
+  * New upstream version 2.15
+
+ -- Jakub Ružička <jakub.ruzicka@nic.cz>  Mon, 11 Mar 2024 14:40:23 +0100
+
 bird2 (2.14-1) unstable; urgency=medium
 
   * New upstream version 2.14 (Closes: #1040031)
