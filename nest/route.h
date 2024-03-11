@@ -150,6 +150,7 @@ struct rtable_config {
   uint addr_type;			/* Type of address data stored in table (NET_*) */
   uint gc_threshold;			/* Maximum number of operations before GC is run */
   uint gc_period;			/* Approximate time between two consecutive GC runs */
+  u32 debug;				/* Debugging flags (D_*) */
   byte sorted;				/* Routes of network are sorted according to rte_better() */
   byte internal;			/* Internal table of a protocol */
   byte trie_used;			/* Rtable has attached trie */
@@ -166,6 +167,7 @@ typedef struct rtable {
   char *name;				/* Name of this table */
   list channels;			/* List of attached channels (struct channel) */
   uint addr_type;			/* Type of address data stored in table (NET_*) */
+  u32 debug;				/* Debugging flags (D_*) */
   int pipe_busy;			/* Pipe loop detection */
   int use_count;			/* Number of protocols using this table */
   u32 rt_count;				/* Number of routes in the table */
@@ -244,7 +246,8 @@ struct hostentry {
   ip_addr addr;				/* IP address of host, part of key */
   ip_addr link;				/* (link-local) IP address of host, used as gw
 					   if host is directly attached */
-  struct rtable *tab;			/* Dependent table, part of key */
+  rtable *tab;				/* Dependent table, part of key */
+  rtable *owner;			/* Nexthop owner table */
   struct hostentry *next;		/* Next in hash chain */
   unsigned hash_key;			/* Hash key */
   unsigned uc;				/* Use count */
@@ -539,6 +542,7 @@ const char *ea_custom_name(uint ea);
 #define EA_ALLOW_UNDEF 0x10000		/* ea_find: allow EAF_TYPE_UNDEF */
 #define EA_BIT(n) ((n) << 24)		/* Used in bitfield accessors */
 #define EA_BIT_GET(ea) ((ea) >> 24)
+#define EA_DATA_ALIGN 4			/* Alignment of adata in attribute cache */
 
 #define EAF_TYPE_MASK 0x1f		/* Mask with this to get type */
 #define EAF_TYPE_INT 0x01		/* 32-bit unsigned integer number */
@@ -550,7 +554,8 @@ const char *ea_custom_name(uint ea);
 #define EAF_TYPE_INT_SET 0x0a		/* Set of u32's (e.g., a community list) */
 #define EAF_TYPE_EC_SET 0x0e		/* Set of pairs of u32's - ext. community list */
 #define EAF_TYPE_LC_SET 0x12		/* Set of triplets of u32's - large community list */
-#define EAF_TYPE_IFACE 0x16		/* Interface pointer stored in adata */
+#define EAF_TYPE_IFACE 0x14		/* Interface pointer stored in adata */
+#define EAF_TYPE_STRING 0x16		/* Text string */
 #define EAF_EMBEDDED 0x01		/* Data stored in eattr.u.data (part of type spec) */
 #define EAF_VAR_LENGTH 0x02		/* Attribute length is variable (part of type spec) */
 
@@ -690,6 +695,9 @@ static inline size_t nexthop_size(const struct nexthop *nh)
 int nexthop__same(struct nexthop *x, struct nexthop *y); /* Compare multipath nexthops */
 static inline int nexthop_same(struct nexthop *x, struct nexthop *y)
 { return (x == y) || nexthop__same(x, y); }
+int nexthop_equal_(struct nexthop *x, struct nexthop *y); /* Compare multipath nexthops, ignore labels_orig */
+static inline int nexthop_equal(struct nexthop *x, struct nexthop *y)
+{ return (x == y) || nexthop_equal_(x, y); }
 struct nexthop *nexthop_merge(struct nexthop *x, struct nexthop *y, int rx, int ry, int max, linpool *lp);
 struct nexthop *nexthop_sort(struct nexthop *x);
 static inline void nexthop_link(struct rta *a, const struct nexthop *from)

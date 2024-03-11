@@ -375,6 +375,8 @@ bgp_close_conn(struct bgp_conn *conn)
   conn->keepalive_timer = NULL;
   rfree(conn->hold_timer);
   conn->hold_timer = NULL;
+  rfree(conn->send_hold_timer);
+  conn->send_hold_timer = NULL;
   rfree(conn->tx_ev);
   conn->tx_ev = NULL;
   rfree(conn->sk);
@@ -546,9 +548,6 @@ bgp_conn_enter_openconfirm_state(struct bgp_conn *conn)
   bgp_conn_set_state(conn, BS_OPENCONFIRM);
 }
 
-static const struct bgp_af_caps dummy_af_caps = { };
-static const struct bgp_af_caps basic_af_caps = { .ready = 1 };
-
 void
 bgp_conn_enter_established_state(struct bgp_conn *conn)
 {
@@ -603,20 +602,6 @@ bgp_conn_enter_established_state(struct bgp_conn *conn)
   {
     const struct bgp_af_caps *loc = bgp_find_af_caps(local, c->afi);
     const struct bgp_af_caps *rem = bgp_find_af_caps(peer,  c->afi);
-
-    /* Use default if capabilities were not announced */
-    if (!local->length && (c->afi == BGP_AF_IPV4))
-      loc = &basic_af_caps;
-
-    if (!peer->length && (c->afi == BGP_AF_IPV4))
-      rem = &basic_af_caps;
-
-    /* Ignore AFIs that were not announced in multiprotocol capability */
-    if (!loc || !loc->ready)
-      loc = &dummy_af_caps;
-
-    if (!rem || !rem->ready)
-      rem = &dummy_af_caps;
 
     int active = loc->ready && rem->ready;
     c->c.disabled = !active;
@@ -688,6 +673,13 @@ bgp_conn_enter_established_state(struct bgp_conn *conn)
 
     p->afi_map[c->index] = c->afi;
     p->channel_map[c->index] = c;
+  }
+
+  /* Breaking rx_hook for simulating receive problem */
+  if (p->cf->disable_rx)
+  {
+    conn->sk->rx_hook = NULL;
+    tm_stop(conn->hold_timer);
   }
 
   /* proto_notify_state() will likely call bgp_feed_begin(), setting c->feed_state */
@@ -1061,6 +1053,28 @@ bgp_keepalive_timeout(timer *t)
     ev_run(conn->tx_ev);
 }
 
+void
+bgp_send_hold_timeout(timer *t)
+{
+  struct bgp_conn *conn = t->data;
+  struct bgp_proto *p = conn->bgp;
+
+  DBG("BGP: Send hold timeout\n");
+
+  if (conn->state == BS_CLOSE)
+    return;
+
+  uint code = 8;
+  uint subcode = 0;
+
+  /* Like bgp_error() but without NOTIFICATION */
+  bgp_log_error(p, BE_BGP_TX, "Error", code, subcode, NULL, 0);
+  bgp_store_error(p, conn, BE_BGP_TX, (code << 16) | subcode);
+  bgp_conn_enter_idle_state(conn);
+  bgp_update_startup_delay(p);
+  bgp_stop(p, 0, NULL, 0);
+}
+
 static void
 bgp_setup_conn(struct bgp_proto *p, struct bgp_conn *conn)
 {
@@ -1075,6 +1089,7 @@ bgp_setup_conn(struct bgp_proto *p, struct bgp_conn *conn)
   conn->connect_timer	= tm_new_init(p->p.pool, bgp_connect_timeout,	 conn, 0, 0);
   conn->hold_timer 	= tm_new_init(p->p.pool, bgp_hold_timeout,	 conn, 0, 0);
   conn->keepalive_timer	= tm_new_init(p->p.pool, bgp_keepalive_timeout, conn, 0, 0);
+  conn->send_hold_timer = tm_new_init(p->p.pool, bgp_send_hold_timeout, conn, 0, 0);
 
   conn->tx_ev = ev_new_init(p->p.pool, bgp_kick_tx, conn);
 }
@@ -1112,7 +1127,7 @@ static void
 bgp_connect(struct bgp_proto *p)	/* Enter Connect state and start establishing connection */
 {
   struct bgp_conn *conn = &p->outgoing_conn;
-  int hops = p->cf->multihop ? : 1;
+  int hops = p->cf->multihop ?: 1;
 
   DBG("BGP: Connecting\n");
   sock *s = sk_new(p->p.pool);
@@ -1249,7 +1264,7 @@ bgp_incoming_connection(sock *sk, uint dummy UNUSED)
     return 0;
   }
 
-  hops = p->cf->multihop ? : 1;
+  hops = p->cf->multihop ?: 1;
 
   if (sk_set_ttl(sk, p->cf->ttl_security ? 255 : hops) < 0)
     goto err;
@@ -1602,6 +1617,7 @@ bgp_start(struct proto *P)
   struct object_lock *lock;
   lock = p->lock = olock_new(P->pool);
   lock->addr = p->remote_ip;
+  lock->addr_local = p->cf->local_ip;
   lock->port = p->cf->remote_port;
   lock->iface = p->cf->iface;
   lock->vrf = p->cf->iface ? NULL : p->p.vrf;
@@ -2017,6 +2033,21 @@ bgp_postconfig(struct proto_config *CF)
   if (interior && (cf->local_role != BGP_ROLE_UNDEFINED))
     log(L_WARN "BGP roles are not recommended to be used within AS confederations");
 
+  if (cf->require_enhanced_refresh && !(cf->enable_refresh && cf->enable_enhanced_refresh))
+    cf_warn("Enhanced refresh required but disabled");
+
+  if (cf->require_as4 && !cf->enable_as4)
+    cf_warn("AS4 support required but disabled");
+
+  if (cf->require_extended_messages && !cf->enable_extended_messages)
+    cf_warn("Extended messages required but not enabled");
+
+  if (cf->require_gr && !cf->gr_mode)
+    cf_warn("Graceful restart required but not enabled");
+
+  if (cf->require_llgr && !cf->llgr_mode)
+    cf_warn("Long-lived graceful restart required but not enabled");
+
   if (cf->require_roles && (cf->local_role == BGP_ROLE_UNDEFINED))
     cf_error("Local role must be set if roles are required");
 
@@ -2140,6 +2171,12 @@ bgp_postconfig(struct proto_config *CF)
 
     if (cc->secondary && !cc->c.table->sorted)
       cf_error("BGP with secondary option requires sorted table");
+
+    if (cc->require_ext_next_hop && !cc->ext_next_hop)
+      cf_warn("Extended next hop required but not enabled");
+
+    if (cc->require_add_path && !cc->add_path)
+      cf_warn("ADD-PATH required but not enabled");
   }
 }
 
@@ -2184,23 +2221,33 @@ bgp_reconfigure(struct proto *P, struct proto_config *CF)
     if (C->stale)
       same = proto_configure_channel(P, &C, NULL) && same;
 
-  if (same)
-    proto_setup_mpls_map(P, RTS_BGP, 1);
-
-  if (same && (p->start_state > BSS_PREPARE))
-    bgp_update_bfd(p, new->bfd);
-
-  /* We should update our copy of configuration ptr as old configuration will be freed */
-  if (same)
-    p->cf = new;
-
   /* Reset name counter */
   p->dynamic_name_counter = 0;
 
-  return same;
+  if (!same)
+    return 0;
+
+  /* We should update our copy of configuration ptr as old configuration will be freed */
+  p->cf = new;
+
+  /* Check whether existing connections are compatible with required capabilities */
+  struct bgp_conn *ci = &p->incoming_conn;
+  if (((ci->state == BS_OPENCONFIRM) || (ci->state == BS_ESTABLISHED)) && !bgp_check_capabilities(ci))
+    return 0;
+
+  struct bgp_conn *co = &p->outgoing_conn;
+  if (((co->state == BS_OPENCONFIRM) || (co->state == BS_ESTABLISHED)) && !bgp_check_capabilities(co))
+    return 0;
+
+  proto_setup_mpls_map(P, RTS_BGP, 1);
+
+  if (p->start_state > BSS_PREPARE)
+    bgp_update_bfd(p, new->bfd);
+
+  return 1;
 }
 
-#define TABLE(cf, NAME) ((cf)->NAME ? (cf)->NAME->table : NULL )
+#define TABLE(cf, NAME) ((cf)->NAME ? (cf)->NAME->table : NULL)
 
 static int
 bgp_channel_reconfigure(struct channel *C, struct channel_config *CC, int *import_changed, int *export_changed)
@@ -2332,10 +2379,10 @@ bgp_store_error(struct bgp_proto *p, struct bgp_conn *c, u8 class, u32 code)
 }
 
 static char *bgp_state_names[] = { "Idle", "Connect", "Active", "OpenSent", "OpenConfirm", "Established", "Close" };
-static char *bgp_err_classes[] = { "", "Error: ", "Socket: ", "Received: ", "BGP Error: ", "Automatic shutdown: ", ""};
-static char *bgp_misc_errors[] = { "", "Neighbor lost", "Invalid next hop", "Kernel MD5 auth failed", "No listening socket", "Link down", "BFD session down", "Graceful restart"};
-static char *bgp_auto_errors[] = { "", "Route limit exceeded"};
-static char *bgp_gr_states[] = { "None", "Regular", "Long-lived"};
+static char *bgp_err_classes[] = { "", "Error: ", "Socket: ", "Received: ", "BGP Error: ", "Automatic shutdown: ", "" };
+static char *bgp_misc_errors[] = { "", "Neighbor lost", "Invalid next hop", "Kernel MD5 auth failed", "No listening socket", "Link down", "BFD session down", "Graceful restart" };
+static char *bgp_auto_errors[] = { "", "Route limit exceeded" };
+static char *bgp_gr_states[] = { "None", "Regular", "Long-lived" };
 
 static const char *
 bgp_last_errmsg(struct bgp_proto *p)
@@ -2605,7 +2652,9 @@ bgp_show_proto_info(struct proto *P)
 	    tm_remains(p->conn->hold_timer), p->conn->hold_time);
     cli_msg(-1006, "    Keepalive timer:  %t/%u",
 	    tm_remains(p->conn->keepalive_timer), p->conn->keepalive_time);
-  }
+    cli_msg(-1006, "    Send hold timer:  %t/%u",
+	    tm_remains(p->conn->send_hold_timer), p->conn->send_hold_time);
+}
 
 #if 0
   struct bgp_stats *s = &p->stats;

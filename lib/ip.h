@@ -176,6 +176,10 @@ static inline ip6_addr ip6_not(ip6_addr a)
 #define ipa_xor(x,y) ip6_xor(x,y)
 #define ipa_not(x) ip6_not(x)
 
+/* Compare addresses when zero address works like a wildcard */
+static inline int ipa_equal_wildcard(ip_addr x, ip_addr y)
+{ return ipa_zero(x) || ipa_zero(y) || ipa_equal(x, y); }
+
 
 /*
  * A zero address is either a token for invalid/unused, or the prefix of default
@@ -388,6 +392,7 @@ static inline ip6_addr ip6_ntoh(ip6_addr a)
 #define MPLS_MAX_LABEL 0x100000
 
 #define MPLS_MAX_LABEL_STACK 8
+#define MPLS_MAX_LABEL_STRING MPLS_MAX_LABEL_STACK*12 + 5
 typedef struct mpls_label_stack {
   uint len;
   u32 stack[MPLS_MAX_LABEL_STACK];

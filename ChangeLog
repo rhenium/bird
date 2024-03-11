@@ -1,3 +1,370 @@
+commit adfff448789c9e75c525f5162c046fb44f9768cd
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Mar 10 18:57:04 2024 +0100
+
+    NEWS and version update
+
+commit 1b064355f752b9bfe4644f775697bbd9b711f762
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Mar 5 19:04:10 2024 +0100
+
+    Client: Add support for completion of command options
+    
+    We can easily extend command completion to handle also keywords for
+    command options. Help for command options is not yet supported.
+
+commit 114be2af28e5c124bd479a487f89244ba99c272d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Mar 5 16:38:24 2024 +0100
+
+    Filter: Add route attribute gw_mpls_stack
+    
+    Add route attribute gw_mpls_stack to make MPLS stack of route nexthop
+    accessible from filters. Its type is T_CLIST, which is really not correct
+    (as it is a list, while T_CLIST is a set). Therefore, we keep this
+    attribute *undocumented* and it will be *changed* without further notice.
+    
+    Based on a patch from Trisha Biswas <tbiswas@fastly.com>, thanks!
+
+commit 26dd61ee7f91c15157601b2404de5b6500a6061c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Mar 4 23:20:53 2024 +0100
+
+    BFD: Add arguments to 'show bfd sessions' command
+    
+    Add several arguments to 'show bfd sessions' command to filter
+    the list of sessions.
+
+commit 4737937375c657794d608ea02cefa289531d763a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Mar 1 18:39:09 2024 +0100
+
+    BFD: Improve 'show bfd sessions all' command
+
+commit a48dc5efe05f4e985b648f19679865153d0398bd
+Author: Katerina Kubecova <katerina.kubecova@nic.cz>
+Date:   Thu Jan 18 12:36:48 2024 +0100
+
+    BFD: Show session for ip / ip prefix
+
+commit 37bf2078434b5de5662d28345bce788624d50ac7
+Author: Katerina Kubecova <katerina.kubecova@nic.cz>
+Date:   Tue Jan 16 11:02:22 2024 +0100
+
+    BFD: show bfd sessions all
+
+commit e2728c8078161d9811d6c24a11e4c95efd1c9313
+Author: Job Snijders <job@fastly.com>
+Date:   Thu Feb 22 14:58:29 2024 +0100
+
+    RPKI: Add 'local address' configuration option
+    
+    Allow to explicitly configure the source IP address for RPKI-To-Router
+    sessions. Predictable source addresses are useful for minimizing the
+    holes to be poked in ACLs.
+    
+    Changed from 'source address' to 'local address' by committer.
+
+commit 2d0652dd1088395c50df8fe1a99f1111b44688c6
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Feb 20 17:39:05 2024 +0100
+
+    BGP: Maintain valid route attribute flags even in local tables
+    
+    BGP route attributes have flags (Optional, Transitive) that are validated
+    on decode and set to valid value on export. But if such attribute is
+    modified by filter or set internally by BGP during import, then its flags
+    would be zero in local tables. That usually does not matter, as they are
+    not used locally and they were fixed on export, but invalid flags leaked
+    in BMP and MRT dumps.
+    
+    Keep route attribute flags set to valid values even when set by filters
+    or modified by BGP.
+
+commit 44a16bff6cbf3f5ae8db21ffcec602bc51295d0a
+Author: Job Snijders <job@fastly.com>
+Date:   Sun Feb 18 09:00:10 2024 +0100
+
+    BGP: Update SendHoldTimer BGP Error code
+    
+    IANA registered an "Early Allocation" BGP Error code for 'Send Hold
+    Timer Expired' event. Update BIRD to use that error code.
+
+commit c3335b504403136ef8deb81cb034480a65ca2815
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Feb 16 18:44:40 2024 +0100
+
+    Static: Allow to define both nexthop and interface
+    
+    Allow to define both nexthop and interface using iproute2-like syntax,
+    e.g.: route 10.0.0.0/16 via 10.1.0.1 dev "eth0";
+    
+    Now we can avoid to use link-local scope hack (e.g. 10.1.0.1%eth0)
+    for cases where both nexthop and interface have to be defined.
+    
+    Thanks to Marcin Saklak for the suggestion.
+
+commit 5c04f0e2354ff0cca9b1479e68882b72755f3aab
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Feb 16 14:54:17 2024 +0100
+
+    Netlink: Fix spelling of krt_ssthresh / krt_lock_ssthresh
+    
+    BIRD route attribute for RTAX_SSTHRESH metric was krt_sstresh instead of
+    krt_ssthresh. Fix that and keep old name as an depreacted alias.
+
+commit e68363909cb9733c1bf55fff80a8b034e4111849
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Feb 16 14:29:54 2024 +0100
+
+    Netlink: Cleanups in route metrics
+    
+    - Add krt_fastopen_no_cookie atttibute
+    - Add missing krt_lock_* bits
+    - Fix krt_feature_allfrag
+    - Fix type of EA_KRT_LOCK and EA_KRT_FEATURES
+
+commit 225943eaea3cdd634dce8fd84547baf1bc363640
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Feb 14 14:01:04 2024 +0100
+
+    Filter: Add support for setting TCP congestion control algorithm
+    
+    Allow to set TCP congestion control algorithm using krt_congctl
+    route attribute.
+    
+    Based on patch from Trisha Biswas <tbiswas@fastly.com>, thanks!
+
+commit 224a152c53f304881f8616a1c9255b467062a069
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Feb 14 13:58:56 2024 +0100
+
+    Filter: Add support for string route attribute
+
+commit 574d7eb241a60622b0573ab1460cb23d968ba1cc
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Wed Feb 7 19:11:10 2024 +0100
+
+    BGP: Allow multiple EBGP neighbors with the same peer.
+    
+    We can distinguish BGP sessions if at least one side uses a different IP
+    address. Extend olock mechanism to handle local IP as a part of key, with
+    optional wildcard, so BGP sessions could local IP in the olock and not
+    block themselves.
+
+commit 0b52f7c01f55707b25eebd0a66c48eafe06fe455
+Author: Inrin <inrin@caesia.net>
+Date:   Tue Feb 6 19:03:14 2024 +0100
+
+    birdc: Do not execute cmd on noninteractive help request
+    
+    The help command triggered by '?' keeps the message in readline buffer,
+    so it could be edited. For noninteractive shell it leads to an unexpected
+    side effect that `echo <cmd> ? | birdc` executes the command <cmd> after
+    showing its help. Avoid this by clearing the readline buffer in such case.
+
+commit ff2ebdc7e1c586762b04004608fb7aaf55e245c7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Feb 6 18:34:55 2024 +0100
+
+    BGP: Increase max length of notification data in error logs
+    
+    Increase max length of notification data in error logs from 16 to 128.
+    There is already enough space in the buffer.
+    
+    Thanks to Marco d'Itri for the suggestion.
+
+commit f40e2bc270d3635be518ae80251ce0b5c519c6f4
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sat Jan 27 17:38:06 2024 +0100
+
+    Nest: Fix bug in recursive routes with MPLS-labeled nexthops
+    
+    When a recursive route with MPLS-labeled nexthop was exported to kernel
+    and read back, the nexthop_same() failed due to different labels_orig
+    field and kernel protocol reinstalled it unnecessarily.
+    
+    For comparing hext hops, route cache has to distinguish ones with
+    different labels_orig, but KRT has to ignore that, so we need two
+    nexthop compare functions.
+    
+    Thanks to Marcel Menzel for the bugreport.
+
+commit 472be46f7ab211f38e7662543f1436df30dca753
+Author: Katerina Kubecova <katerina.kubecova@nic.cz>
+Date:   Fri Jan 19 11:54:25 2024 +0100
+
+    Filter: Tests for net_addr
+    
+    Minor changes by committer.
+
+commit 13c6cf8a7430a6b133e46525256eb5554b3f0a2b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Jan 22 06:29:14 2024 +0100
+
+    Trivial code cleanups
+
+commit 2b6bd8ca3a3955a407b0553009b05572693cfdf7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Dec 13 18:07:38 2023 +0100
+
+    OSPF: Cleanup some warnings
+
+commit 7d2c7d59a363e690995eb958959f0bc12445355c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Dec 13 17:46:16 2023 +0100
+
+    Nest: Fix memory alignment in attribute cache
+    
+    In attribute cache, adata structures were stored densely in one memory
+    block, without regard to alignment. Let's force at least u32 alignment.
+
+commit 2c7555cf2ac8439713dd9148b348128c57222a38
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Dec 13 03:48:12 2023 +0100
+
+    Log: Add support for UDP logging
+    
+    Add support for UDP logging, using RFC 3164 syslog protocol.
+    
+    Based on the patch from Alexander Zubkov <green@qrator.net>, thanks!
+
+commit 8cf1be6f67eaeb9bfd2fffe4a4bc9ae419adffd5
+Merge: 4aac1b25 bb094fb6
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Dec 8 12:09:30 2023 +0100
+
+    Merge commit 'bb094fb6'
+
+commit bb094fb6c758897fabfeefa0c0d97dbc7a956246
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Dec 8 12:07:46 2023 +0100
+
+    Refactoring also net_roa_check
+    
+    Having 4 functions doing almost the same is more mess than three macros.
+
+commit 4aac1b259fa94b99427f837564876baa2183ccb1
+Merge: bcf23274 54ddf90f
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Dec 8 08:30:30 2023 +0100
+
+    Merge commit '54ddf90f'
+
+commit 54ddf90f6370f06efc71c3ffd6e02d031a86866f
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Dec 7 14:38:05 2023 +0100
+
+    Conf: debug tables
+    
+    For now just a dummy config but it is needed for forward
+    compatibility with v3.
+
+commit 9a91ea52db32ec2fda830afd1c88f0f83e6c0df4
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Dec 7 14:10:11 2023 +0100
+
+    Refactoring of net_route
+
+commit 3b48dc9bce12b00aa2a212495b19c925e0fda249
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Dec 7 13:54:41 2023 +0100
+
+    Table: Adding route refresh begin and end debug messages
+
+commit bcf2327425d4dd96f381b87501cccf943bed606e
+Author: Katerina Kubecova <katerina.kubecova@nic.cz>
+Date:   Fri Oct 27 17:11:06 2023 +0200
+
+    BGP: Send hold timer
+    
+    Implement BGP Send hold timer according to draft-ietf-idr-bgp-sendholdtimer.
+    The Send hold timer drops the session if the neighbor is sending keepalives,
+    but does not receive our messages, causing the TCP connection to stall.
+
+commit 3fb06fea1d14ef147a567052391a5b359704e971
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Nov 23 20:54:22 2023 +0100
+
+    BGP: Add options to require BGP capabilities
+    
+    Some BGP capabilities change the BGP behavior in a significant way, so if
+    the configuration depends on it, it is better to not establish BGP
+    session when the capability is not available.
+    
+    Add several BGP option to require individual BGP capabilities during
+    session negotiation.
+
+commit b6923f6386b04340d6b2b6a75fbe83c392f207ca
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Nov 23 17:18:04 2023 +0100
+
+    BGP: Simplify capability handling
+
+commit 31aa62ae6d2e111e87c08b4b27a16ead968f0689
+Author: Soha Jin <soha@jin.sh>
+Date:   Thu Nov 9 14:33:25 2023 +0100
+
+    OSPF: On physical PtP links, skip next-hop resolving
+    
+    Signed-off-by: Soha Jin <soha@jin.sh>
+    Co-developed-by: Wende Tan <twd2.me@gmail.com>
+
+commit a740054db50b8532680bd1673a5d4519af889c0f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 25 18:25:46 2023 +0200
+
+    Nest: Minor fixes in MPLS
+
+commit 06301a991d80597a2a0a9e449d0cdf4bc1eda6d1
+Author: Michal Rada <michal.rada@nic.cz>
+Date:   Tue Oct 17 14:58:14 2023 +0200
+
+    Doc: prefix match prefix pattern definition typo (in sets of prefixes definition)
+
+commit 63f1c4d918209ba4210024638011f7b9ccdd894b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Mar 14 16:02:32 2023 +0100
+
+    Use RTA_MAX_SIZE in rta_do_cow()
+    
+    This allows to modify MPLS label stack in filters. Fixes a bug in
+    handling of 'gw_mpls' attribute.
+
+commit 108c4cfaf3b0fda5daf4bccf2f1ea45d7f3a271d
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Oct 24 12:40:52 2023 +0200
+
+    Autoconf: minor reduction of redundancy
+    
+    Joined BIRD_CHECK_GCC_OPTION and BIRD_ADD_GCC_OPTION.
+
+commit c9b7b032110fbd49a5f084bfe3bc886e0e1edfe4
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 18 01:48:11 2023 +0200
+
+    CI: Update for new netlab worker
+    
+     - Change tag from 'birdlab' to 'netlab'
+     - Change path of gitlab-runner home dir
+     - Use stayrtr from Debian
+
+commit 5973031460372a4d695c44a9f398d516b0e5bac1
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Oct 16 15:24:32 2023 +0200
+
+    CI: Add MPLS tests
+
+commit b5e9e5197bb75c4d7c8f19b1e76b31f9defcb915
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Oct 16 15:21:36 2023 +0200
+
+    MPLS: Fix issue with recursive MPLS routes
+    
+    Recursive MPLS routes used hostentry from the original route, which
+    triggered different table than MPLS table, and therefore were not
+    updated.
+
 commit 0e1fbaa5b21db8e5c64a732dbaf0b8afe707a147
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Oct 6 18:53:25 2023 +0200
@@ -112,23 +479,17 @@ Date:   Wed Oct 4 15:00:24 2023 +0200
 
     MPLS: Update to support and use 64bit source id
 
-commit cab5fce2b6822b7f3a892103077f26e197fecfbc
-Author: Ondrej Zajicek <santiago@crfreenet.org>
-Date:   Wed Oct 4 13:00:06 2023 +0200
-
-    Doc: L3VPN documentation
-
-commit 8a70885694c5a3b384deba0f8cd25b7f63b99fcd
-Author: Ondrej Zajicek <santiago@crfreenet.org>
-Date:   Tue Oct 3 16:11:18 2023 +0200
-
-    Doc: MPLS documentation
-
 commit 8f5511dafb54b5788546065c9b572f9b4f9d47ee
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Oct 1 05:02:46 2023 +0200
 
     L3VPN: Import/export target reconfiguration
+
+commit cab5fce2b6822b7f3a892103077f26e197fecfbc
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 4 13:00:06 2023 +0200
+
+    Doc: L3VPN documentation
 
 commit d8130da86bda6244e1f5c06eb9b9033625b781e6
 Author: Ondrej Zajicek <santiago@crfreenet.org>
@@ -139,6 +500,12 @@ Date:   Sat Sep 30 23:18:04 2023 +0200
     When a MPLS channel is reloaded, it should reload all regular MPLS-aware
     channels. This causes re-evaluation of routes in FEC map and possibly
     reannouncement of MPLS routes.
+
+commit 8a70885694c5a3b384deba0f8cd25b7f63b99fcd
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Oct 3 16:11:18 2023 +0200
+
+    Doc: MPLS documentation
 
 commit a7a9df8639c701dd020cf61d19b205230742a17e
 Author: Ondrej Zajicek <santiago@crfreenet.org>

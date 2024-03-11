@@ -6133,6 +6133,7 @@ printf "%s\n" "#define DEBUGGING 1" >>confdefs.h
   CFLAGS="$CFLAGS -O0 -ggdb -g3"
 
 
+
   bird_tmp_cflags="$CFLAGS"
   CFLAGS=" -gdwarf-4"
 
@@ -6174,6 +6175,7 @@ printf "%s\n" "$bird_cv_c_option_dwarf4" >&6; }
   if test "$bird_cv_c_option_dwarf4" = yes ; then
     CFLAGS="$CFLAGS -gdwarf-4"
   fi
+
 
 
   ac_fn_c_check_header_compile "$LINENO" "execinfo.h" "ac_cv_header_execinfo_h" "$ac_includes_default"

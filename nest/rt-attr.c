@@ -185,20 +185,40 @@ nexthop_hash(struct nexthop *x)
   return h;
 }
 
+static inline int
+nexthop_equal_1(struct nexthop *x, struct nexthop *y)
+{
+  if (!ipa_equal(x->gw, y->gw) || (x->iface != y->iface) ||
+      (x->flags != y->flags) || (x->weight != y->weight) ||
+      (x->labels != y->labels))
+    return 0;
+
+  for (int i = 0; i < x->labels; i++)
+    if (x->label[i] != y->label[i])
+      return 0;
+
+  return 1;
+}
+
+int
+nexthop_equal_(struct nexthop *x, struct nexthop *y)
+{
+  /* Like nexthop_same(), but ignores difference between local labels and labels from hostentry */
+
+  for (; x && y; x = x->next, y = y->next)
+    if (!nexthop_equal_1(x, y))
+      return 0;
+
+  return x == y;
+}
+
 int
 nexthop__same(struct nexthop *x, struct nexthop *y)
 {
   for (; x && y; x = x->next, y = y->next)
-  {
-    if (!ipa_equal(x->gw, y->gw) || (x->iface != y->iface) ||
-	(x->flags != y->flags) || (x->weight != y->weight) ||
-	(x->labels_orig != y->labels_orig) || (x->labels != y->labels))
+    if (!nexthop_equal_1(x, y) ||
+	(x->labels_orig != y->labels_orig))
       return 0;
-
-    for (int i = 0; i < x->labels; i++)
-      if (x->label[i] != y->label[i])
-	return 0;
-  }
 
   return x == y;
 }
@@ -766,7 +786,7 @@ ea_list_copy(ea_list *o)
     {
       eattr *a = &o->attrs[i];
       if (!(a->type & EAF_EMBEDDED))
-	elen += sizeof(struct adata) + a->u.ptr->length;
+	elen += BIRD_ALIGN(sizeof(struct adata) + a->u.ptr->length, EA_DATA_ALIGN);
     }
 
   n = mb_alloc(rta_pool, elen);
@@ -777,11 +797,12 @@ ea_list_copy(ea_list *o)
       eattr *a = &n->attrs[i];
       if (!(a->type & EAF_EMBEDDED))
 	{
-	  unsigned size = sizeof(struct adata) + a->u.ptr->length;
+	  uint size_u = sizeof(struct adata) + a->u.ptr->length;
+	  uint size = BIRD_ALIGN(size_u, EA_DATA_ALIGN);
 	  ASSERT_DIE(adpos + size <= elen);
 
 	  struct adata *d = ((void *) n) + adpos;
-	  memcpy(d, a->u.ptr, size);
+	  memcpy(d, a->u.ptr, size_u);
 	  a->u.ptr = d;
 
 	  adpos += size;
@@ -994,6 +1015,9 @@ ea_show(struct cli *c, const eattr *e)
 	case EAF_TYPE_LC_SET:
 	  ea_show_lc_set(c, ad, pos, buf, end);
 	  return;
+	case EAF_TYPE_STRING:
+	  bsnprintf(pos, end - pos, "%s", (const char *) ad->data);
+	  break;
 	default:
 	  bsprintf(pos, "<type %02x>", e->type);
 	}
@@ -1264,7 +1288,7 @@ rta__free(rta *a)
 rta *
 rta_do_cow(rta *o, linpool *lp)
 {
-  rta *r = lp_alloc(lp, rta_size(o));
+  rta *r = lp_alloc(lp, RTA_MAX_SIZE);
   memcpy(r, o, rta_size(o));
   for (struct nexthop **nhn = &(r->nh.next), *nho = o->nh.next; nho; nho = nho->next)
     {
