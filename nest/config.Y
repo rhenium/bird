@@ -114,7 +114,7 @@ proto_postconfig(void)
 CF_DECLS
 
 CF_KEYWORDS(ROUTER, ID, HOSTNAME, PROTOCOL, TEMPLATE, PREFERENCE, DISABLED, DEBUG, ALL, OFF, DIRECT)
-CF_KEYWORDS(INTERFACE, IMPORT, EXPORT, FILTER, NONE, VRF, DEFAULT, TABLE, STATES, ROUTES, FILTERS)
+CF_KEYWORDS(INTERFACE, IMPORT, EXPORT, FILTER, NONE, VRF, DEFAULT, TABLE, TABLES, STATES, ROUTES, FILTERS)
 CF_KEYWORDS(IPV4, IPV6, VPN4, VPN6, ROA4, ROA6, FLOW4, FLOW6, SADR, MPLS)
 CF_KEYWORDS(RECEIVE, LIMIT, ACTION, WARN, BLOCK, RESTART, DISABLE, KEEP, FILTERED, RPKI)
 CF_KEYWORDS(PASSWORD, KEY, FROM, PASSIVE, TO, ID, EVENTS, PACKETS, PROTOCOLS, CHANNELS, INTERFACES)
@@ -209,7 +209,7 @@ net_type:
  | MPLS { $$ = NET_MPLS; }
  ;
 
-CF_ENUM(T_ENUM_NETTYPE, NET_, IP4, IP6, VPN4, VPN6, ROA4, ROA6, FLOW4, FLOW6, IP6_SADR)
+CF_ENUM(T_ENUM_NETTYPE, NET_, IP4, IP6, VPN4, VPN6, ROA4, ROA6, FLOW4, FLOW6, IP6_SADR, MPLS)
 
 
 /* Creation of routing tables */
@@ -230,6 +230,7 @@ table_sorted:
 
 table_opt:
    SORTED bool { this_table->sorted = $2; }
+ | DEBUG debug_mask { this_table->debug = $2; }
  | TRIE bool {
      if (!net_val_match(this_table->addr_type, NB_IP | NB_VPN | NB_ROA | NB_IP6_SADR))
        cf_error("Trie option not supported for %s table", net_label[this_table->addr_type]);
@@ -380,6 +381,7 @@ conf: debug_default ;
 debug_default:
    DEBUG PROTOCOLS debug_mask { new_config->proto_default_debug = $3; }
  | DEBUG CHANNELS debug_mask { new_config->channel_default_debug = $3; }
+ | DEBUG TABLES debug_mask { new_config->table_default_debug = $3; }
  | DEBUG COMMANDS expr { new_config->cli_debug = $3; }
  ;
 
@@ -648,6 +650,23 @@ CF_CLI_HELP(SHOW ROUTE, ..., [[Show routing table]])
 CF_CLI(SHOW ROUTE, r_args, [[[<prefix>|for <prefix>|for <ip>|in <prefix>] [table <t>] [(import|export) table <p>.<c>] [filter <f>|where <cond>] [all] [primary] [filtered] [(export|preexport|noexport) <p>] [protocol <p>] [stats|count]]], [[Show routing table]])
 { rt_show($3); } ;
 
+CF_CLI_OPT(SHOW ROUTE FOR, <ip>|<prefix>)
+CF_CLI_OPT(SHOW ROUTE IN, <prefix>)
+CF_CLI_OPT(SHOW ROUTE TABLE, <t>)
+CF_CLI_OPT(SHOW ROUTE FILTER, <f>)
+CF_CLI_OPT(SHOW ROUTE WHERE, <cond>)
+CF_CLI_OPT(SHOW ROUTE ALL)
+CF_CLI_OPT(SHOW ROUTE PRIMARY)
+CF_CLI_OPT(SHOW ROUTE FILTERED)
+CF_CLI_OPT(SHOW ROUTE IMPORT, <p>[.<c>])
+CF_CLI_OPT(SHOW ROUTE EXPORT, <p>[.<c>])
+CF_CLI_OPT(SHOW ROUTE EXPORTED, <p>[.<c>])
+CF_CLI_OPT(SHOW ROUTE PREEXPORT, <p>[.<c>])
+CF_CLI_OPT(SHOW ROUTE NOEXPORT, <p>[.<c>])
+CF_CLI_OPT(SHOW ROUTE PROTOCOL, <p>)
+CF_CLI_OPT(SHOW ROUTE STATS)
+CF_CLI_OPT(SHOW ROUTE COUNT)
+
 r_args:
    /* empty */ {
      $$ = cfg_allocz(sizeof(struct rt_show_data));
@@ -839,13 +858,19 @@ CF_CLI_HELP(SHOW SYMBOLS, ..., [[Show all known symbolic names]])
 CF_CLI(SHOW SYMBOLS, sym_args, [table|filter|function|protocol|template|<symbol>], [[Show all known symbolic names]])
 { cmd_show_symbols($3); } ;
 
+CF_CLI_OPT(SHOW SYMBOLS TABLE)
+CF_CLI_OPT(SHOW SYMBOLS FILTER)
+CF_CLI_OPT(SHOW SYMBOLS FUNCTION)
+CF_CLI_OPT(SHOW SYMBOLS PROTOCOL)
+CF_CLI_OPT(SHOW SYMBOLS TEMPLATE)
+
 sym_args:
    /* empty */ {
      $$ = cfg_allocz(sizeof(struct sym_show_data));
    }
  | sym_args TABLE { $$ = $1; $$->type = SYM_TABLE; }
- | sym_args FUNCTION { $$ = $1; $$->type = SYM_FUNCTION; }
  | sym_args FILTER { $$ = $1; $$->type = SYM_FILTER; }
+ | sym_args FUNCTION { $$ = $1; $$->type = SYM_FUNCTION; }
  | sym_args PROTOCOL { $$ = $1; $$->type = SYM_PROTO; }
  | sym_args TEMPLATE { $$ = $1; $$->type = SYM_TEMPLATE; }
  | sym_args CF_SYM_KNOWN { $$ = $1; $$->sym = $2; }
@@ -911,6 +936,15 @@ CF_CLI(RELOAD OUT, proto_patt, <protocol> | \"<pattern>\" | all, [[Reload protoc
 CF_CLI_HELP(DEBUG, ..., [[Control protocol debugging via BIRD logs]])
 CF_CLI(DEBUG, debug_args, (<protocol> | <channel> | \"<pattern>\" | all) (all | off | { states|routes|filters|interfaces|events|packets [, ...] }), [[Control protocol debugging via BIRD logs]])
 { /* Done in debug_args */  };
+
+CF_CLI_OPT(DEBUG ALL)
+CF_CLI_OPT(DEBUG OFF)
+CF_CLI_OPT(DEBUG STATES)
+CF_CLI_OPT(DEBUG ROUTES)
+CF_CLI_OPT(DEBUG FILTERS)
+CF_CLI_OPT(DEBUG INTERFACES)
+CF_CLI_OPT(DEBUG EVENTS)
+CF_CLI_OPT(DEBUG PACKETS)
 
 debug_args:
    proto_patt debug_mask { proto_apply_cmd($1, proto_cmd_debug, 1, $2);  }

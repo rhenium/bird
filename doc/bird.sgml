@@ -543,11 +543,12 @@ ipv6 table
 include "tablename.conf";;
 </code>
 
-	<tag><label id="opt-log">log "<m/filename/" [<m/limit/ "<m/backup/"] | syslog [name <m/name/] | stderr all|{ <m/list of classes/ }</tag>
+	<tag><label id="opt-log">log "<m/filename/" [<m/limit/ "<m/backup/"] | syslog [name <m/name/] | stderr | udp <m/address/ [port <m/port/] all|{ <m/list of classes/ }</tag>
 	Set logging of messages having the given class (either <cf/all/ or <cf>{
 	error|trace [, <m/.../] }</cf> etc.) into selected destination - a file
 	specified as a filename string (with optional log rotation information),
-	syslog (with optional name argument), or the stderr output.
+	syslog (with optional name argument), the stderr output, or as a UDP
+	message (in <rfc id="3164"> syslog format).
 
 	Classes are:
 	<cf/info/, <cf/warning/, <cf/error/ and <cf/fatal/ for messages about local problems,
@@ -575,6 +576,11 @@ include "tablename.conf";;
 	<tag><label id="opt-debug-channels">debug channels all|off|{ states|routes|filters|events [, <m/.../] }</tag>
 	Set global defaults of channel debugging options.
 	See <ref id="channel-debug" name="debug"> in the channel section.
+	Default: off.
+
+	<tag><label id="opt-debug-tables">debug tables all|off|{ states|routes|filters|events [, <m/.../] }</tag>
+	Set global defaults of table debugging options.
+	See <ref id="table-debug" name="debug"> in the table section.
 	Default: off.
 
 	<tag><label id="opt-debug-commands">debug commands <m/number/</tag>
@@ -718,6 +724,12 @@ that implicit tables (<cf/master4/ and <cf/master6/) can be redefined in order
 to set options.
 
 <descrip>
+	<tag><label id="table-debug">debug all|off|{ states|routes|filters [, <m/.../] }</tag>
+	Set table debugging options. Like in <ref id="proto-debug"
+	name="protocol debugging">, tables are capable of writing trace
+	messages about its work to the log (with category <cf/trace/).
+	For now, this does nothing, but in version 3, it is used. Default: off.
+
 	<tag><label id="rtable-sorted">sorted <m/switch/</tag>
 	Usually, a routing table just chooses the selected (best) route from a
 	list of routes for each network, while keeping remaining routes unsorted.
@@ -1276,8 +1288,9 @@ This argument can be omitted if there exists only a single instance.
 	<tag><label id="cli-show-static">show static [<m/name/]</tag>
 	Show detailed information about static routes.
 
-	<tag><label id="cli-show-bfd-sessions">show bfd sessions [<m/name/]</tag>
-	Show information about BFD sessions.
+	<tag><label id="cli-show-bfd-sessions">show bfd sessions [<m/name/] [address (<m/IP/|<m/prefix/)] [(interface|dev) "<m/name/"] [ipv4|ipv6] [direct|multihop] [all]</tag>
+	Show information about BFD sessions. Options could be used to filter
+	entries, or in the case of the option <cf/all/ to give verbose output.
 
 	<tag><label id="cli-show-symbols">show symbols [table|filter|function|protocol|template|roa|<m/symbol/]</tag>
 	Show the list of symbols defined in the configuration (names of
@@ -1704,7 +1717,7 @@ in the foot).
 	Prefix <cf><m>ip1</m>/<m>len1</m></cf> matches prefix
 	pattern <cf><m>ip2</m>/<m>len2</m>{<m>l</m>,<m>h</m>}</cf> if the
 	first <cf>min(len1, len2)</cf> bits of <cf/ip1/ and <cf/ip2/ are
-	identical and <cf>len1 &lt;= ip1 &lt;= len2</cf>. A valid prefix pattern
+	identical and <cf>l &lt;= len1 &lt;= h</cf>. A valid prefix pattern
 	has to satisfy <cf>low &lt;= high</cf>, but <cf/pxlen/ is not
 	constrained by <cf/low/ or <cf/high/. Obviously, a prefix matches a
 	prefix set literal if it matches any prefix pattern in the prefix set
@@ -2996,14 +3009,22 @@ using the following configuration parameters:
 	refresh requests. Disabling Route Refresh also disables Enhanced Route Refresh.
 	Default: on.
 
+	<tag><label id="bgp-require-route-refresh">require route refresh <m/switch/</tag>
+	If enabled, the BGP Route Refresh capability (<rfc id="2918">) must be
+	announced by the BGP neighbor, otherwise the BGP session will not be
+	established. Default: off.
+
 	<tag><label id="bgp-enable-enhanced-route-refresh">enable enhanced route refresh <m/switch/</tag>
-	BGP protocol extension Enhanced Route Refresh (<rfc id="7313">) specifies explicit
-	begin and end for Route Refresh (see previous option),
-	therefore the receiver can remove
-	stale routes that were not advertised during the exchange. This option
-	specifies whether BIRD advertises this capability and supports
-	related procedures.
-	Default: on.
+	BGP protocol extension Enhanced Route Refresh (<rfc id="7313">)
+	specifies explicit begin and end for Route Refresh (see previous
+	option), therefore the receiver can remove stale routes that were not
+	advertised during the exchange. This option specifies whether BIRD
+	advertises this capability and supports related procedures. Default: on.
+
+	<tag><label id="bgp-require-enhanced-route-refresh">require enhanced route refresh <m/switch/</tag>
+	If enabled, the BGP Enhanced Route Refresh capability (<rfc id="7313">)
+	must be announced by the BGP neighbor, otherwise the BGP session
+	will not be established. Default: off.
 
 	<tag><label id="bgp-graceful-restart">graceful restart <m/switch/|aware</tag>
 	When a BGP speaker restarts or crashes, neighbors will discard all
@@ -3020,10 +3041,15 @@ using the following configuration parameters:
 	restart requires also configuration of other protocols. Default: aware.
 
 	<tag><label id="bgp-graceful-restart-time">graceful restart time <m/number/</tag>
-	The restart time is announced in the BGP graceful restart capability
+	The restart time is announced in the BGP Graceful Restart capability
 	and specifies how long the neighbor would wait for the BGP session to
 	re-establish after a restart before deleting stale routes. Default:
 	120 seconds.
+
+	<tag><label id="bgp-require-graceful-restart">require graceful restart <m/switch/</tag>
+	If enabled, the BGP Graceful Restart capability (<rfc id="4724">)
+	must be announced by the BGP neighbor, otherwise the BGP session
+	will not be established. Default: off.
 
 	<tag><label id="bgp-long-lived-graceful-restart">long lived graceful restart <m/switch/|aware</tag>
 	The long-lived graceful restart is an extension of the traditional
@@ -3038,11 +3064,16 @@ using the following configuration parameters:
 	graceful restart is disabled.
 
 	<tag><label id="bgp-long-lived-stale-time">long lived stale time <m/number/</tag>
-	The long-lived stale time is announced in the BGP long-lived graceful
-	restart capability and specifies how long the neighbor would keep stale
+	The long-lived stale time is announced in the BGP Long-lived Graceful
+	Restart capability and specifies how long the neighbor would keep stale
 	routes depreferenced during long-lived graceful restart until either the
 	session is re-stablished and synchronized or the stale time expires and
 	routes are removed. Default: 3600 seconds.
+
+	<tag><label id="bgp-require-long-lived-graceful-restart">require long lived graceful restart <m/switch/</tag>
+	If enabled, the BGP Long-lived Graceful Restart capability (draft)
+	must be announced by the BGP neighbor, otherwise the BGP session
+	will not be established. Default: off.
 
 	<tag><label id="bgp-interpret-communities">interpret communities <m/switch/</tag>
 	<rfc id="1997"> demands that BGP speaker should process well-known
@@ -3063,10 +3094,20 @@ using the following configuration parameters:
 	in neighbor's implementation of 4B AS extension. Even when disabled
 	(off), BIRD behaves internally as AS4-aware BGP router. Default: on.
 
+	<tag><label id="bgp-require-as4">require as4 <m/switch/</tag>
+	If enabled, the BGP 4B AS number capability (<rfc id="6793">) must be
+	announced by the BGP neighbor, otherwise the BGP session will not be
+	established. Default: off.
+
 	<tag><label id="bgp-enable-extended-messages">enable extended messages <m/switch/</tag>
 	The BGP protocol uses maximum message length of 4096 bytes. This option
 	provides an extension (<rfc id="8654">) to allow extended messages with
 	length up to 65535 bytes. Default: off.
+
+	<tag><label id="bgp-require-extended-messages">require extended messages <m/switch/</tag>
+	If enabled, the BGP Extended Message capability (<rfc id="8654">) must
+	be announced by the BGP neighbor, otherwise the BGP session will not be
+	established. Default: off.
 
 	<tag><label id="bgp-capabilities">capabilities <m/switch/</tag>
 	Use capability advertisement to advertise optional capabilities. This is
@@ -3077,7 +3118,11 @@ using the following configuration parameters:
 	capability-related error.
 
 	<tag><label id="bgp-advertise-hostname">advertise hostname <m/switch/</tag>
-	Advertise hostname capability along with the hostname. Default: off.
+	Advertise the hostname capability along with the hostname. Default: off.
+
+	<tag><label id="bgp-require-hostname">require hostname <m/switch/</tag>
+	If enabled, the hostname capability must be announced by the BGP
+	neighbor, otherwise the BGP session negotiation fails. Default: off.
 
 	<tag><label id="bgp-disable-after-error">disable after error <m/switch/</tag>
 	When an error is encountered (either locally or by the other side),
@@ -3124,6 +3169,23 @@ using the following configuration parameters:
 	Minimum value of the keepalive time that is accepted during session
 	negotiation. If the proposed hold time would lead to a lower value of
 	the keepalive time, the session is rejected with error. Default: none.
+
+	<tag><label id="bgp-send-hold-time">send hold time <m/number/</tag>
+	Maximum time in seconds betweeen successfull transmissions of BGP messages.
+	Send hold timer drops the session if the neighbor is sending keepalives,
+	but does not receive our messages, causing the TCP connection to stall.
+	This may happen due to malfunctioning or overwhelmed neighbor. See
+	<HTMLURL URL="https://datatracker.ietf.org/doc/draft-ietf-idr-bgp-sendholdtimer/"
+	name="draft-ietf-idr-bgp-sendholdtimer"> for more details.
+
+	Like the option <cf/keepalive time/, the effective value depends on the
+	negotiated hold time, as it is scaled to maintain proportion between the
+	send hold time and the keepalive time. If it is set to zero, the timer
+	is disabled. Default: double of the hold timer limit.
+
+	The option <cf/disable rx/ is intended only for testing this feature and
+	should not be used anywhere else. It discards received messages and
+	disables the hold timer.
 
 	<tag><label id="bgp-connect-delay-time">connect delay time <m/number/</tag>
 	Delay in seconds between protocol startup and the first attempt to
@@ -3403,14 +3465,29 @@ be used in explicit configuration.
 	just IPv4-mapped IPv6 addresses are used, as described in
 	<rfc id="4798"> and <rfc id="4659">. Default: off.
 
+	<tag><label id="bgp-require-extended-next-hop">require extended next hop <m/switch/</tag>
+	If enabled, the BGP Extended Next Hop Encoding capability (<rfc id="8950">)
+	must be announced by the BGP neighbor, otherwise the BGP session will
+	not be established. Note that this option is relevant just for IPv4 /
+	VPNv4 channels, as IPv6 / VPNv6 channels use a different mechanism not
+	signalled by a capability. Default: off.
+
 	<tag><label id="bgp-add-paths">add paths <m/switch/|rx|tx</tag>
 	Standard BGP can propagate only one path (route) per destination network
-	(usually the selected one). This option controls the add-path protocol
+	(usually the selected one). This option controls the ADD-PATH protocol
 	extension, which allows to advertise any number of paths to a
-	destination. Note that to be active, add-path has to be enabled on both
+	destination. Note that to be active, ADD-PATH has to be enabled on both
 	sides of the BGP session, but it could be enabled separately for RX and
 	TX direction. When active, all available routes accepted by the export
 	filter are advertised to the neighbor. Default: off.
+
+	<tag><label id="bgp-require-add-paths">require add paths <m/switch/</tag>
+	If enabled, the BGP ADD-PATH capability (<rfc id="7911">) must be
+	announced by the BGP neighbor, otherwise the BGP session will not be
+	established. Announced directions in the capability must be compatible
+	with locally configured directions. E.g., If <cf/add path tx/ is
+	configured locally, then the neighbor capability must announce RX.
+	Default: off.
 
 	<tag><label id="bgp-aigp">aigp <m/switch/|originate</tag>
 	The BGP protocol does not use a common metric like other routing
@@ -3886,15 +3963,17 @@ these attributes:
 <p>In Linux, there is also a plenty of obscure route attributes mostly focused
 on tuning TCP performance of local connections. BIRD supports most of these
 attributes, see Linux or iproute2 documentation for their meaning. Attributes
-<cf/krt_lock_*/ and <cf/krt_feature_*/ have type bool, others have type int.
-Supported attributes are:
+<cf/krt_lock_*/ and <cf/krt_feature_*/ have type bool, <cf/krt_congctl/ has type
+string, others have type int. Supported attributes are:
 
 <cf/krt_mtu/, <cf/krt_lock_mtu/, <cf/krt_window/, <cf/krt_lock_window/,
 <cf/krt_rtt/, <cf/krt_lock_rtt/, <cf/krt_rttvar/, <cf/krt_lock_rttvar/,
-<cf/krt_sstresh/, <cf/krt_lock_sstresh/, <cf/krt_cwnd/, <cf/krt_lock_cwnd/,
+<cf/krt_ssthresh/, <cf/krt_lock_ssthresh/, <cf/krt_cwnd/, <cf/krt_lock_cwnd/,
 <cf/krt_advmss/, <cf/krt_lock_advmss/, <cf/krt_reordering/, <cf/krt_lock_reordering/,
 <cf/krt_hoplimit/, <cf/krt_lock_hoplimit/, <cf/krt_rto_min/, <cf/krt_lock_rto_min/,
-<cf/krt_initcwnd/, <cf/krt_initrwnd/, <cf/krt_quickack/,
+<cf/krt_initcwnd/, <cf/krt_lock_initcwnd/, <cf/krt_initrwnd/, <cf/krt_lock_initrwnd/,
+<cf/krt_quickack/, <cf/krt_lock_quickack/, <cf/krt_congctl/, <cf/krt_lock_congctl/,
+<cf/krt_fastopen_no_cookie/, <cf/krt_lock_fastopen_no_cookie/,
 <cf/krt_feature_ecn/, <cf/krt_feature_allfrag/
 
 <sect1>Example
@@ -5619,6 +5698,7 @@ protocol rpki [&lt;name&gt;] {
         roa6 { table &lt;tab&gt;; };
         remote &lt;ip&gt; | "&lt;domain&gt;" [port &lt;num&gt;];
         port &lt;num&gt;;
+        local address &lt;ip&gt;;
         refresh [keep] &lt;num&gt;;
         retry [keep] &lt;num&gt;;
         expire [keep] &lt;num&gt;;
@@ -5647,6 +5727,9 @@ specify both channels.
         <tag>port <m/num/</tag> Specifies the port number. The default port
         number is 323 for transport without any encryption and 22 for transport
         with SSH encryption.
+
+        <tag>local address <m/ip/</tag>
+        Define local address we should use as a source address for the RTR session.
 
         <tag>refresh [keep] <m/num/</tag> Time period in seconds. Tells how
         long to wait before next attempting to poll the cache using a Serial
@@ -5862,6 +5945,12 @@ options (<cf/bfd/ and <cf/weight 1/), the second nexthop has just <cf/weight 2/.
 	that BFD protocol also has to be configured, see <ref id="bfd" name="BFD">
 	section for details. Default value is no.
 
+	<tag><label id="static-route-dev">dev <m/text/</tag>
+	The outgoing interface associated with the nexthop. Useful for
+	link-local nexthop addresses or when multiple interfaces use the same
+	network prefix. By default, the outgoing interface is resolved from the
+	nexthop address.
+
 	<tag><label id="static-route-mpls">mpls <m/num/[/<m/num/[/<m/num/[...]]]</tag>
 	MPLS labels that should be pushed to packets forwarded by the route.
 	The option could be used for both IP routes (on MPLS ingress routers)
@@ -6042,7 +6131,8 @@ protocol static {
 		via 198.51.100.20 bfd	# BFD-controlled next hop
 		via 192.0.2.1;
 	route 203.0.113.0/24 blackhole; # Sink route
-	route 10.2.0.0/24 via "arc0";	# Secondary network
+	route 10.2.0.0/24 via "arc0";	# Direct route
+	route 10.2.2.0/24 via 192.0.2.1 dev "eth0" onlink; # Route with both nexthop and iface
 	route 192.168.10.0/24 via 198.51.100.100 {
 		ospf_metric1 = 20;	# Set extended attribute
 	};
@@ -6061,7 +6151,8 @@ protocol static {
 	route 2001:db8:10::/48 via 2001:db8:1::1;	# Route with global nexthop
 	route 2001:db8:20::/48 via fe80::10%eth0;	# Route with link-local nexthop
 	route 2001:db8:30::/48 via fe80::20%'eth1.60';	# Iface with non-alphanumeric characters
-	route 2001:db8:40::/48 via "eth2";		# Direct route to eth2
+	route 2001:db8:40::/48 via fe80::30 dev "eth1";	# Another link-local nexthop
+	route 2001:db8:50::/48 via "eth2";		# Direct route to eth2
 	route 2001:db8::/32 unreachable;		# Unreachable route
 	route ::/0 via 2001:db8:1::1 bfd;		# BFD-controlled default route
 }

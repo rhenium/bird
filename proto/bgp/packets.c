@@ -173,8 +173,11 @@ bgp_create_notification(struct bgp_conn *conn, byte *buf)
 
 /* Capability negotiation as per RFC 5492 */
 
-const struct bgp_af_caps *
-bgp_find_af_caps(struct bgp_caps *caps, u32 afi)
+static const struct bgp_af_caps dummy_af_caps = { };
+static const struct bgp_af_caps basic_af_caps = { .ready = 1 };
+
+static const struct bgp_af_caps *
+bgp_find_af_caps_(struct bgp_caps *caps, u32 afi)
 {
   struct bgp_af_caps *ac;
 
@@ -183,6 +186,23 @@ bgp_find_af_caps(struct bgp_caps *caps, u32 afi)
       return ac;
 
   return NULL;
+}
+
+const struct bgp_af_caps *
+bgp_find_af_caps(struct bgp_caps *caps, u32 afi)
+{
+  const struct bgp_af_caps *ac = bgp_find_af_caps_(caps, afi);
+
+  /* Return proper capability if found */
+  if (ac)
+    return ac;
+
+  /* Use default if capabilities were not announced */
+  if (!caps->length && (afi == BGP_AF_IPV4))
+    return &basic_af_caps;
+
+  /* Ignore AFIs that were not announced in multiprotocol capability */
+  return &dummy_af_caps;
 }
 
 static struct bgp_af_caps *
@@ -674,7 +694,7 @@ err:
   return -1;
 }
 
-static int
+int
 bgp_check_capabilities(struct bgp_conn *conn)
 {
   struct bgp_proto *p = conn->bgp;
@@ -686,21 +706,54 @@ bgp_check_capabilities(struct bgp_conn *conn)
   /* This is partially overlapping with bgp_conn_enter_established_state(),
      but we need to run this just after we receive OPEN message */
 
+  if (p->cf->require_refresh && !remote->route_refresh)
+    return 0;
+
+  if (p->cf->require_enhanced_refresh && !remote->enhanced_refresh)
+    return 0;
+
+  if (p->cf->require_as4 && !remote->as4_support)
+    return 0;
+
+  if (p->cf->require_extended_messages && !remote->ext_messages)
+    return 0;
+
+  if (p->cf->require_hostname && !remote->hostname)
+    return 0;
+
+  if (p->cf->require_gr && !remote->gr_aware)
+    return 0;
+
+  if (p->cf->require_llgr && !remote->llgr_aware)
+    return 0;
+
+  /* No check for require_roles, as it uses error code 2.11 instead of 2.7 */
+
   BGP_WALK_CHANNELS(p, c)
   {
     const struct bgp_af_caps *loc = bgp_find_af_caps(local,  c->afi);
     const struct bgp_af_caps *rem = bgp_find_af_caps(remote, c->afi);
 
     /* Find out whether this channel will be active */
-    int active = loc && loc->ready &&
-      ((rem && rem->ready) || (!remote->length && (c->afi == BGP_AF_IPV4)));
+    int active = loc->ready && rem->ready;
 
     /* Mandatory must be active */
     if (c->cf->mandatory && !active)
       return 0;
 
     if (active)
+    {
+      if (c->cf->require_ext_next_hop && !rem->ext_next_hop)
+	return 0;
+
+      if (c->cf->require_add_path && (loc->add_path & BGP_ADD_PATH_RX) && !(rem->add_path & BGP_ADD_PATH_TX))
+	return 0;
+
+      if (c->cf->require_add_path && (loc->add_path & BGP_ADD_PATH_TX) && !(rem->add_path & BGP_ADD_PATH_RX))
+	return 0;
+
       count++;
+    }
   }
 
   /* We need at least one channel active */
@@ -873,6 +926,10 @@ bgp_rx_open(struct bgp_conn *conn, byte *pkt, uint len)
     (p->cf->keepalive_time * hold_time / p->cf->hold_time) :
     hold_time / 3;
 
+  uint send_hold_time = (p->cf->send_hold_time >= 0) ?
+    (p->cf->send_hold_time * hold_time / p->cf->hold_time) :
+    2 * hold_time;
+
   /* Keepalive time might be rounded down to zero */
   if (hold_time && !keepalive_time)
     keepalive_time = 1;
@@ -886,7 +943,7 @@ bgp_rx_open(struct bgp_conn *conn, byte *pkt, uint len)
   if (!id || (p->is_internal && id == p->local_id))
   { bgp_error(conn, 2, 3, pkt+24, -4); return; }
 
-  /* RFC 5492 4 - check for required capabilities */
+  /* RFC 5492 5 - check for required capabilities */
   if (p->cf->capabilities && !bgp_check_capabilities(conn))
   { bgp_error(conn, 2, 7, NULL, 0); return; }
 
@@ -981,6 +1038,7 @@ bgp_rx_open(struct bgp_conn *conn, byte *pkt, uint len)
   /* Update our local variables */
   conn->hold_time = hold_time;
   conn->keepalive_time = keepalive_time;
+  conn->send_hold_time = send_hold_time;
   conn->as4_session = conn->local_caps->as4_support && caps->as4_support;
   conn->ext_messages = conn->local_caps->ext_messages && caps->ext_messages;
   p->remote_id = id;
@@ -990,6 +1048,7 @@ bgp_rx_open(struct bgp_conn *conn, byte *pkt, uint len)
 
   bgp_schedule_packet(conn, NULL, PKT_KEEPALIVE);
   bgp_start_timer(conn->hold_timer, conn->hold_time);
+  bgp_start_timer(conn->send_hold_timer, conn->send_hold_time);
   bgp_conn_enter_openconfirm_state(conn);
 }
 
@@ -2440,7 +2499,7 @@ bgp_create_update_bmp(struct bgp_channel *c, byte *buf, struct bgp_bucket *buck,
     .proto = p,
     .channel = c,
     .pool = tmp_linpool,
-    .mp_reach = (c->afi != BGP_AF_IPV4) || (rem && rem->ext_next_hop),
+    .mp_reach = (c->afi != BGP_AF_IPV4) || rem->ext_next_hop,
     .as4_session = 1,
     .add_path = c->add_path_rx,
     .mpls = c->desc->mpls,
@@ -3007,7 +3066,11 @@ bgp_send(struct bgp_conn *conn, uint type, uint len)
   put_u16(buf+16, len);
   buf[18] = type;
 
-  return sk_send(sk, len);
+  int success = sk_send(sk, len);
+  if (success && ((conn->state == BS_ESTABLISHED) || (conn->state == BS_OPENCONFIRM)))
+    bgp_start_timer(conn->send_hold_timer, conn->send_hold_time);
+
+  return success;
 }
 
 /**
@@ -3167,6 +3230,10 @@ bgp_tx(sock *sk)
 {
   struct bgp_conn *conn = sk->data;
 
+  /* Pending message was passed to kernel */
+  if ((conn->state == BS_ESTABLISHED) || (conn->state == BS_OPENCONFIRM))
+    bgp_start_timer(conn->send_hold_timer, conn->send_hold_time);
+
   DBG("BGP: TX hook\n");
   uint max = 1024;
   while (--max && (bgp_fire_tx(conn) > 0))
@@ -3222,7 +3289,8 @@ static struct {
   { 6, 7, "Connection collision resolution" },
   { 6, 8, "Out of Resources" },
   { 7, 0, "Invalid ROUTE-REFRESH message" }, /* [RFC7313] */
-  { 7, 1, "Invalid ROUTE-REFRESH message length" } /* [RFC7313] */
+  { 7, 1, "Invalid ROUTE-REFRESH message length" }, /* [RFC7313] */
+  { 8, 0, "Send hold timer expired" }, /* [draft-ietf-idr-bgp-sendholdtimer] */
 };
 
 /**
@@ -3309,8 +3377,8 @@ bgp_log_error(struct bgp_proto *p, u8 class, char *msg, uint code, uint subcode,
 
       *t++ = ':';
       *t++ = ' ';
-      if (len > 16)
-	len = 16;
+      if (len > 128)
+	len = 128;
       for (i=0; i<len; i++)
 	t += bsprintf(t, "%02x", data[i]);
     }

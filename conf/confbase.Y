@@ -89,6 +89,7 @@ CF_DECLS
   struct lsadb_show_data *ld;
   struct mrt_dump_data *md;
   struct mpls_show_ranges_cmd *msrc;
+  struct bfd_show_sessions_cmd *bssc;
   struct iface *iface;
   void *g;
   btime time;
@@ -294,7 +295,7 @@ net_roa6_: net_ip6_ MAX NUM AS NUM
 
 net_mpls_: MPLS NUM
 {
-  $$ = cfg_alloc(sizeof(net_addr_roa6));
+  $$ = cfg_alloc(sizeof(net_addr_mpls));
   net_fill_mpls($$, $2);
 }
 

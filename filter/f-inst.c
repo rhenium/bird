@@ -692,6 +692,16 @@
       case SA_WEIGHT:	RESULT(sa.f_type, i, rta->nh.weight + 1); break;
       case SA_PREF:	RESULT(sa.f_type, i, rta->pref); break;
       case SA_GW_MPLS:	RESULT(sa.f_type, i, rta->nh.labels ? rta->nh.label[0] : MPLS_NULL); break;
+      case SA_GW_MPLS_STACK:
+        {
+	  uint len = rta->nh.labels * sizeof(u32);
+	  struct adata *list = falloc(sizeof(struct adata) + len);
+	  list->length = len;
+	  memcpy(list->data, rta->nh.label, len);
+	  RESULT(sa.f_type, ad, list);
+	  break;
+	}
+
       case SA_ONLINK:	RESULT(sa.f_type, i, rta->nh.flags & RNF_ONLINK ? 1 : 0); break;
 
       default:
@@ -779,6 +789,36 @@
 	  }
 	  else
 	    rta->nh.labels = 0;
+
+	  rta->nh.labels_orig = rta->hostentry ? rta->nh.labels : 0;
+	}
+	break;
+
+      case SA_GW_MPLS_STACK:
+	{
+	  int len = int_set_get_size(v1.val.ad);
+	  u32 *l = int_set_get_data(v1.val.ad);
+
+	  if (len > MPLS_MAX_LABEL_STACK)
+	    runtime("Too many MPLS labels in stack (%d)", len);
+
+	  int i;
+	  for (i = 0; i < len; i++)
+	  {
+	    u32 label = l[i];
+
+	    if (label >= 0x100000)
+	      runtime("Invalid MPLS label (%u)", label);
+
+	    /* Ignore rest of label stack if implicit-NULL label (3) is set */
+	    if (label == MPLS_NULL)
+	      break;
+
+	    rta->nh.label[i] = label;
+	  }
+
+	  rta->nh.labels = i;
+	  rta->nh.labels_orig = rta->hostentry ? i : 0;
 	}
 	break;
 
@@ -861,6 +901,9 @@
       case EAF_TYPE_LC_SET:
 	RESULT_(T_LCLIST, ad, e->u.ptr);
 	break;
+      case EAF_TYPE_STRING:
+	RESULT_(T_STRING, s, (const char *) e->u.ptr->data);
+	break;
       default:
 	bug("Unknown dynamic attribute type");
       }
@@ -912,6 +955,12 @@
       case EAF_TYPE_EC_SET:
       case EAF_TYPE_LC_SET:
 	l->attrs[0].u.ptr = v1.val.ad;
+	break;
+
+      case EAF_TYPE_STRING:;
+	struct adata *d = lp_alloc_adata(fs->pool, strlen(v1.val.s) + 1);
+	memcpy(d->data, v1.val.s, d->length);
+	l->attrs[0].u.ptr = d;
 	break;
 
       case EAF_TYPE_BITFIELD:
@@ -1253,6 +1302,14 @@
     RESULT(T_CLIST, ad, [[ int_set_add(fpool, v1.val.ad, v2.val.i) ]]);
   }
 
+  /* Hack for gw_mpls_list */
+  INST(FI_CLIST_ADD_INT, 2, 1) {
+    ARG(1, T_CLIST);
+    ARG(2, T_INT);
+    METHOD_CONSTRUCTOR("add");
+    RESULT(T_CLIST, ad, [[ int_set_add(fpool, v1.val.ad, v2.val.i) ]]);
+  }
+
   INST(FI_CLIST_ADD_IP, 2, 1) {
     ARG(1, T_CLIST);
     ARG(2, T_IP);
@@ -1331,6 +1388,14 @@
   INST(FI_CLIST_DELETE_PAIR, 2, 1) {
     ARG(1, T_CLIST);
     ARG(2, T_PAIR);
+    METHOD_CONSTRUCTOR("delete");
+    RESULT(T_CLIST, ad, [[ int_set_del(fpool, v1.val.ad, v2.val.i) ]]);
+  }
+
+  /* Hack for gw_mpls_list */
+  INST(FI_CLIST_DELETE_INT, 2, 1) {
+    ARG(1, T_CLIST);
+    ARG(2, T_INT);
     METHOD_CONSTRUCTOR("delete");
     RESULT(T_CLIST, ad, [[ int_set_del(fpool, v1.val.ad, v2.val.i) ]]);
   }
