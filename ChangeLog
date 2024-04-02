@@ -1,3 +1,52 @@
+commit 0b684a43bd7ce4a32c9cd7754b88286bcd1815bb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Mar 22 01:40:43 2024 +0100
+
+    NEWS and version update
+
+commit a698f8d917af8e9b421a667766a42f45e9359616
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Mar 22 00:40:06 2024 +0100
+
+    Static: Fix invalid combination of nexthop options
+    
+    BFD requires defined local IP, but for nexthop with onlink there might
+    not be such address. So we reject this combination of nexthop options.
+    This prevent crash where such combination of options is used.
+
+commit d21a508e8d9210f5b3b60d8fc8b79a344d4a7440
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Mar 21 15:59:26 2024 +0100
+
+    Revert "OSPF: On physical PtP links, skip next-hop resolving"
+    
+    This reverts commit 31aa62ae6d2e111e87c08b4b27a16ead968f0689.
+
+commit 46a4932574106315e2585d990199da7825863a85
+Merge: 66d6ac70 44e351d1
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Mar 21 15:58:52 2024 +0100
+
+    Merge commit '44e351d1522f0099687aac9fd65dcea73a04af43'
+
+commit 66d6ac70856bdb29840983454373bb10a532e4f7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Mar 19 15:39:46 2024 +0100
+
+    Babel: Fix build with limited set of protocols
+
+commit 06209c1917338a6d5f3844a31a1b9e29c1c85573
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Mar 19 15:39:19 2024 +0100
+
+    Aggregator: Fix build with limited set of protocols
+
+commit 099898ffdd7dd0133d520c96ff19319e500448b3
+Author: Michal Zagorski <mzagorsk@akamai.com>
+Date:   Mon Mar 11 12:57:13 2024 +0100
+
+    Static: Fix build with limited set of protocols
+
 commit adfff448789c9e75c525f5162c046fb44f9768cd
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Mar 10 18:57:04 2024 +0100
@@ -203,6 +252,20 @@ Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Jan 22 06:29:14 2024 +0100
 
     Trivial code cleanups
+
+commit 44e351d1522f0099687aac9fd65dcea73a04af43
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Dec 8 20:53:20 2023 +0100
+
+    RPKI: retry timer doesn't reset connections when more data is pending
+    
+    With very busy deployments, RPKI may kill cache connection too early.
+    Instead of that, we want it to keep loading if any data is waiting to
+    be read and the reason for delay is just our congestion.
+    
+    Also, when we kill the session because of actually slow cache, we want
+    to reload from scratch as the data we have is unreliable and nobody
+    knows whether the state is still valid.
 
 commit 2b6bd8ca3a3955a407b0553009b05572693cfdf7
 Author: Ondrej Zajicek <santiago@crfreenet.org>
