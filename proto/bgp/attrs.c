@@ -208,13 +208,16 @@ bgp_encode_raw(struct bgp_write_state *s UNUSED, eattr *a, byte *buf, uint size)
  */
 
 static int
-bgp_aigp_valid(byte *data, uint len, char *err, uint elen)
+bgp_aigp_valid(byte *data, uint len, char *err, uint elen, u64 *metric)
 {
   byte *pos = data;
   char *err_dsc = NULL;
   uint err_val = 0;
 
 #define BAD(DSC,VAL) ({ err_dsc = DSC; err_val = VAL; goto bad; })
+  if (len == 0 || len > 11)
+    BAD("[RHE NON-COMPLIANT] AIGP attribute must contain just 1 TLV", len);
+
   while (len)
   {
     if (len < 3)
@@ -230,8 +233,13 @@ bgp_aigp_valid(byte *data, uint len, char *err, uint elen)
     if (plen < 3)
       BAD("Bad TLV length", plen);
 
-    if ((ptype == BGP_AIGP_METRIC) && (plen != 11))
-      BAD("Bad AIGP TLV length", plen);
+    if (ptype == BGP_AIGP_METRIC) {
+      if (plen != 11)
+        BAD("Bad AIGP TLV length", plen);
+      *metric = get_u64(pos + 3);
+    }
+    else
+      BAD("[RHE NON-COMPLIANT] Unsupported TLV Type", ptype);
 
     ADVANCE(pos, len, plen);
   }
@@ -247,95 +255,6 @@ bad:
   return 0;
 }
 
-static const byte *
-bgp_aigp_get_tlv(const struct adata *ad, uint type)
-{
-  if (!ad)
-    return NULL;
-
-  uint len = ad->length;
-  const byte *pos = ad->data;
-
-  while (len)
-  {
-    uint ptype = pos[0];
-    uint plen = get_u16(pos + 1);
-
-    if (ptype == type)
-      return pos;
-
-    ADVANCE(pos, len, plen);
-  }
-
-  return NULL;
-}
-
-static const struct adata *
-bgp_aigp_set_tlv(struct linpool *pool, const struct adata *ad, uint type, byte *data, uint dlen)
-{
-  uint len = ad ? ad->length : 0;
-  const byte *pos = ad ? ad->data : NULL;
-  struct adata *res = lp_alloc_adata(pool, len + 3 + dlen);
-  byte *dst = res->data;
-  byte *tlv = NULL;
-  int del = 0;
-
-  while (len)
-  {
-    uint ptype = pos[0];
-    uint plen = get_u16(pos + 1);
-
-    /* Find position for new TLV */
-    if ((ptype >= type) && !tlv)
-    {
-      tlv = dst;
-      dst += 3 + dlen;
-    }
-
-    /* Skip first matching TLV, copy others */
-    if ((ptype == type) && !del)
-      del = 1;
-    else
-    {
-      memcpy(dst, pos, plen);
-      dst += plen;
-    }
-
-    ADVANCE(pos, len, plen);
-  }
-
-  if (!tlv)
-  {
-    tlv = dst;
-    dst += 3 + dlen;
-  }
-
-  /* Store the TLD */
-  put_u8(tlv + 0, type);
-  put_u16(tlv + 1, 3 + dlen);
-  memcpy(tlv + 3, data, dlen);
-
-  /* Update length */
-  res->length = dst - res->data;
-
-  return res;
-}
-
-static u64 UNUSED
-bgp_aigp_get_metric(const struct adata *ad, u64 def)
-{
-  const byte *b = bgp_aigp_get_tlv(ad, BGP_AIGP_METRIC);
-  return b ? get_u64(b + 3) : def;
-}
-
-static const struct adata *
-bgp_aigp_set_metric(struct linpool *pool, const struct adata *ad, u64 metric)
-{
-  byte data[8];
-  put_u64(data, metric);
-  return bgp_aigp_set_tlv(pool, ad, BGP_AIGP_METRIC, data, 8);
-}
-
 int
 bgp_total_aigp_metric_(rte *e, u64 *metric, const struct adata **ad)
 {
@@ -343,11 +262,7 @@ bgp_total_aigp_metric_(rte *e, u64 *metric, const struct adata **ad)
   if (!a)
     return 0;
 
-  const byte *b = bgp_aigp_get_tlv(a->u.ptr, BGP_AIGP_METRIC);
-  if (!b)
-    return 0;
-
-  u64 aigp = get_u64(b + 3);
+  u64 aigp = a->u.data; /* u32 -> u64 */
   u64 step = e->attrs->igp_metric;
 
   if (!rte_resolvable(e) || (step >= IGP_METRIC_UNKNOWN))
@@ -856,6 +771,21 @@ bgp_export_aigp(struct bgp_export_state *s, eattr *a)
     UNSET(a);
 }
 
+static int
+bgp_encode_aigp(struct bgp_write_state *s UNUSED, eattr *a, byte *buf, uint size)
+{
+  if (size < (3+1+2+8))
+    return -1;
+
+  u64 metric = a->u.data; /* u32 -> u64 */
+  bgp_put_attr_hdr3(buf, EA_ID(a->id), a->flags, 1+2+8);
+  put_u8(buf + 3, 1);
+  put_u16(buf + 3 + 1, 11);
+  put_u64(buf + 3 + 3, metric);
+
+  return 3+1+2+8;
+}
+
 static void
 bgp_decode_aigp(struct bgp_parse_state *s, uint code UNUSED, uint flags, byte *data, uint len, ea_list **to)
 {
@@ -866,21 +796,12 @@ bgp_decode_aigp(struct bgp_parse_state *s, uint code UNUSED, uint flags, byte *d
   if ((flags ^ bgp_attr_table[BA_AIGP].flags) & (BAF_OPTIONAL | BAF_TRANSITIVE))
     DISCARD("Malformed AIGP attribute - conflicting flags (%02x)", flags);
 
-  if (!bgp_aigp_valid(data, len, err, sizeof(err)))
+  u64 val;
+  if (!bgp_aigp_valid(data, len, err, sizeof(err), &val))
     DISCARD("Malformed AIGP attribute - %s", err);
-
-  bgp_set_attr_data(to, s->pool, BA_AIGP, flags, data, len);
-}
-
-static void
-bgp_format_aigp(const eattr *a, byte *buf, uint size UNUSED)
-{
-  const byte *b = bgp_aigp_get_tlv(a->u.ptr, BGP_AIGP_METRIC);
-
-  if (!b)
-    bsprintf(buf, "?");
-  else
-    bsprintf(buf, "%lu", get_u64(b + 3));
+  if (val > 0xffffffff)
+    DISCARD("[RHE NON-COMPLIANT] AIGP metric value higher than 0xffffffff is not supported");
+  bgp_set_attr_u32(to, s->pool, BA_AIGP, flags, val);
 }
 
 
@@ -1114,12 +1035,11 @@ static const struct bgp_attr_desc bgp_attr_table[] = {
   },
   [BA_AIGP] = {
     .name = "aigp",
-    .type = EAF_TYPE_OPAQUE,
+    .type = EAF_TYPE_INT, /* Limiting to 32 bits */
     .flags = BAF_OPTIONAL | BAF_DECODE_FLAGS,
     .export = bgp_export_aigp,
-    .encode = bgp_encode_raw,
+    .encode = bgp_encode_aigp,
     .decode = bgp_decode_aigp,
-    .format = bgp_format_aigp,
   },
   [BA_LARGE_COMMUNITY] = {
     .name = "large_community",
@@ -1867,8 +1787,11 @@ bgp_update_attrs(struct bgp_proto *p, struct bgp_channel *c, rte *e, ea_list *at
       (bgp_total_aigp_metric_(e, &metric, &ad) ||
        (c->cf->aigp_originate && bgp_init_aigp_metric(e, &metric, &ad))))
   {
-    ad = bgp_aigp_set_metric(pool, ad, metric);
-    bgp_set_attr_ptr(&attrs, pool, BA_AIGP, 0, ad);
+    u32 metric32 = (u32)metric;
+    /* TODO */
+    if (metric32 < metric)
+      metric32 = 0xffffffff;
+    bgp_set_attr_u32(&attrs, pool, BA_AIGP, 0, metric32);
   }
 
   /* IBGP route reflection, RFC 4456 */
@@ -2178,6 +2101,10 @@ bgp_rte_mergable(rte *pri, rte *sec)
   p = x ? x->u.data : pri_bgp->cf->default_local_pref;
   s = y ? y->u.data : sec_bgp->cf->default_local_pref;
   if (p != s)
+    return 0;
+
+  /* RFC 7311 4.1 - Apply AIGP metric */
+  if (bgp_total_aigp_metric(pri) != bgp_total_aigp_metric(sec))
     return 0;
 
   /* RFC 4271 9.1.2.2. a)  Use AS path lengths */
