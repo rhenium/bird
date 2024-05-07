@@ -1636,6 +1636,24 @@
     RESULT(T_BYTESTRING, bs, bs);
   }
 
+  INST(FI_ATTACH_MLS, 1, 0) {	/* attach_mls([stack]) */
+    NEVER_CONSTANT;
+    ARG(1, T_MLS);
+    ACCESS_EATTRS;
+    ACCESS_RTE;
+
+    f_rta_cow(fs);
+    {
+      struct rta *rta = (*fs->rte)->attrs;
+      const mpls_label_stack *mls = v1.val.mls;
+      for (struct nexthop *nh = &rta->nh; nh; nh = nh->next) {
+        nh->labels = mls ? mls->len : 0;
+        if (mls)
+          memcpy(&nh->label, mls->stack, mls->len * sizeof(u32));
+      }
+    }
+  }
+
   INST(FI_FORMAT, 1, 1) {	/* Format */
     ARG_ANY(1);
     RESULT(T_STRING, s, val_format_str(fpool, &v1));
