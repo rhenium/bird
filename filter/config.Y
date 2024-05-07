@@ -372,6 +372,7 @@ CF_KEYWORDS(FUNCTION, PRINT, PRINTN, UNSET, RETURN,
 	FILTER, WHERE, EVAL, ATTRIBUTE,
 	FROM_HEX,
 	ATTACH_MLS,
+	ATTACH_BGP_AGGREGATOR,
 	BT_ASSERT, BT_TEST_SUITE, BT_CHECK_ASSIGN, BT_TEST_SAME, FORMAT)
 
 %nonassoc THEN
@@ -1081,6 +1082,7 @@ cmd:
 	f_new_inst(FI_CONSTANT, (struct f_val) { .type = T_MLS, .val.mls = $3, })); }
  | ATTACH_MLS '(' ')' ';' { $$ = f_new_inst(FI_ATTACH_MLS,
 	f_new_inst(FI_CONSTANT, (struct f_val) { .type = T_MLS, .val.mls = cfg_allocz(sizeof(mpls_label_stack)), })); }
+ | ATTACH_BGP_AGGREGATOR '(' term ',' term ')' ';' { $$ = f_new_inst(FI_ATTACH_BGP_AGGREGATOR, $3, $5); }
  ;
 
 get_cf_position:
