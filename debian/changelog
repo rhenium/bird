@@ -1,3 +1,9 @@
+bird2 (200:2.15.1.7+23-20240508-1) unstable; urgency=medium
+
+  * Fixed a crash with BFD auth. (Untested yet)
+
+ -- Kazuki Yamaguchi <k@rhe.jp> Wed, 08 May 2024 14:51:36 +0900
+
 bird2 (200:2.15.1.7+22-20240507-1) unstable; urgency=medium
 
   * Rebased 200:2.14.0.23+22-20240131-2 on top of current master. Conflicting
