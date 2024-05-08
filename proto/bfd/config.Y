@@ -194,8 +194,6 @@ bfd_item:
  | MULTIPLIER expr { this_bfd_opts->multiplier = $2; }
  | PASSIVE bool { this_bfd_opts->passive = $2; this_bfd_opts->passive_set = 1; }
  | GRACEFUL { this_bfd_opts->mode = BGP_BFD_GRACEFUL; }
- | AUTHENTICATION bfd_auth_type { this_bfd_opts->auth_type = $2; }
- | password_list {}
  ;
 
 bfd_items:
@@ -203,31 +201,8 @@ bfd_items:
  | bfd_items bfd_item ';'
  ;
 
-bfd_opts_start:
-{ reset_passwords(); } ;
-
-bfd_opts_end:
-{
-  this_bfd_opts->passwords = get_passwords();
-
-  if (!this_bfd_opts->auth_type != !this_bfd_opts->passwords)
-    cf_warn("Authentication and password options should be used together");
-
-  if (this_bfd_opts->passwords)
-  {
-    struct password_item *pass;
-    WALK_LIST(pass, *this_bfd_opts->passwords)
-    {
-      if (pass->alg)
-        cf_error("Password algorithm option not available in BFD protocol");
-
-      pass->alg = bfd_auth_type_to_hash_alg[this_bfd_opts->auth_type];
-    }
-  }
-};
-
 bfd_opts:
-  '{' bfd_opts_start bfd_items '}' bfd_opts_end;
+  '{' bfd_items '}';
 
 
 CF_CLI_HELP(SHOW BFD, ..., [[Show information about BFD protocol]]);
