@@ -7,7 +7,7 @@ Build-Depends: bison,
                flex,
                libncurses-dev,
                libreadline-dev | libreadline6-dev | libreadline5-dev,
-               libssh-gcrypt-dev,
+               libssh-dev,
                m4,
                quilt,
                xsltproc
