@@ -189,8 +189,9 @@ bfd_session_update_state(struct bfd_session *s, uint state, uint diag)
   if (state == old_state)
     return;
 
-  TRACE(D_EVENTS, "Session to %I changed state from %s to %s",
-	s->addr, bfd_state_names[old_state], bfd_state_names[state]);
+  TRACE(D_EVENTS, "Session to %I%J changed state from %s to %s",
+	s->addr, s->ifa->iface,
+	bfd_state_names[old_state], bfd_state_names[state]);
 
   bfd_lock_sessions(p);
   s->loc_state = state;
@@ -359,7 +360,7 @@ bfd_session_timeout(struct bfd_session *s)
 {
   struct bfd_proto *p = s->ifa->bfd;
 
-  TRACE(D_EVENTS, "Session to %I expired", s->addr);
+  TRACE(D_EVENTS, "Session to %I%J expired", s->addr, s->ifa->iface);
 
   s->rem_state = BFD_STATE_DOWN;
   s->rem_id = 0;
@@ -491,7 +492,7 @@ bfd_add_session(struct bfd_proto *p, ip_addr addr, ip_addr local, struct iface *
   init_list(&s->request_list);
   s->last_state_change = current_time();
 
-  TRACE(D_EVENTS, "Session to %I added", s->addr);
+  TRACE(D_EVENTS, "Session to %I%J added", s->addr, s->ifa->iface);
 
   birdloop_leave(p->loop);
 
@@ -529,6 +530,7 @@ static void
 bfd_remove_session(struct bfd_proto *p, struct bfd_session *s)
 {
   ip_addr ip = s->addr;
+  struct iface *iface = s->ifa->iface;
 
   /* Caller should ensure that request list is empty */
 
@@ -549,7 +551,7 @@ bfd_remove_session(struct bfd_proto *p, struct bfd_session *s)
 
   sl_free(s);
 
-  TRACE(D_EVENTS, "Session to %I removed", ip);
+  TRACE(D_EVENTS, "Session to %I%J removed", ip, iface);
 
   birdloop_leave(p->loop);
 }
@@ -575,7 +577,7 @@ bfd_reconfigure_session(struct bfd_proto *p, struct bfd_session *s)
 
   birdloop_leave(p->loop);
 
-  TRACE(D_EVENTS, "Session to %I reconfigured", s->addr);
+  TRACE(D_EVENTS, "Session to %I%J reconfigured", s->addr, s->ifa->iface);
 }
 
 
