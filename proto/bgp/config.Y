@@ -54,6 +54,7 @@ bgp_proto_start: proto_start BGP {
      BGP_CFG->multihop = -1;	/* undefined */
      BGP_CFG->hold_time = 240;
      BGP_CFG->initial_hold_time = 240;
+     BGP_CFG->soft_hold_time = 0;
      BGP_CFG->compare_path_lengths = 1;
      BGP_CFG->igp_metric = 1;
      BGP_CFG->connect_delay_time = 5;
@@ -163,6 +164,7 @@ bgp_proto:
  | bgp_proto HOLD TIME expr ';' { BGP_CFG->hold_time = $4; if (($4 && $4<3) || ($4>65535)) cf_error("Hold time must be in range 3-65535 or zero"); }
  | bgp_proto MIN HOLD TIME expr ';' { BGP_CFG->min_hold_time = $5; }
  | bgp_proto STARTUP HOLD TIME expr ';' { BGP_CFG->initial_hold_time = $5; }
+ | bgp_proto SOFT HOLD TIME bool ';' { BGP_CFG->soft_hold_time = $5; }
  | bgp_proto DIRECT ';' { BGP_CFG->multihop = 0; }
  | bgp_proto MULTIHOP ';' { BGP_CFG->multihop = 64; }
  | bgp_proto MULTIHOP expr ';' { BGP_CFG->multihop = $3; if (($3<1) || ($3>255)) cf_error("Multihop must be in range 1-255"); }
