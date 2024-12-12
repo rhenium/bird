@@ -14,16 +14,16 @@ CF_HDR
 CF_DEFINES
 
 static struct log_config *this_log;
+static struct cli_config *this_cli_config;
 
 CF_DECLS
 
-CF_KEYWORDS(LOG, SYSLOG, NAME, STDERR, UDP, PORT)
+CF_KEYWORDS(LOG, SYSLOG, NAME, STDERR, UDP, PORT, CLI)
 CF_KEYWORDS(ALL, DEBUG, TRACE, INFO, REMOTE, WARNING, ERROR, AUTH, FATAL, BUG)
 CF_KEYWORDS(DEBUG, LATENCY, LIMIT, WATCHDOG, WARNING, TIMEOUT, THREADS)
 
 %type <i> log_mask log_mask_list log_cat cfg_timeout
 %type <t> cfg_name
-%type <tf> timeformat_which
 %type <t> syslog_name
 
 CF_GRAMMAR
@@ -123,6 +123,28 @@ mrtdump_base:
    }
  ;
 
+conf: cli ;
+
+cli: CLI text cli_opts {
+  this_cli_config->name = $2;
+  cli_config_add_tail(&new_config->cli, this_cli_config);
+  this_cli_config = NULL;
+} ;
+
+cli_opts: cli_opts_begin '{' cli_opts_block '}' ';' | cli_opts_begin ';' ;
+
+cli_opts_begin: {
+  this_cli_config = cfg_alloc(sizeof *this_cli_config);
+  *this_cli_config = (typeof (*this_cli_config)) {
+    .config = new_config,
+    .mode = 0660,
+  };
+};
+
+cli_opts_block:
+  /* EMPTY */ |
+  cli_opts_block RESTRICT { this_cli_config->restricted = 1; }
+;
 
 conf: debug_unix ;
 

@@ -117,9 +117,8 @@ cli_alloc_out(cli *c, int size)
  * macro instead.
  */
 void
-cli_printf(cli *c, int code, char *msg, ...)
+cli_vprintf(cli *c, int code, const char *msg, va_list args)
 {
-  va_list args;
   byte buf[CLI_LINE_SIZE];
   int cd = code;
   int errcode;
@@ -147,9 +146,7 @@ cli_printf(cli *c, int code, char *msg, ...)
     }
 
   c->last_reply = cd;
-  va_start(args, msg);
   cnt = bvsnprintf(buf+size, sizeof(buf)-size-1, msg, args);
-  va_end(args);
   if (cnt < 0)
     {
       cli_printf(c, errcode, "<line overflow>");
@@ -306,7 +303,7 @@ cli_event(void *data)
 }
 
 cli *
-cli_new(void *priv)
+cli_new(void *priv, struct cli_config *cf)
 {
   pool *p = rp_new(cli_pool, "CLI");
   cli *c = mb_alloc(p, sizeof(cli));
@@ -321,6 +318,10 @@ cli_new(void *priv)
   c->parser_pool = lp_new_default(c->pool);
   c->show_pool = lp_new_default(c->pool);
   c->rx_buf = mb_alloc(c->pool, CLI_RX_BUF_SIZE);
+
+  if (cf->restricted)
+    c->restricted = 1;
+
   ev_schedule(c->event);
   return c;
 }
@@ -400,6 +401,36 @@ cli_echo(uint class, byte *msg)
 	    c->ring_write = c->ring_buf;
 	}
     }
+}
+
+/* Set time format override for the current session */
+void
+cli_set_timeformat(cli *c, const struct timeformat tf)
+{
+  size_t len1 = strlen(tf.fmt1) + 1;
+  size_t len2 = tf.fmt2 ? strlen(tf.fmt2) + 1 : 0;
+
+  if (len1 > TM_DATETIME_BUFFER_SIZE || len2 > TM_DATETIME_BUFFER_SIZE)
+  {
+    cli_msg(9003, "Format string too long");
+    return;
+  }
+
+  struct timeformat *old_tf = c->tf;
+  struct timeformat *new_tf = mb_allocz(c->pool, sizeof(struct timeformat));
+  new_tf->fmt1 = memcpy(mb_alloc(c->pool, len1), tf.fmt1, len1);
+  new_tf->fmt2 = tf.fmt2 ? memcpy(mb_alloc(c->pool, len2), tf.fmt2, len2) : NULL;
+  new_tf->limit = tf.limit;
+  c->tf = new_tf;
+
+  if (old_tf)
+  {
+    mb_free((void *) old_tf->fmt1);
+    mb_free((void *) old_tf->fmt2);
+    mb_free(old_tf);
+  }
+
+  cli_msg(0, "");
 }
 
 /* Hack for scheduled undo notification */

@@ -11,6 +11,9 @@
 
 #include "lib/resource.h"
 #include "lib/event.h"
+#include "lib/timer.h"
+#include "lib/tlists.h"
+#include "conf/conf.h"
 
 #define CLI_RX_BUF_SIZE 4096
 #define CLI_TX_BUF_SIZE 4096
@@ -37,6 +40,7 @@ typedef struct cli {
   void *rover;				/* Private to continuation routine */
   int last_reply;
   int restricted;			/* CLI is restricted to read-only commands */
+  struct timeformat *tf;		/* Time format override */
   struct linpool *parser_pool;		/* Pool used during parsing */
   struct linpool *show_pool;		/* Pool used during route show */
   byte *ring_buf;			/* Ring buffer for asynchronous messages */
@@ -47,6 +51,23 @@ typedef struct cli {
   uint async_msg_size;			/* Total size of async messages queued in tx_buf */
 } cli;
 
+struct cli_config {
+#define TLIST_PREFIX cli_config
+#define TLIST_TYPE struct cli_config
+#define TLIST_ITEM n
+#define TLIST_DEFINED_BEFORE
+#define TLIST_WANT_ADD_TAIL
+#define TLIST_WANT_WALK
+  TLIST_DEFAULT_NODE;
+  const char *name;
+  struct config *config;
+  uint uid, gid, mode;
+  _Bool restricted;
+};
+#include "lib/tlists.h"
+
+void cli_config_listen(struct cli_config *, const char *);
+
 extern pool *cli_pool;
 extern struct cli *this_cli;		/* Used during parsing */
 
@@ -54,16 +75,25 @@ extern struct cli *this_cli;		/* Used during parsing */
 
 /* Functions to be called by command handlers */
 
-void cli_printf(cli *, int, char *, ...);
+void cli_vprintf(cli *, int, const char *, va_list);
+static inline void cli_printf(cli *cli, int code, const char *fmt, ...)
+{
+  va_list args;
+  va_start(args, fmt);
+  cli_vprintf(cli, code, fmt, args);
+  va_end(args);
+}
+
 #define cli_msg(x...) cli_printf(this_cli, x)
 void cli_set_log_echo(cli *, uint mask, uint size);
+void cli_set_timeformat(cli *c, const struct timeformat tf);
 
 static inline void cli_separator(cli *c)
 { if (c->last_reply) cli_printf(c, -c->last_reply, ""); };
 
 /* Functions provided to sysdep layer */
 
-cli *cli_new(void *);
+cli *cli_new(void *, struct cli_config *);
 void cli_init(void);
 void cli_free(cli *);
 void cli_kick(cli *);

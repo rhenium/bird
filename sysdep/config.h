@@ -13,7 +13,7 @@
 #ifdef GIT_LABEL
 #define BIRD_VERSION XSTR1(GIT_LABEL)
 #else
-#define BIRD_VERSION "2.15.1"
+#define BIRD_VERSION "2.16"
 #endif
 
 /* Include parameters determined by configure script */
@@ -32,6 +32,7 @@
 
 /* Types */
 
+#include <stdbool.h>
 #include <stdint.h>
 typedef int8_t s8;
 typedef uint8_t u8;

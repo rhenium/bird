@@ -99,6 +99,32 @@ static_announce_rte(struct static_proto *p, struct static_route *r)
     rta_set_recursive_next_hop(p->p.main_channel->table, a, tab, r->via, IPA_NONE, r->mls);
   }
 
+  if (r->net->type == NET_ASPA)
+  {
+    if (r->dest != RTD_NONE)
+    {
+      log(L_WARN "%s: ASPA %u configured with nexthop, ignoring the nexthop",
+	p->p.name, ((struct net_addr_aspa *) r->net)->asn);
+      r->dest = RTD_NONE;
+    }
+
+    if (!r->aspa)
+    {
+      log(L_WARN "%s: ASPA %u configured with no provider list, ignoring the whole rule",
+	p->p.name, ((struct net_addr_aspa *) r->net)->asn);
+      goto withdraw;
+    }
+
+    ea_list *ea = alloca(sizeof(ea_list) + sizeof(eattr));
+    *ea = (ea_list) { .flags = EALF_SORTED, .count = 1, .next = a->eattrs, };
+    ea->attrs[0] = (eattr) {
+      .id = EA_ASPA_PROVIDERS,
+      .type = EAF_TYPE_INT_SET,
+      .u.ptr = r->aspa,
+    };
+    a->eattrs = ea;
+  }
+
   if (p->p.mpls_channel)
   {
     struct mpls_channel *mc = (void *) p->p.mpls_channel;
@@ -587,27 +613,27 @@ static_cleanup(struct proto *P)
 }
 
 static void
-static_dump_rte(struct static_route *r)
+static_dump_rte(struct dump_request *dreq, struct static_route *r)
 {
-  debug("%-1N (%u): ", r->net, r->index);
+  RDUMP("%-1N (%u): ", r->net, r->index);
   if (r->dest == RTD_UNICAST)
     if (r->iface && ipa_zero(r->via))
-      debug("dev %s\n", r->iface->name);
+      RDUMP("dev %s\n", r->iface->name);
     else
-      debug("via %I%J\n", r->via, r->iface);
+      RDUMP("via %I%J\n", r->via, r->iface);
   else
-    debug("rtd %d\n", r->dest);
+    RDUMP("rtd %d\n", r->dest);
 }
 
 static void
-static_dump(struct proto *P)
+static_dump(struct proto *P, struct dump_request *dreq)
 {
   struct static_config *c = (void *) P->cf;
   struct static_route *r;
 
-  debug("Static routes:\n");
+  RDUMP("Static routes:\n");
   WALK_LIST(r, c->routes)
-    static_dump_rte(r);
+    static_dump_rte(dreq, r);
 }
 
 #define IGP_TABLE(cf, sym) ((cf)->igp_table_##sym ? (cf)->igp_table_##sym ->table : NULL )

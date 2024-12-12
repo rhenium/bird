@@ -357,14 +357,14 @@ CF_DECLS
 CF_KEYWORDS_EXCLUSIVE(IN)
 CF_KEYWORDS(FUNCTION, PRINT, PRINTN, UNSET, RETURN,
 	ACCEPT, REJECT, ERROR,
-	INT, BOOL, IP, PREFIX, RD, PAIR, QUAD, EC, LC,
+	INT, BOOL, IP, PREFIX, RD, PAIR, QUAD, EC, LC, ENUM,
 	SET, STRING, BYTESTRING, BGPMASK, BGPPATH, CLIST, ECLIST, LCLIST,
 	IF, THEN, ELSE, CASE,
 	FOR, DO,
 	TRUE, FALSE, RT, RO, UNKNOWN, GENERIC,
 	FROM, GW, NET, PROTO, SOURCE, SCOPE, DEST, IFNAME, IFINDEX, WEIGHT, GW_MPLS, GW_MPLS_STACK, ONLINK,
 	PREFERENCE,
-	ROA_CHECK,
+	ROA_CHECK, ASPA_CHECK,
 	DEFINED,
 	ADD, DELETE, RESET,
 	PREPEND,
@@ -390,7 +390,7 @@ CF_KEYWORDS(FUNCTION, PRINT, PRINTN, UNSET, RETURN,
 %type <i32> cnum
 %type <e> pair_item ec_item lc_item set_item switch_item ec_items set_items switch_items switch_body
 %type <trie> fprefix_set
-%type <v> set_atom switch_atom fipa
+%type <v> set_atom0 set_atom switch_atom fipa
 %type <px> fprefix
 %type <t> get_cf_position
 %type <s> for_var
@@ -473,6 +473,7 @@ type:
 	  case T_INT:
 	  case T_PAIR:
 	  case T_QUAD:
+	  case T_ENUM:
 	  case T_EC:
 	  case T_LC:
 	  case T_RD:
@@ -488,6 +489,7 @@ type:
 		cf_error( "You can't create sets of this type." );
 	}
    }
+ | ENUM enum_type { $$ = $2; };
  ;
 
 function_argsn:
@@ -636,27 +638,30 @@ fipa:
  * as a function call in switch case cmds.
  */
 
-set_atom:
+set_atom0:
    NUM    { $$.type = T_INT; $$.val.i = $1; }
  | fipa   { $$ = $1; }
  | VPN_RD { $$.type = T_RD; $$.val.ec = $1; }
- | ENUM   { $$.type = pair_a($1); $$.val.i = pair_b($1); }
+ | ENUM_TOKEN { $$.type = pair_a($1); $$.val.i = pair_b($1); }
  | '(' term ')' {
      $$ = cf_eval($2, T_VOID);
-     if (!f_valid_set_type($$.type)) cf_error("Set-incompatible type");
+     if (!f_valid_set_type($$.type))
+       cf_error("Set-incompatible type (%s)", f_type_name($$.type));
    }
+ ;
+
+set_atom:
+   set_atom0
  | symbol_known {
      cf_assert_symbol($1, SYM_CONSTANT);
-     if (!f_valid_set_type(SYM_TYPE($1))) cf_error("%s: set-incompatible type", $1->name);
+     if (!f_valid_set_type(SYM_TYPE($1)))
+       cf_error("%s: Set-incompatible type (%s)", $1->name, f_type_name(SYM_TYPE($1)));
      $$ = *$1->val;
    }
  ;
 
 switch_atom:
-   NUM   { $$.type = T_INT; $$.val.i = $1; }
- | '(' term ')' { $$ = cf_eval($2, T_INT); }
- | fipa  { $$ = $1; }
- | ENUM  { $$.type = pair_a($1); $$.val.i = pair_b($1); }
+   set_atom0
  ;
 
 cnum:
@@ -749,7 +754,7 @@ fprefix_set:
  ;
 
 switch_body: /* EMPTY */ { $$ = NULL; }
- | switch_body switch_items ':' cmds_scoped  {
+ | switch_body switch_items ':' cmds_scoped {
      /* Fill data fields */
      struct f_tree *t;
      for (t = $2; t; t = t->left)
@@ -805,7 +810,7 @@ constant:
      DBG( "ook\n" );
  }
  | '[' fprefix_set ']' { $$ = f_new_inst(FI_CONSTANT, (struct f_val) { .type = T_PREFIX_SET, .val.ti = $2, }); }
- | ENUM	  { $$ = f_new_inst(FI_CONSTANT, (struct f_val) { .type = $1 >> 16, .val.i = $1 & 0xffff, }); }
+ | ENUM_TOKEN { $$ = f_new_inst(FI_CONSTANT, (struct f_val) { .type = $1 >> 16, .val.i = $1 & 0xffff, }); }
  ;
 
 constructor:
@@ -946,6 +951,7 @@ term:
 
  | ROA_CHECK '(' rtable ')' { $$ = f_new_inst(FI_ROA_CHECK_IMPLICIT, $3); }
  | ROA_CHECK '(' rtable ',' term ',' term ')' { $$ = f_new_inst(FI_ROA_CHECK_EXPLICIT, $5, $7, $3); }
+ | ASPA_CHECK '(' rtable ',' term ',' term ')' { $$ = f_new_inst(FI_ASPA_CHECK_EXPLICIT, $5, $7, $3); }
 
  | FORMAT '(' term ')' {  $$ = f_new_inst(FI_FORMAT, $3); }
 

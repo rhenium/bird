@@ -92,7 +92,7 @@ void sk_reallocate(sock *);		/* Free and allocate tbuf & rbuf */
 void sk_set_rbsize(sock *s, uint val);	/* Resize RX buffer */
 void sk_set_tbsize(sock *s, uint val);	/* Resize TX buffer, keeping content */
 void sk_set_tbuf(sock *s, void *tbuf);	/* Switch TX buffer, NULL-> return to internal */
-void sk_dump_all(void);
+void sk_dump_all(struct dump_request *);
 
 int sk_is_ipv4(sock *s);		/* True if socket is IPv4 */
 int sk_is_ipv6(sock *s);		/* True if socket is IPv6 */
@@ -130,6 +130,8 @@ extern int sk_priority_control;		/* Suggested priority for control traffic, shou
 #define SKF_TRUNCATED	0x200	/* Received packet was truncated, set by IO layer */
 #define SKF_HDRINCL	0x400	/* Used internally */
 #define SKF_PKTINFO	0x800	/* Used internally */
+
+#define SKF_UDP6_NO_CSUM_RX	0x1000	/* Accept zero checksums for received UDPv6 packets */
 
 /*
  *	Socket types		     SA SP DA DP IF  TTL SendTo	(?=may, -=must not, *=must)

@@ -30,7 +30,7 @@ struct resclass {
   char *name;				/* Resource class name */
   unsigned size;			/* Standard size of single resource */
   void (*free)(resource *);		/* Freeing function */
-  void (*dump)(resource *);		/* Dump to debug output */
+  void (*dump)(struct dump_request *, resource *);	/* Dump to debug output */
   resource *(*lookup)(resource *, unsigned long);	/* Look up address (only for debugging) */
   struct resmem (*memsize)(resource *);	/* Return size of memory used by the resource, may be NULL */
 };
@@ -46,7 +46,10 @@ void resource_init(void);
 pool *rp_new(pool *, const char *);	/* Create new pool */
 pool *rp_newf(pool *, const char *, ...);	/* Create a new pool with a formatted string as its name */
 void rfree(void *);			/* Free single resource */
-void rdump(void *);			/* Dump to debug output */
+
+struct dump_request;
+void rdump(struct dump_request *, void *);	/* Dump to debug output */
+void resource_dump(struct dump_request *);	/* Dump the root pool */
 struct resmem rmemsize(void *res);		/* Return size of memory used by the resource */
 void rlookup(unsigned long);		/* Look up address (only for debugging) */
 void rmove(void *, pool *);		/* Move to a different pool */
@@ -57,9 +60,9 @@ extern pool root_pool;
 
 /* Normal memory blocks */
 
-void *mb_alloc(pool *, unsigned size);
-void *mb_allocz(pool *, unsigned size);
-void *mb_realloc(void *m, unsigned size);
+void *mb_alloc(pool *, unsigned size) ALLOC_SIZE(2);
+void *mb_allocz(pool *, unsigned size) ALLOC_SIZE(2);
+void *mb_realloc(void *m, unsigned size) ALLOC_SIZE(2);
 void mb_free(void *);
 
 /* Memory pools with linear allocation */
@@ -73,9 +76,9 @@ typedef struct lp_state {
 } lp_state;
 
 linpool *lp_new(pool *);
-void *lp_alloc(linpool *, unsigned size);	/* Aligned */
-void *lp_allocu(linpool *, unsigned size);	/* Unaligned */
-void *lp_allocz(linpool *, unsigned size);	/* With clear */
+void *lp_alloc(linpool *, unsigned size) ALLOC_SIZE(2);		/* Aligned */
+void *lp_allocu(linpool *, unsigned size) ALLOC_SIZE(2);	/* Unaligned */
+void *lp_allocz(linpool *, unsigned size) ALLOC_SIZE(2);	/* With clear */
 void lp_flush(linpool *);			/* Free everything, but leave linpool */
 void lp_save(linpool *m, lp_state *p);		/* Save state */
 void lp_restore(linpool *m, lp_state *p);	/* Restore state */

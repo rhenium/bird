@@ -627,7 +627,7 @@ bgp_read_capabilities(struct bgp_conn *conn, byte *pos, int len)
       caps->enhanced_refresh = 1;
       break;
 
-    case 71: /* Long lived graceful restart capability, RFC draft */
+    case 71: /* Long lived graceful restart capability, RFC 9494 */
       if (cl % 7)
 	goto err;
 
@@ -2482,12 +2482,10 @@ bgp_create_mp_unreach(struct bgp_write_state *s, struct bgp_bucket *buck, byte *
 #ifdef CONFIG_BMP
 
 static byte *
-bgp_create_update_bmp(struct bgp_channel *c, byte *buf, struct bgp_bucket *buck, bool update)
+bgp_create_update_bmp(struct bgp_channel *c, byte *buf, byte *end, struct bgp_bucket *buck, bool update)
 {
   struct bgp_proto *p = (void *) c->c.proto;
-  byte *end = buf + (BGP_MAX_EXT_MSG_LENGTH - BGP_HEADER_LENGTH);
   byte *res = NULL;
-  /* FIXME: must be a bit shorter */
 
   struct lp_state tmpp;
   lp_save(tmp_linpool, &tmpp);
@@ -2524,23 +2522,11 @@ bgp_create_update_bmp(struct bgp_channel *c, byte *buf, struct bgp_bucket *buck,
   return res;
 }
 
-static byte *
-bgp_bmp_prepare_bgp_hdr(byte *buf, const u16 msg_size, const u8 msg_type)
-{
-  memset(buf + BGP_MSG_HDR_MARKER_POS, 0xff, BGP_MSG_HDR_MARKER_SIZE);
-  put_u16(buf + BGP_MSG_HDR_LENGTH_POS, msg_size);
-  put_u8(buf + BGP_MSG_HDR_TYPE_POS, msg_type);
-
-  return buf + BGP_MSG_HDR_TYPE_POS + BGP_MSG_HDR_TYPE_SIZE;
-}
-
 byte *
-bgp_bmp_encode_rte(struct bgp_channel *c, byte *buf, const net_addr *n,
+bgp_bmp_encode_rte(struct bgp_channel *c, byte *buf, byte *end, const net_addr *n,
 		   const struct rte *new, const struct rte_src *src)
 {
 //  struct bgp_proto *p = (void *) c->c.proto;
-  byte *pkt = buf + BGP_HEADER_LENGTH;
-
   ea_list *attrs = new ? new->attrs->eattrs : NULL;
   uint ea_size = new ? (sizeof(ea_list) + attrs->count * sizeof(eattr)) : 0;
   uint bucket_size = sizeof(struct bgp_bucket) + ea_size;
@@ -2561,12 +2547,7 @@ bgp_bmp_encode_rte(struct bgp_channel *c, byte *buf, const net_addr *n,
   net_copy(px->net, n);
   add_tail(&b->prefixes, &px->buck_node);
 
-  byte *end = bgp_create_update_bmp(c, pkt, b, !!new);
-
-  if (end)
-    bgp_bmp_prepare_bgp_hdr(buf, end - buf, PKT_UPDATE);
-
-  return end;
+  return bgp_create_update_bmp(c, buf, end, b, !!new);
 }
 
 #endif /* CONFIG_BMP */
@@ -3290,7 +3271,7 @@ static struct {
   { 6, 8, "Out of Resources" },
   { 7, 0, "Invalid ROUTE-REFRESH message" }, /* [RFC7313] */
   { 7, 1, "Invalid ROUTE-REFRESH message length" }, /* [RFC7313] */
-  { 8, 0, "Send hold timer expired" }, /* [draft-ietf-idr-bgp-sendholdtimer] */
+  { 8, 0, "Send hold timer expired" }, /* [RFC9687] */
 };
 
 /**

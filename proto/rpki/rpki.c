@@ -140,6 +140,37 @@ rpki_table_remove_roa(struct rpki_cache *cache, struct channel *channel, const n
   rte_update2(channel, &pfxr->n, NULL, p->p.main_source);
 }
 
+void
+rpki_table_add_aspa(struct rpki_cache *cache, struct channel *channel,
+    u32 customer, void *providers, uint providers_length)
+{
+  struct rpki_proto *p = cache->p;
+
+  net_addr_union n = { .aspa = NET_ADDR_ASPA(customer) };
+  rta a0 = {
+    .pref = channel->preference,
+    .source = RTS_RPKI,
+    .scope = SCOPE_UNIVERSE,
+    .dest = RTD_NONE,
+  };
+
+  ea_set_attr_data(&a0.eattrs, tmp_linpool, EA_ASPA_PROVIDERS, 0,
+		   EAF_TYPE_INT_SET, providers, providers_length);
+
+  rta *a = rta_lookup(&a0);
+  rte *e = rte_get_temp(a, p->p.main_source);
+
+  rte_update2(channel, &n.n, e, e->src);
+}
+
+void
+rpki_table_remove_aspa(struct rpki_cache *cache, struct channel *channel, u32 customer)
+{
+  struct rpki_proto *p = cache->p;
+  net_addr_union n = { .aspa = NET_ADDR_ASPA(customer) };
+  rte_update2(channel, &n.n, NULL, p->p.main_source);
+}
+
 
 /*
  *	RPKI Protocol Logic
@@ -568,7 +599,8 @@ rpki_init_cache(struct rpki_proto *p, struct rpki_config *cf)
 
   cache->state = RPKI_CS_SHUTDOWN;
   cache->request_session_id = 1;
-  cache->version = RPKI_MAX_VERSION;
+  cache->version = cf->max_version;
+  cache->min_version = cf->min_version;
 
   cache->refresh_interval = cf->refresh_interval;
   cache->retry_interval = cf->retry_interval;
@@ -673,6 +705,23 @@ rpki_reconfigure_cache(struct rpki_proto *p UNUSED, struct rpki_cache *cache, st
     return NEED_RESTART;
   }
 
+  if (new->min_version > cache->version)
+  {
+    CACHE_TRACE(D_EVENTS, cache, "Protocol min version %u higher than current version %u",
+	new->min_version, cache->version);
+    return NEED_RESTART;
+  }
+  else
+    cache->min_version = new->min_version;
+
+  if (new->max_version < cache->version)
+  {
+    CACHE_TRACE(D_EVENTS, cache, "Protocol max version %u lower than current version %u",
+	new->max_version, cache->version);
+    cache->version = new->max_version;
+    try_reset = 1;
+  }
+
   if (old->tr_config.type != new->tr_config.type)
   {
     CACHE_TRACE(D_EVENTS, cache, "Transport type changed");
@@ -683,6 +732,24 @@ rpki_reconfigure_cache(struct rpki_proto *p UNUSED, struct rpki_cache *cache, st
   {
     CACHE_TRACE(D_EVENTS, cache, "Ignore max length changed");
     try_reset = 1;
+  }
+
+  if (new->tr_config.type == RPKI_TR_TCP)
+  {
+    struct rpki_tr_tcp_config *tcp_old = (void *) old->tr_config.spec;
+    struct rpki_tr_tcp_config *tcp_new = (void *) new->tr_config.spec;
+
+    if (tcp_old->auth_type != tcp_new->auth_type)
+    {
+      CACHE_TRACE(D_EVENTS, cache, "Authentication type changed");
+      return NEED_RESTART;
+    }
+
+    if (bstrcmp(tcp_old->password, tcp_new->password))
+    {
+      CACHE_TRACE(D_EVENTS, cache, "MD5 password changed");
+      return NEED_RESTART;
+    }
   }
 
 #if HAVE_LIBSSH
@@ -755,7 +822,8 @@ rpki_reconfigure(struct proto *P, struct proto_config *CF)
   struct rpki_cache *cache = p->cache;
 
   if (!proto_configure_channel(&p->p, &p->roa4_channel, proto_cf_find_channel(CF, NET_ROA4)) ||
-      !proto_configure_channel(&p->p, &p->roa6_channel, proto_cf_find_channel(CF, NET_ROA6)))
+      !proto_configure_channel(&p->p, &p->roa6_channel, proto_cf_find_channel(CF, NET_ROA6)) ||
+      !proto_configure_channel(&p->p, &p->aspa_channel, proto_cf_find_channel(CF, NET_ASPA)))
     return NEED_RESTART;
 
   if (rpki_reconfigure_cache(p, cache, new, old) != SUCCESSFUL_RECONF)
@@ -777,6 +845,7 @@ rpki_init(struct proto_config *CF)
 
   proto_configure_channel(&p->p, &p->roa4_channel, proto_cf_find_channel(CF, NET_ROA4));
   proto_configure_channel(&p->p, &p->roa6_channel, proto_cf_find_channel(CF, NET_ROA6));
+  proto_configure_channel(&p->p, &p->aspa_channel, proto_cf_find_channel(CF, NET_ASPA));
 
   return P;
 }
@@ -842,8 +911,12 @@ rpki_show_proto_info(struct proto *P)
       default_port = RPKI_SSH_PORT;
       break;
 #endif
-    case RPKI_TR_TCP:
-      transport_name = "Unprotected over TCP";
+    case RPKI_TR_TCP:;
+      struct rpki_tr_tcp_config *tcp_cf = (void *) cf->tr_config.spec;
+      if (tcp_cf->auth_type == RPKI_TCP_AUTH_MD5)
+	transport_name = "TCP-MD5";
+      else
+	transport_name = "Unprotected over TCP";
       default_port = RPKI_TCP_PORT;
       break;
     };
@@ -886,6 +959,11 @@ rpki_show_proto_info(struct proto *P)
       channel_show_info(p->roa6_channel);
     else
       cli_msg(-1006, "  No roa6 channel");
+
+    if (p->aspa_channel)
+      channel_show_info(p->aspa_channel);
+    else
+      cli_msg(-1006, "  No aspa channel");
   }
 }
 
@@ -903,6 +981,9 @@ rpki_show_proto_info(struct proto *P)
 void
 rpki_check_config(struct rpki_config *cf)
 {
+  if (cf->min_version > cf->max_version)
+    cf_error("Impossible min/max version for RPKI: %u/%u", cf->min_version, cf->max_version);
+
   /* Do not check templates at all */
   if (cf->c.class == SYM_TEMPLATE)
     return;
@@ -957,7 +1038,7 @@ struct protocol proto_rpki = {
   .init = 		rpki_init,
   .start = 		rpki_start,
   .postconfig = 	rpki_postconfig,
-  .channel_mask =	(NB_ROA4 | NB_ROA6),
+  .channel_mask =	(NB_ROA4 | NB_ROA6 | NB_ASPA),
   .show_proto_info =	rpki_show_proto_info,
   .shutdown = 		rpki_shutdown,
   .copy_config = 	rpki_copy_config,

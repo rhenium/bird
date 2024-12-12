@@ -690,7 +690,7 @@ static void
 bgp_format_cluster_list(const eattr *a, byte *buf, uint size)
 {
   /* Truncates cluster lists larger than buflen, probably not a problem */
-  int_set_format(a->u.ptr, 0, -1, buf, size);
+  int_set_format(a->u.ptr, ISF_ROUTER_ID, -1, buf, size);
 }
 
 
@@ -1247,7 +1247,11 @@ bgp_export_attrs(struct bgp_export_state *s, ea_list *attrs)
 static inline int
 bgp_encode_attr(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 {
-  ASSERT(EA_PROTO(a->id) == PROTOCOL_BGP);
+  if (EA_PROTO(a->id) != PROTOCOL_BGP)
+    if (s->ignore_non_bgp_attrs)
+      return 0;
+    else
+      bug("Tried to encode a non-BGP attribute");
 
   uint code = EA_ID(a->id);
 
@@ -2031,7 +2035,7 @@ bgp_rte_better(rte *new, rte *old)
   if (n < o)
     return 0;
 
-  /* LLGR draft - depreference stale routes */
+  /* LLGR 9494 - depreference stale routes */
   n = rte_stale(new);
   o = rte_stale(old);
   if (n > o)
@@ -2168,7 +2172,7 @@ bgp_rte_mergable(rte *pri, rte *sec)
   if (rte_resolvable(pri) != rte_resolvable(sec))
     return 0;
 
-  /* LLGR draft - depreference stale routes */
+  /* LLGR 9494 - depreference stale routes */
   if (rte_stale(pri) != rte_stale(sec))
     return 0;
 

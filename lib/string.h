@@ -17,13 +17,15 @@
 
 int bsprintf(char *str, const char *fmt, ...);
 int bvsprintf(char *str, const char *fmt, va_list args);
-int bsnprintf(char *str, int size, const char *fmt, ...);
-int bvsnprintf(char *str, int size, const char *fmt, va_list args);
+int bsnprintf(char *str, int size, const char *fmt, ...) ACCESS_WRITE(1, 2);
+int bvsnprintf(char *str, int size, const char *fmt, va_list args) ACCESS_WRITE(1, 2);
 
 char *mb_sprintf(pool *p, const char *fmt, ...);
 char *mb_vsprintf(pool *p, const char *fmt, va_list args);
 char *lp_sprintf(linpool *p, const char *fmt, ...);
 char *lp_vsprintf(linpool *p, const char *fmt, va_list args);
+#define tmp_sprintf(...)    lp_sprintf(tmp_linpool, __VA_ARGS__)
+#define tmp_vsprintf(...)   lp_vsprintf(tmp_linpool, __VA_ARGS__)
 
 int buffer_vprint(buffer *buf, const char *fmt, va_list args);
 int buffer_print(buffer *buf, const char *fmt, ...);
@@ -33,8 +35,10 @@ u64 bstrtoul10(const char *str, char **end);
 u64 bstrtoul16(const char *str, char **end);
 byte bstrtobyte16(const char *str);
 
+char *fmt_order(u64 value, uint decimals, u64 kb_threshold);
+
 int bstrhextobin(const char *s, byte *b);
-int bstrbintohex(const byte *b, size_t len, char *buf, size_t size, char delim);
+int bstrbintohex(const byte *b, size_t len, char *buf, size_t size, char delim) ACCESS_READ(1, 2) ACCESS_WRITE(3, 4);
 
 int patmatch(const byte *pat, const byte *str);
 

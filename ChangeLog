@@ -1,3 +1,737 @@
+commit 6a55359b1eeba099dddf410bb37137370fe19b86
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Dec 6 04:06:16 2024 +0100
+
+    BGP: Graceful restart timer overrides
+    
+    Implement several options (min/max graceful restart time, min/max long
+    lived stale time) to override graceful restart and long-lived graceful
+    restart timer values, as suggested by RFC 9494.
+
+commit fc5d06c28db76073373ab99e9dc88e3739abebee
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Dec 5 16:35:01 2024 +0100
+
+    BGP: Update LLGR draft references to RFC 9494
+
+commit 1dbee120d383981811aa47b244886962ebd345c0
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Dec 3 17:23:09 2024 +0100
+
+    CI: Fix filter tests for ASPA
+    
+    (broken by previous change)
+
+commit c926a6e105f7eb27ea3d1f7368a508eb42e0edf7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Dec 3 17:05:23 2024 +0100
+
+    Static: Fix ASPA static route argument
+    
+    It seems that it should be 'providers' instead of 'provider'.
+    
+    It matches keyword declaration and documentation. Mismatch beween keyword
+    declaration also breaks static-only builds.
+
+commit 4fb8fe6f53a0aba037b29d1ab92fb549f78de46f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Dec 3 04:59:56 2024 +0100
+
+    NEWS and version update
+
+commit b8008791cd0d9e1cc0972fe034886a9c8ddbb823
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Dec 3 12:29:30 2024 +0100
+
+    Documentation: Updating roadmap as of end of 2024
+
+commit 707cad6188313bc289ced5eaac44f10a9e056d13
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Dec 3 10:57:10 2024 +0100
+
+    CLI: Dumping forces new file creation instead of truncating.
+
+commit 2ab3f22e4a7ff9c566b38a9075620bdd61fef6b0
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Nov 15 08:20:17 2024 +0100
+
+    CLI: show memory also displays cold pages
+    
+    Minor changes by committer.
+
+commit ef4561185055cb66dd2d141623bdbcbb306a5403
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Dec 3 01:19:44 2024 +0100
+
+    RPKI: Fix several errors in handling of Error PDU
+    
+    Fix several errors including:
+     - Unaligned memory access to 'Length of Error Text' field
+     - No validation of 'Length of Encapsulated PDU' field
+     - No validation of 'Error Code' field
+     - No validation of characters in diagnostic message
+
+commit 89d548accb79b706d6bc0a6eb89ab390fa17333b
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Dec 2 06:38:59 2024 +0100
+
+    RPKI: Increase max PDU length to 64k
+    
+    APSA records can be arbitrarily large, let's use 64k as
+    a reasonable limit.
+
+commit d85fa48e3a2e50d92a1e83a1202bced7b6b3d527
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Nov 15 19:05:26 2024 +0100
+
+    Slab: Write out all block pointers when asked for dump
+
+commit ceab02832629a69dbd3cae13087d3f576f66f355
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Fri Nov 15 18:35:30 2024 +0100
+
+    Linpool: Write out all block pointers when asked for dump
+
+commit da8a23277eefb46c5482fe63ecc7f75fcc21c0a6
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Nov 14 20:43:35 2024 +0100
+
+    CLI: Dumping internal data structures to files, not to debug output
+    
+    All the 'dump something' CLI commands now have a new mandatory
+    argument -- name of the file where to dump the data. This allows
+    for more flexible dumping even for production deployments where
+    the debug output is by default off.
+    
+    Also the dump commands are now restricted (they weren't before)
+    to assure that only the appropriate users can run these time consuming
+    commands.
+
+commit 4dd5b3d90e962d5fd1794f97a8f82077f8f1eb36
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Nov 14 21:20:49 2024 +0100
+
+    Logging: exposing vlog() to log va_lists
+
+commit 145830bdc871dc97d7d170ec52932cbcf63fe803
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Nov 14 20:46:45 2024 +0100
+
+    CLI: adding cli_vprintf()
+
+commit 946386f2dd69982105d0b02a90f57391b265d2ef
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Nov 14 22:15:56 2024 +0100
+
+    MRT: instead of crashing, ignore non-BGP attributes
+
+commit 7ee27418a7d38542577c48abc43df57c0d3e69a5
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Nov 14 23:34:28 2024 +0100
+
+    Printf: impossible buffer overflow fix
+    
+    When printing near the end of the buffer, there was an overflow in two cases:
+    
+    (1) %c and size is zero
+    (2) %1N, %1I, %1I4, %1I6 (auto-fill field_width for Net or IP), size is
+        more than actual length of the net/ip but less than the auto-filled
+        field width.
+    
+    Manual code examination showed that nothing could have ever triggered
+    this behavior. All older versions of BIRD, including BIRD 3 development
+    versions, are totally safe. This exact overflow has been found while
+    implementing a new feature in later commits.
+
+commit a47704a53db4f088e52e43f8b24785e5777ce147
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Mon Dec 2 00:00:36 2024 +0100
+
+    BMP: Refactor route monitor message serialization
+    
+    Instead of several levels of functions, just have two functions
+    (one for routes, the other for end-of-rib), this allows to create
+    messages in a simple linear fashion.
+    
+    Also reduce three duplicite functions to construct BGP header for
+    BMP messages to just one.
+
+commit 73e7d3f5cede2e72eb9e77d61424a8c443672c09
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Dec 1 22:54:11 2024 +0100
+
+    BMP: Refactor computation of message length
+    
+    Fill message length after the message is created instead of computing
+    it beforehand. Also rename some functions to fit common pattern.
+
+commit 5205ff97448cc34cf7334e90172c28eb48f227f2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Sun Dec 1 20:56:53 2024 +0100
+
+    BMP: Refactor per-peer header arguments
+    
+    Put all arguments for per-peer header into one structure instead of
+    passing them around as a lump of arguments. Also simplify code for
+    peer flags.
+
+commit e6a100b31a7637ee739338e4b933367707ec931f
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Sep 17 16:27:54 2024 +0200
+
+    BMP: simplified update queuing and better memory performance
+    
+    This commit is quite a substantial rework of the underlying layers in
+    BMP TX:
+    
+    - several unnecessary layers of indirection dropped, including most of
+      the original BMP's buffer machinery
+    - all messages are now written directly into one protocol's buffer
+      allocated for the whole time big enough to fit every possible message
+    - output blocks are allocated by pages and immediately returned when
+      used, improving the overall memory footprint
+    - no intermediary allocation is done from the heap altogether
+    - there is a documented and configurable limit on the TX queue size
+
+commit 460321cfe979459e3b78ba87694f29865d321612
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Nov 28 23:08:50 2024 +0100
+
+    Formatting numbers with order prefixes
+    
+    Unit tests by Ondrej Zajicek.
+
+commit c48a7ac0cc76d2d5c1682251cd8b03a8953bd6b5
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Sep 17 15:59:07 2024 +0200
+
+    BMP: drop an unused mempool
+
+commit 3ca6e03db774f0a2d462faf20646e4a341664c8d
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Nov 28 14:10:40 2024 +0100
+
+    RPKI: refactored pdu to host byte order conversion
+    
+    We shouldn't convert bytes 2 and 3 of the PDU blindly, there are several
+    cases where these are used by bytes. Instead, the conversion is done
+    only where needed.
+    
+    This fixes misinterpretation bug of ASPA PDU flags on little endian
+    architectures.
+
+commit 54499f8850fd5b3a25639dc06d5618ae98ac1537
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Nov 27 12:01:58 2024 +0100
+
+    String tests: fixed too strict strcmp checks
+    
+    The strcmp function is not guaranteed to return -1 or +1
+    but any negative or positive value if the input strings
+    are different. Fixed the false assumption which triggered
+    a build bug on emulated arm64.
+
+commit fc2b4b26a62215d12f4565c21b77e949cd861b9a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Nov 27 04:15:16 2024 +0100
+
+    Fixed crash if logging happened in unit tests
+    
+    The patch initializes logging in unit tests. Previously, unit tests did
+    not initialize logging and other subsystems, just resources. But
+    resource_init() could under certain circumstances trigger logging and
+    cause crash.
+    
+    The bug was Found by Jakub Ruzicka, dissected by David Petera and Maria
+    Matejka, disguised as failing build for Debian arm64 in pbuilder
+    emulation which did not like disabling THP.
+    
+    Fixes #42.
+
+commit 997d2f578ee61d64f57e2ab6932b15c0a6a3a8d8
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Nov 26 20:32:53 2024 +0100
+
+    ASPA: Unified the ASPA_INVALID into one result
+    
+    The _EMPTY and _CONFED variants are easy to spot bare-eyed from the AS path.
+
+commit 01377599da2f14567da46d8c0387a660189a8065
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Tue Nov 26 16:36:13 2024 +0100
+
+    RPKI: Polishing of ASPA syntax and documentation
+
+commit fb919ac2a266aed53638ebc4f006c7ef48bb9e31
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Nov 26 17:46:27 2024 +0100
+
+    RPKI: Fix PDU length check
+    
+    The END_OF_DATA PDU was extended in version 1, so it has different length
+    in different versions. We should do the PDU length check according to its
+    version.
+
+commit e330fb1614d83e3529f4405d0875160d425f8bb3
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Nov 25 09:35:33 2024 +0100
+
+    RPKI: added documentation and RTR version config options
+
+commit fa65e063721d963a29749ad63e47c97b52ce98d8
+Author: Katerina Kubecova <katerina.kubecova@nic.cz>
+Date:   Fri Nov 8 15:26:37 2024 +0100
+
+    RPKI: protocol version 2, loading ASPA
+    
+    Implemented draft-ietf-sidrops-8210bis-16, interoperable with StayRTR
+    development branches.
+
+commit 224fbe59802ea45820ce49fd1f59b91314b17e7e
+Author: Katerina Kubecova <katerina.kubecova@nic.cz>
+Date:   Wed Nov 8 13:46:42 2023 +0100
+
+    ASPA: Automatic channel reload
+
+commit 49be4a0329b218a7c35c9275680de3ca177cd2e7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Nov 8 18:54:13 2024 +0100
+
+    Lib: Optimized printing of numbers
+    
+    One simple trick makes printing of numbers ~4x faster.
+
+commit 5c6572c422a2dc3a8349c4f0f9f6ab31de9c5528
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Nov 8 18:51:54 2024 +0100
+
+    Lib: Optimized printing of IP addresses
+    
+    Makes printing network prefixes ~15x faster.
+
+commit 82d57fb7adf02b297840ab710737df6043832ce2
+Author: Piotr Wydrych <pwydrych@akamai.com>
+Date:   Tue Nov 5 18:53:22 2024 +0100
+
+    CLI: Add timeformat command
+    
+    Adds ability to override time format of show commands for current CLI session
+    so that it does not depend on configuration and may ease parsing when CLI is
+    called from tools.
+    
+    Minor changes by committer.
+
+commit 9eca3e1a2e5a71c38ebd95ee01489d1eb62a063f
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Nov 5 17:35:20 2024 +0100
+
+    Nest: Cleanup timeformat grammar
+
+commit 38195ac628797cad5453e91cd6b38bb0b6f34f84
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Nov 6 12:12:37 2024 +0100
+
+    ASPA: fixed the check algorithm to actually do what is in the RFC
+    
+    The original algorithm assumed principles not consistent with the RFC
+    and could have lead to false invalids.
+    
+    Also added filter tests showing also how the ASPA literals are used in
+    the static protocol.
+
+commit c7e843c1a7f376890d641730ebece1c94d8fab58
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Nov 7 15:03:01 2024 +0100
+
+    BGP: Add RFC 9687 to list of supported RFCs
+
+commit b4196b70c4463d78f8f202ef4ad65c24f240e1a2
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Nov 6 13:05:32 2024 +0100
+
+    BGP: SendHoldTimer became an RFC, updating docs
+
+commit 294d363da06418f2e6f518c0b7aac78a6f4d0811
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Oct 18 16:53:12 2024 +0200
+
+    Filter: Remove T_ENUM_RTC
+    
+    It is not used for a long time.
+
+commit 1002c35bf99544cbb3567defe3a7dca38f5f2375
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Oct 18 16:49:19 2024 +0200
+
+    Filter: Replace T_ENUM_NETTYPE with T_ENUM_NET_TYPE
+    
+    To be consistent with other enum type names.
+
+commit 80ca0ed279f2c8f396976d90f2e98ba6b923081c
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Fri Oct 18 16:39:42 2024 +0200
+
+    Filter: Add enum types to filter grammar
+    
+    Enum types existed on semantic level, but not on syntactic level,
+    so they could not be used in filter code.
+    
+    Generate filter grammar for enum types based on CF_ENUM() declarations.
+    
+    Thanks to lbz for the bugreport.
+
+commit 072821e55e2a3bd0fb3ffee3099375927dc902e8
+Author: Eric Long <i@hack3r.moe>
+Date:   Wed Oct 16 21:32:36 2024 +0200
+
+    Flowspec: Fix IPv6 prefix when offset is not multiple of 8
+    
+    Current implementation handles flowspec prefix length and offset only
+    in bytes, but RFC 8956 (Dissemination of Flow Specification Rules for
+    IPv6) Section 3.1 [1] and example in Section 3.8.2 [2] states the
+    pattern should begin right after offset *bits*.
+    
+    For example, pattern "::1:1234:5678:9800:0/60-104" is currently
+    serialized as "02 68 3c 01 12 34 56 78 98", but it should shift its
+    pattern 4 more bits to the left: "02 68 3c 11 23 45 67 89 80".
+    
+    This patch implements shifting left/right for IPv6 type and use it to
+    correct the behaviour. Test data are replaced with the correct ones.
+    
+    Minor changes and test vectors done by committer.
+    
+    [1]: https://www.rfc-editor.org/rfc/rfc8956.html#section-3.1
+    [2]: https://www.rfc-editor.org/rfc/rfc8956.html#section-3.8.2
+
+commit 6f9ccfae9edba40975f9709a516ecf3784616e68
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 16 04:04:46 2024 +0200
+
+    Flowspec: Test improvements
+    
+    Simplify Flowspec initialization macros.
+    
+    Add examples from RFC 8955 4.3 and RFC 8956 3.8 to format tests.
+
+commit a70ecadefe93d6b7ed11e42c85d87fe2f02f328a
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Oct 15 17:19:42 2024 +0200
+
+    Doc: Minor fixes
+
+commit cb40a666b9e093399c72af0cb3913be6be3a6088
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Oct 15 17:14:57 2024 +0200
+
+    Doc: Fix code blocks
+    
+    Code blocks should not be indented, as the indendation is passed
+    to the output,
+
+commit 72c2df562dd184837c61fe4b68d8e2816b7643bc
+Author: Johannes Erwerle <jo@swagspace.org>
+Date:   Tue Oct 15 16:56:48 2024 +0200
+
+    Doc: Improve readability of the operator documentation
+    
+    Minor changes by committer.
+
+commit 48a620a916b08a1ed882f536fdc508a60c2ade94
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Oct 9 18:00:16 2024 +0200
+
+    Fix typo in documentation
+
+commit 39e75b879b1464f35725bb218d9e14399fc4c291
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Oct 8 19:34:51 2024 +0200
+
+    Filter: Fixes and improvements related to case/sets
+    
+    Unify grammar for set_atom and switch_atom to avoid inconsistencies
+    between them. Fix errors in documentation related to case statement
+    and set type. Change 'vpnrd' to 'rd' to be consistent with the filter
+    language.
+    
+    Thanks to Mikhail Mayorov for bugreport.
+
+commit 163ab3130f6a890411402643818af388df5f5719
+Merge: 8dc2a36a d4929d91
+Author: Ondřej Zajíček <santiago@crfreenet.org>
+Date:   Mon Oct 7 16:35:55 2024 +0200
+
+    Merge branch 'dpetera-master-patch-71179' into 'master'
+    
+    Fix typo in user docs
+    
+    See merge request labs/bird!27
+
+commit d4929d911378c25802b4b04963bc593d0a9928ab
+Author: David Petera <david.petera@nic.cz>
+Date:   Mon Oct 7 16:15:09 2024 +0200
+
+    Fix typo in user docs
+
+commit 8dc2a36ae545d13fdf201b0891185f98852584ee
+Author: Job Snijders <job@fastly.com>
+Date:   Thu Oct 3 15:43:12 2024 +0200
+
+    RPKI: Add TCP-MD5 authentication option
+    
+    RPKI-To-Router (RTR) sessions seem to be similar security-sensitivity as
+    IBGP sessions. BIRD already offered a choice of either "plain TCP" (meh)
+    or "SSH" (secure, albeit a bit more hassle to set up than TCP-MD5).
+    The patch adds TCP-MD5 as another option. TCP-MD5 for RTR is specified
+    through RFC 6810 section 7.3 and RFC 8210 section 9.3.
+    
+    Minor changes by committer.
+
+commit 5daec239c4c62dd508a3cd8f7ca82d3666becbe6
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jul 8 17:12:21 2024 +0200
+
+    Renamed my past self in commit authorship and mentioned that in the contributing policy
+
+commit 2ba6e797ccd365f5c930a18953a08d3c5e315ff9
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Aug 29 14:37:19 2024 +0200
+
+    Fixed a stupid bug in parse-and-exit mode
+    
+    Introduced in 08ff0af8986099e6fb1d8a94c7ce62c83e4df7f1, the additional CLI
+    configuration wasn't properly initialized in the parse-and-exit mode
+    due to an oversight that cli_init_unix() is not called in this mode.
+    
+    Thanks to Felix Friedlander for the bugreport.
+
+commit 404e82616d950cbf45b16adb11ce3a52e285e16b
+Author: Fabrice Fontaine <fontaine.fabrice@gmail.com>
+Date:   Tue Aug 27 14:54:07 2024 +0200
+
+    configure.ac: properly evaluate ac_test_CFLAGS
+    
+    Since autoconf 2.69 and
+    https://git.savannah.gnu.org/cgit/autoconf.git/commit/?id=76754e04fce5f6a7701bec57b057020585df2ae3
+    ac_test_CFLAGS is set to ${CFLAGS+y} instead of ${CFLAGS+set}.
+    
+    Just test that ac_test_CFLAGS is not empty, to support both cases.
+    
+    Signed-off-by: Fabrice Fontaine <fontaine.fabrice@gmail.com>
+    Signed-off-by: Arnout Vandecappelle (Essensium/Mind) <arnout@mind.be>
+
+commit acbdc29d57373a42a512b505c7d4169fd9ca2bee
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Aug 27 14:28:41 2024 +0200
+
+    Lib: Expand timer recurrence to 64b
+    
+    The period of recurent timers was stored in 32b field, despite it was
+    btime-compatible value in us. Therefore, it was limited to ~72 min,
+    which mas okay for most purposes, except configurable MRT dump periods.
+    
+    Thanks to Felix Friedlander for the bugreport.
+
+commit 5214d7e59fe4d5d89e14e8e7b654ded25f918afb
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Aug 1 14:55:05 2024 +0200
+
+    IO: Ensure that socket rcvbuf is large enough
+    
+    The socket structure has the field rbsize (receive buffer size), which
+    controls the size of the userspace receive buffer. There is also kernel
+    receive buffer, which in some cases may be smaller (e.g. on FreeBSD it
+    is by default ~8k). The patch ensures that the kernel receive buffer is
+    as large as the userspace receive buffer.
+
+commit c9836207f53be16860546f00fa27483f1e659551
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jul 30 16:42:32 2024 +0200
+
+    IO: Fix missing return introduced in one of earlier patches
+
+commit df22b3140cad6bd8742dce16e6a1b342d4a83f6d
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue Jul 30 16:33:51 2024 +0200
+
+    IO: Avoid re-binding accepted sockets to VRF
+    
+    When VRFs are used, BIRD correctly binds listening (and connecting)
+    sockets to their VRFs but also re-binds accepted sockets to the same VRF.
+    This is not needed as the interface bind is inherited in this case, and
+    indeed this redundant bind causes an -EPERM if BIRD is running as
+    non-root making BIRD close the connection and reject the peer.
+    
+    Thanks to Christian Svensson for the original patch and Alexander Zubkov
+    for suggestions.
+
+commit 08ff0af8986099e6fb1d8a94c7ce62c83e4df7f1
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jun 24 13:46:12 2024 +0200
+
+    Additional CLI sockets may now be restricted
+    
+    This allows to have one main socket for the heavy operations
+    very restricted just for the appropriate users, whereas the
+    looking glass socket may be more open.
+    
+    Implemented an idea originally submitted and requested by Akamai.
+
+commit f3b6661ddda9a9c2591444799ff88cd82621d06b
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jun 24 11:10:07 2024 +0200
+
+    Additional CLI sockets can be now configured in the config file
+    
+    If the user has such a need, they may configure additional sockets
+    in the config file. This may work for e.g. some advanced access control.
+
+commit a95fff37937171302167e670bd8b6e80d447cf65
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jun 24 11:09:46 2024 +0200
+
+    CLI now has a configuration structure
+
+commit 09f50f3766e54b04e006b45e04e96316942526fd
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jun 24 11:27:45 2024 +0200
+
+    Typed lists: added forgotten #undef
+
+commit f27004fb4d556148a22f7750feaefd3b329778f0
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Mon Jun 24 09:45:57 2024 +0200
+
+    Backported typed list updates from v3
+    
+    Source: dda37842dcf82dae8e441a6c2bcef4b0ffae3429
+
+commit 333c7e8536cf4a3b99c4c1359ac7679c7d9c7e27
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Jun 26 16:38:03 2024 +0200
+
+    Doc: Minor cleanups in BFD documentation
+
+commit 8a40bccffe9e28e211fe996845658f87f5cc60e9
+Author: Alexander Zubkov <green@qrator.net>
+Date:   Wed Jun 26 16:29:57 2024 +0200
+
+    BFD: Add option to accept zero checksum for IPv6 UDP packets
+    
+    Some vendors do not fill the checksum for IPv6 UDP packets.
+    For interoperability with such implementations one can set
+    UDP_NO_CHECK6_RX socket option on Linux.
+    
+    Thanks to Ville O for the suggestion.
+    
+    Minor changes by committer.
+
+commit 00b139bd25c77b401d2065283cb970d9d8c1aa02
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu May 30 16:12:15 2024 +0200
+
+    Kernel: Do not use route replace when krt_metric differs
+    
+    The krt_metric is a part of the primary key, so it cannot differ for
+    route replace operation.
+    
+    Thanks to Leif Jakob for the bugreport.
+
+commit a5b4c21d8138bb533b02a60973b1ff4feedae456
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu May 30 02:40:55 2024 +0200
+
+    Filter: Silence some warnings in clang
+
+commit 3327d6129896069fcaea00867d5adeaf85865c18
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu May 30 02:11:06 2024 +0200
+
+    Lib: Fix BSD build
+
+commit c130b4e1aedfda8119b513ecaa82c7f7deda3228
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed May 29 13:03:10 2024 +0200
+
+    Lib: Use access() function attribute
+
+commit 2d6fb31cd1142befb60cad15ce9da2a7eabb76e2
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue May 28 16:41:24 2024 +0200
+
+    Lib: Use alloc_size() function attribute
+
+commit e29f134ad9346343277b7cb4581d2a704592dc79
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue May 28 15:31:52 2024 +0200
+
+    BFD: Fix build when BFD is disabled
+    
+    Move bfd_opts grammar inside BFD parser code to avoid dependences between
+    nest and BFD grammars, which breaks when BFD build is disabled.
+    
+    Add dummy bfd_opts grammar rule, so protocols can use this nonterminal
+    even with BFD disabled.
+    
+    Thanks to Yuri Honegger for the bugreport.
+
+commit 765debf5236375595d52aaa188183df8b5edd4f4
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed May 1 20:23:04 2024 +0200
+
+    Formalized our contribution policy which we're currently applying
+
+commit d0512ba74bd45c772d3fdd5682fa88e5d30b86f7
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Wed Apr 17 17:07:47 2024 +0200
+
+    Doc: BFD update
+
+commit e6dbde68836ab632126614fa5588268120997548
+Author: Katerina Kubecova <katerina.kubecova@nic.cz>
+Date:   Thu Apr 11 14:53:39 2024 +0200
+
+    BFD: Set password per session
+
+commit 13c10ee06241d4538603d21954be0c2db08911ba
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Apr 11 18:54:23 2024 +0200
+
+    Doc: Fix datetime format for password entries
+    
+    In BIRD 1, we used DD-MM-YYYY, while in BIRD 2 we switched to the usual
+    format YYYY-MM-DD.
+    
+    Thanks to Janne Pisilä for the bugreport.
+
+commit 280daed57d061eb1ebc89013637c683fe23465e8
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Thu Apr 4 18:37:26 2024 +0200
+
+    OSPF: Allow loopback nexthop in OSPFv3-IPv4
+    
+    In OSPFv3-IPv4 there is no requirement that link-local next hop announced
+    in Link-LSA must be in interface address range. Therefore, for interfaces
+    that do not have IPv4 address we can use some loopback IP address and
+    announce it as a next hop. Also we should accept such address.
+
+commit bc10975adbb0aef772496f334dd0bbd23251c1d8
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Sun Oct 15 23:52:46 2023 +0200
+
+    ASPA: checks done in filters; no autoreload yet
+
+commit 08571b20598c58877e1565403d970efc2b90dba6
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Sun Oct 15 16:04:36 2023 +0200
+
+    ASPA: basic data structures and Static protocol support
+
+commit b95dc8f29f18eb177f91fdc4bf0716fac9b15366
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Sun Oct 15 12:06:11 2023 +0200
+
+    Expanded usage of stdbool.h to the whole BIRD
+
 commit 0b684a43bd7ce4a32c9cd7754b88286bcd1815bb
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Mar 22 01:40:43 2024 +0100
@@ -7340,7 +8074,7 @@ Date:   Mon Jul 1 11:57:35 2019 +0200
     This is a preparation for filter pre-evaluation.
 
 commit 026bfedb332d8c0dde28c693c177fe993b5df26d
-Author: Maria Jan Matejka <mq@jmq.cz>
+Author: Maria Matejka <mq@jmq.cz>
 Date:   Tue Jun 11 13:19:21 2019 +0000
 
     BGP: Prefix hash is too small, increase its max size.
@@ -7350,7 +8084,7 @@ Date:   Tue Jun 11 13:19:21 2019 +0000
     the max hash size from 2^20 to 2^24.
 
 commit 9dac814ee89fe41856923a532c87ffd14dbc0f79
-Author: Maria Jan Matejka <mq@jmq.cz>
+Author: Maria Matejka <mq@jmq.cz>
 Date:   Tue Jun 11 09:35:25 2019 +0000
 
     BGP: split tx explicitly
@@ -7500,7 +8234,7 @@ Date:   Wed May 29 21:03:52 2019 +0200
     Filter: Stacks moved to thread-local storage if available.
 
 commit 6479e403ef7398f48c0e1c0f1a71aa112938a357
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu May 23 11:27:24 2019 +0000
 
     Filters: If somebody doesn't like _Thread_local, don't fail for now, just be a little slower.
@@ -7509,7 +8243,7 @@ Date:   Thu May 23 11:27:24 2019 +0000
     C11 feature. It's much simpler and also faster than pthread_[sg]etspecific().
 
 commit 23e3b1e6652bac4a003a7eb1e074bdaf7ebb4900
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed May 22 15:16:32 2019 +0000
 
     Filter: Some people can't pronounce "postfixify" correctly. Let's try "linearize" instead.
@@ -7517,13 +8251,13 @@ Date:   Wed May 22 15:16:32 2019 +0000
     This is just a naming change.
 
 commit 96d757c13fe4b2e21b265275af9ac7d1e2c3f075
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue May 21 16:33:37 2019 +0000
 
     Filter: Store variables and function arguments on stack
 
 commit 20c6ea70ccb69f3c1d9ca46cc7941eb686f283c6
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon May 20 17:53:10 2019 +0000
 
     Filter: Making the filter state thread local.
@@ -8007,7 +8741,7 @@ Date:   Tue Dec 18 17:10:05 2018 +0100
     Filter refactoring: indentation fix
 
 commit fc8df41ec6cd5e6e3d53036a97dc7219dbbade5e
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Dec 17 15:00:01 2018 +0100
 
     Filter refactoring: The values are now saved on a custom stack.
@@ -8015,7 +8749,7 @@ Date:   Mon Dec 17 15:00:01 2018 +0100
     This shall help with performance.
 
 commit 7afa1438866fa94454ba133608b6877171f71d37
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Dec 17 13:51:11 2018 +0100
 
     Filter refactoring: Passing the resulting struct f_val as a pointer.
@@ -8024,31 +8758,31 @@ Date:   Mon Dec 17 13:51:11 2018 +0100
     together with the T_RETURN f_val type flag.
 
 commit f62a369fb48be066560d6e8f0df82eef9c464ef0
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Dec 17 13:08:08 2018 +0100
 
     Filter refactoring: Moved filter instruction definition to a separate file
 
 commit 25566c68109381178e0305f3e7e1464dea15b90b
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Dec 17 12:58:01 2018 +0100
 
     Filter refactoring: Moved the bitfield bit position formula to route.h
 
 commit aca8263926df6156322e1a1157886f1cad2486b1
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Dec 17 12:48:33 2018 +0100
 
     Filter refactoring: Moved the interpret macros inside the block
 
 commit 02dcbf343d94dd548605c5efbf724f89d81d7258
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Dec 17 12:45:21 2018 +0100
 
     Configure: Don't check for implicit fallthrough unless when debugging.
 
 commit a946317fab9776754192f679f38cb7789050c52d
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Feb 27 15:39:39 2018 +0100
 
     Filter: Converted static global variables to a filter_state struct.
@@ -8270,7 +9004,7 @@ Date:   Thu Jan 24 22:34:33 2019 +0100
     LSA (RFC 7770). The second part is here mainly for testing opaque LSAs.
 
 commit 954888859969587a288501b6801ab0ddb1f94133
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Dec 14 16:10:19 2018 +0100
 
     Nest: Don't make tmp_attr before preexport is called
@@ -8348,7 +9082,7 @@ Date:   Tue Dec 18 19:16:23 2018 +0100
     including BFD which always uses TTL 255. Bad FreeBSD!
 
 commit 82b742533bdbf977ec95997fc0011a47a672bcc8
-Author: Maria Matějka <mq@jmq.cz>
+Author: Maria Matejka <mq@jmq.cz>
 Date:   Fri Oct 26 09:32:35 2018 +0200
 
     Perf: Protocol to measure BIRD performance internally
@@ -8358,7 +9092,7 @@ Date:   Fri Oct 26 09:32:35 2018 +0200
     so much time in filter processing.
 
 commit 78131eee64aeaf14cf418d6e5bf3f17ca602afb7
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Dec 14 15:50:44 2018 +0100
 
     Debug: support for -gdwarf-4 is not available everywhere
@@ -8539,7 +9273,7 @@ Date:   Mon Dec 10 02:11:42 2018 +0100
 
 commit 9a5ef043c11ad9fba00557dedcc0d7ae0d2794e9
 Merge: 0e492063 265419a3
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Dec 6 09:55:34 2018 +0100
 
     Merge branch 'mq-custom' into int-new
@@ -8589,13 +9323,13 @@ Date:   Tue Dec 4 16:55:25 2018 +0100
     stderr instead of given debug file.
 
 commit 0642fb4d456fe12e1bbeb2ffc2149433f228c02e
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Nov 27 08:49:31 2018 +0100
 
     Hash: mem_hash doesn't modify the memory, declared constant
 
 commit d73c4ac869048e60276c5e568450c7342bc0bc8a
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Nov 1 12:17:49 2018 +0100
 
     Route table max hash size raised to 2^24.
@@ -8604,13 +9338,13 @@ Date:   Thu Nov 1 12:17:49 2018 +0100
     to keep a little collision rate for full BGP table.
 
 commit 84661bf6da683d70e6e5e0e490d95abaf91b470b
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Oct 30 15:25:32 2018 +0100
 
     Changed IPv4 hash function to simple multiplication.
 
 commit 14375237f6901a926d59cc54870cf44ed2a61d20
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Feb 14 13:42:53 2018 +0100
 
     Terminology cleanup: The import_control hook is now called preexport.
@@ -8846,7 +9580,7 @@ Date:   Mon Oct 1 15:35:43 2018 +0200
     establishment, the LLGR timer is not allocated, so we should not show it.
 
 commit d4cebc6bbe2a55bd344383fcc27255a12d686195
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Sep 18 14:21:11 2018 +0200
 
     No more warnings ...
@@ -8859,13 +9593,13 @@ Date:   Tue Sep 18 14:21:11 2018 +0200
     (use the melody of well-known Oh Freedom!)
 
 commit d50b0bc437f5ffd0d2c9f843217f8ed098c8d675
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Sep 11 16:55:41 2018 +0200
 
     Conf: Show the line:char position where the syntax error happens
 
 commit 89b0af3978caf15e1478922a8d9d4f7e38145a61
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Aug 28 16:45:50 2018 +0200
 
     Main: Add -b to force background even in debug mode
@@ -8879,7 +9613,7 @@ Date:   Fri Aug 24 18:54:27 2018 +0200
     Thanks to Clemens Schrimpe for the bugreport.
 
 commit 64c5ad58d276d8a0463aa9ad2b34f75b7d1f4108
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Aug 22 14:58:53 2018 +0200
 
     Lib: recursive printf
@@ -8903,19 +9637,19 @@ Date:   Tue Aug 21 15:24:55 2018 +0200
     Thanks to Piotr Wydrych for the bugreport.
 
 commit 7ffc0a6534fb66ad27d22984e25bd0789f4404b6
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Aug 14 14:36:44 2018 +0200
 
     Bison: A bit more verbose error messages in config.
 
 commit 78ca6ea8f0b8ab312b1e0ef56629a18e3efbce42
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Jul 17 15:39:06 2018 +0200
 
     Make: Add option to force colors in compiler output
 
 commit 86b9e8e39a0b42407c95921ca8262b0a75cad5f2
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Jul 17 15:30:59 2018 +0200
 
     M4: generate synchronization lines
@@ -9030,7 +9764,7 @@ Date:   Sun Jul 1 00:43:24 2018 +0200
     Thanks to Vadim Fedorenko for the original patch.
 
 commit daf113ac66fb9dc83a904ce9bcc68e90830624d0
-Author: Maria Jan Matejka <mq@jmq.cz>
+Author: Maria Matejka <mq@jmq.cz>
 Date:   Fri Jun 29 17:23:27 2018 +0200
 
     BGP: Attribute set function merged with its common counterpart
@@ -9074,13 +9808,13 @@ Date:   Mon Apr 23 11:29:13 2018 +0200
     Doc: renamed progdoc files Doc -> progdoc to fix collision with doc/ folder on case-insensitive filesystems
 
 commit f851f0d7e30cbd1e2ba20a5bf06a584acc136828
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Jun 26 14:29:03 2018 +0200
 
     Config: Dropping CF_ADDTO.
 
 commit 1771f70d7473b8c8e0c6bd47d5c35cc5fbe7eb19
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Jun 19 16:16:08 2018 +0200
 
     Filter: fixed eattr cached pointer
@@ -9094,7 +9828,7 @@ Date:   Tue Jun 19 16:16:08 2018 +0200
 
 commit 1ef23f05ee00394e6a2748f658b73c20d3ff7c45
 Merge: 13c0be19 caa9d03d
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Jun 19 14:32:16 2018 +0200
 
     Merge branch 'int-new' into HEAD
@@ -9120,7 +9854,7 @@ Date:   Wed Jun 13 14:47:37 2018 +0200
     RFC 7606 specifies handle-as-withdraw instead of session reset.
 
 commit 13c0be19d3d2acc9c1636bbab9222aabdf27d7ac
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue May 29 12:08:12 2018 +0200
 
     Nest: Removing separate tmpa from route propagation
@@ -9144,7 +9878,7 @@ Date:   Tue May 29 14:23:14 2018 +0200
     OSPF: Fix invalid NSSA RFC references
 
 commit ee7e2ffd265fd76dbc8c94d9c2d48da54c27ff76
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon May 7 14:47:00 2018 +0200
 
     Protocol: Introducing an enum protocol_class
@@ -9152,19 +9886,19 @@ Date:   Mon May 7 14:47:00 2018 +0200
     This supersedes the EAP_* constants.
 
 commit c3becfe1934da2dc2c0881a71eac8a26f810791f
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed May 2 12:34:35 2018 +0200
 
     Filter: macro for recursive interpretation of instructions
 
 commit 0ec6b5ecd37529d57079e13748c4ecbd336332c1
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Apr 30 16:06:53 2018 +0200
 
     Filter: Simple type checks converted to ARG() macro
 
 commit 478f9babed361f8df8a9c944f20bcbe116dc30aa
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Apr 30 13:29:05 2018 +0200
 
     Filter: Removing the third argument hack
@@ -9172,19 +9906,19 @@ Date:   Mon Apr 30 13:29:05 2018 +0200
     Just to make the code a bit more clean and easier to maintain.
 
 commit cff9e937fd0ed42b88be1deb5e1aa9fe301caabd
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Apr 30 12:49:22 2018 +0200
 
     Filter: instruction names
 
 commit 31d6939cde071ab04d1da6b3ff6fb6cd579e164a
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Apr 30 12:39:32 2018 +0200
 
     Filter: Instruction codes linearized
 
 commit 906092534ba8479ca76723b7dd7ee233f5a70d1e
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Apr 30 12:20:04 2018 +0200
 
     Macro: Added a bunch of dirty C preprocessor tricks
@@ -9268,7 +10002,7 @@ Date:   Thu May 3 16:02:29 2018 +0200
     Thanks to Toke Hoiland-Jorgensen for the patch.
 
 commit 29958745c8f58cffd24e1793702524ce84545e5a
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu May 3 11:14:49 2018 +0200
 
     Makefile: Only set git version if BIRD is build from its repository.
@@ -9276,7 +10010,7 @@ Date:   Thu May 3 11:14:49 2018 +0200
     Thanks to Toke Høiland-Jørgensen <toke@toke.dk> for reporting this bug.
 
 commit 823ad12191e66e243dd088a81c66e4a518563e40
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Apr 27 14:38:41 2018 +0200
 
     Filter: Added missing instruction comparators.
@@ -9399,13 +10133,13 @@ Date:   Sat Mar 17 17:14:02 2018 +0100
 
 commit 8a871e890a7198f7cbaff5c75033160ae3ad68f3
 Merge: e95705f0 e8bc64e3
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 14 12:57:16 2018 +0100
 
     Merge branch 'master' into int-new
 
 commit e8bc64e308586b6502090da2775af84cd760ed0d
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Feb 28 16:57:50 2018 +0100
 
     Filter: make bgpmask literals real constructors
@@ -9449,13 +10183,13 @@ Date:   Wed Feb 28 16:57:50 2018 +0100
 
 commit e95705f00c9e297cd6dde1e8fa60bee4a4d539f2
 Merge: d1ba927b 74bfd2f9
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Mar 13 17:02:49 2018 +0100
 
     Merge branch 'master' into int-new
 
 commit 74bfd2f97c0a95b6fb73a67d9334e54a90695c58
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Mar 13 12:08:37 2018 +0100
 
     Filters: Removed FI_COMMA, not used for 19 years.
@@ -9469,13 +10203,13 @@ Date:   Tue Mar 13 12:08:37 2018 +0100
 
 commit d1ba927b369c91ddb2143b686ca4c1be53e46e64
 Merge: f2f5a7d9 7c601e6b
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Mar 13 16:51:04 2018 +0100
 
     Merge branch 'master' into int-new
 
 commit 7c601e6b7b7696b24ce5f5715fa14dbb91c71d6e
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Nov 29 11:38:01 2017 +0100
 
     Filter: recursion to loop
@@ -9485,7 +10219,7 @@ Date:   Wed Nov 29 11:38:01 2017 +0100
     performance improvement for flat filters.
 
 commit 5a14df395053f4094a1e3ebea98e3487cbfc0e63
-Author: Maria Jan Matejka <mq@jmq.cz>
+Author: Maria Matejka <mq@jmq.cz>
 Date:   Thu Oct 19 12:39:44 2017 +0200
 
     Filter: Instruction codes named as enum
@@ -9499,7 +10233,7 @@ Date:   Thu Oct 19 12:39:44 2017 +0200
     the instruction codes even without GDB from plain memory dump.
 
 commit f2f5a7d9455f938fb14e31315a879c3be2c5d28a
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Mar 6 16:04:56 2018 +0100
 
     Filter: the test conf checks also a bit of BGP args
@@ -9507,7 +10241,7 @@ Date:   Tue Mar 6 16:04:56 2018 +0100
     Uncommented an old test.
 
 commit 0575c7db723523701d5582e2a9058cb5c46951c9
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Mar 6 16:03:35 2018 +0100
 
     Config: Dropped the ipv4:netmask4 syntax for IPv4 prefixes.
@@ -9666,13 +10400,13 @@ Date:   Tue Jan 23 14:26:18 2018 +0100
     Doc: Fix example
 
 commit 8adaf730c0e2dae2debd7aa09633899e28428b11
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Jan 16 16:10:13 2018 +0100
 
     Pipe: show export state
 
 commit c591810d46ae31c9e46768388878321e78e4ef94
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Jan 16 14:46:06 2018 +0100
 
     Pipe: fixed template bug
@@ -9757,7 +10491,7 @@ Date:   Tue Jan 9 18:42:22 2018 +0100
     channel can be redefined. In such case channel options are merged.
 
 commit 09c1e370b3084f7acb7c3777427670a69945368a
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Jan 9 16:46:00 2018 +0100
 
     Moved freebsd cflags and ldflags to configure
@@ -9881,13 +10615,13 @@ Date:   Wed Dec 13 14:49:55 2017 +0100
 
 commit cb21c5ffa92494b1a4bf110605509de3326b6c3d
 Merge: 71c51aa4 1e11918c
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Dec 13 10:29:10 2017 +0100
 
     Merge branch 'int-new' of gitlab.labs.nic.cz:labs/bird into int-new
 
 commit 71c51aa4ab0daa3490f9a488f505eb25102c4705
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Dec 13 10:28:50 2017 +0100
 
     Doc: Fixed misc sgml bugs, no content change
@@ -9949,7 +10683,7 @@ Date:   Sun Dec 10 22:47:38 2017 +0100
     Doc: Documentation update
 
 commit 6b0f5f68a8ae35b05abb144cf998bf537dfa283b
-Author: Maria Jan Matejka <mq@jmq.cz>
+Author: Maria Matejka <mq@jmq.cz>
 Date:   Mon Sep 25 13:00:05 2017 +0200
 
     Switchoff for MPLS in kernel.
@@ -9987,7 +10721,7 @@ Date:   Fri Dec 8 17:00:47 2017 +0100
     BGP: Link check just for single-hop
 
 commit 3e52d112d714545df3cd97119824ee94c27a0606
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Sep 27 16:55:09 2017 +0200
 
     Docs: Update to v2.0
@@ -10285,19 +11019,19 @@ Date:   Tue Nov 28 19:33:33 2017 +0100
     Thanks to Toke Hoiland-Jorgensen for the patch.
 
 commit 9ba4b4a63d27943586b76574b7f310ee532509a3
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Nov 9 15:04:05 2017 +0100
 
     Filter test: typo fix
 
 commit 4ae3ee1200b386219673c2168eae996c6207b077
-Author: Jan Maria Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Aug 22 13:47:01 2017 +0200
 
     Babel: Interface address irrelevant for interface pattern matching.
 
 commit 289c1a7968c5a3c0a76124a89eb45de010f1c640
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Aug 21 14:14:07 2017 +0200
 
     Iface address debug dump fix
@@ -10924,19 +11658,19 @@ Date:   Wed May 17 13:17:40 2017 +0200
     prefer dependency on just tinfo than full ncurses.
 
 commit 31874783c44dd59c355921908016f9b42d22ef02
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue May 16 15:47:41 2017 +0200
 
     Client: manipulate history only if interactive
 
 commit 05d47bd53e71480f1b276bd895f1c25088201e48
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue May 16 14:31:16 2017 +0200
 
     Linpool: default allocation size
 
 commit b880e3ffaea12c3231975157bc51b5f90a2f2433
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue May 16 10:35:10 2017 +0200
 
     Bird readline client saves its history.
@@ -10987,7 +11721,7 @@ Date:   Tue May 9 13:44:02 2017 +0200
     Thanks to Ruben Kerkhof for the patchset.
 
 commit f8d44b01df5d93681e116ccbff39cc4618632825
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon May 15 12:10:51 2017 +0200
 
     Nest: split route show into separate file
@@ -11080,25 +11814,25 @@ Date:   Wed Apr 26 14:11:28 2017 +0200
 
 commit 69fddac0525b1b0c940d778a161ed3a0a742ed6f
 Merge: 93a3661c b2949999
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Apr 26 12:30:22 2017 +0200
 
     Merge branch 'int-new' of gitlab.labs.nic.cz:labs/bird into int-new
 
 commit 93a3661c15c612e1de807524649482765b2c2702
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Apr 26 12:26:14 2017 +0200
 
     Flowspec: split net_format_flowspec into several functions
 
 commit 2af807a83f6aa120b9d0b7b68dc04e543840e2e6
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Apr 26 12:19:39 2017 +0200
 
     Test: fixed broken test for VPN RD output
 
 commit a2fd34f81fe4259d5ef27f1684177753a03f0f90
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Apr 26 10:53:48 2017 +0200
 
     Debug: Add a Makefile rule for assembler intermediates.
@@ -11131,25 +11865,25 @@ Date:   Wed Apr 5 16:16:04 2017 +0200
     Allow to define static roa/flow routes without dest.
 
 commit 3484cb9a654cab9bd2c2b1164528d3000a22a79e
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Apr 18 13:45:50 2017 +0200
 
     Client: separate config syntax structure for "show route for"
 
 commit 7ee07a3c3966ec787bcb7e5100c1add4abef9213
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Apr 5 15:11:10 2017 +0200
 
     Nest: Fix route lookup
 
 commit 97e48b6a18142d1aa11e909d094812f3fff4ea61
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Apr 5 14:26:37 2017 +0200
 
     Adding also our copy of struct rtvia.
 
 commit 54635f435a76ad0f3141b09a9c5072f6e2e8c319
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Apr 5 14:15:43 2017 +0200
 
     Include local lwtunnel.h unless found in system
@@ -11172,7 +11906,7 @@ Date:   Thu Mar 30 13:29:34 2017 +0200
     hop) are allowed, we need both IPv4 and IPv6 IGP tables.
 
 commit 2faf519cf9d34f90d59081ee5f8d6976c62f4f6e
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Mar 30 13:52:01 2017 +0200
 
     Client: multitable version of show route
@@ -11211,13 +11945,13 @@ Date:   Tue Mar 28 18:14:32 2017 +0200
 
 commit 5dbeb87ec96157ca95c84d881e014614dd3164a3
 Merge: 2282030b d1b8fe93
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Mar 28 17:35:57 2017 +0200
 
     Merge branch 'int-new' of gitlab.labs.nic.cz:labs/bird into int-new
 
 commit 2282030b2a4fb07805a0cd8b82a9aab73b7586d8
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Mar 28 17:35:32 2017 +0200
 
     Simpler format of VPN RD
@@ -11261,19 +11995,19 @@ Date:   Wed Mar 22 15:00:07 2017 +0100
 
 commit ead7b8f498ddefc0b7373cbba78f9a7ba1dddaa9
 Merge: da3cf9ea 61e501da
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 22 14:54:00 2017 +0100
 
     Merge branch 'nexthop-merged' into int-new
 
 commit 61e501da895553abfd2424e56470ab2b457beac4
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 22 14:53:37 2017 +0100
 
     Filter: Check whether IP is 4 or 6
 
 commit 3c74416465d77c0e79eeaaeb988e471663484b5d
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Mar 17 15:48:09 2017 +0100
 
     Nexthop: Fixed recursive route mpls label merging
@@ -11323,13 +12057,13 @@ Date:   Sat Mar 11 16:21:28 2017 +0100
     Thanks to Lennert Buytenhek for the bugreport
 
 commit 8c9986d310c58b26c000375be00be0deb9c2e360
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Mar 13 13:50:32 2017 +0100
 
     Filters: VPN Route Distinguishers, Prefix Type, Docs Update
 
 commit 54334b5667158d4b0af55201f327faeb80c05e0e
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Mar 9 15:57:54 2017 +0100
 
     Filter: ROA check test and mixed prefix test
@@ -11365,7 +12099,7 @@ Date:   Wed Mar 8 17:37:11 2017 +0100
     Update OSPF and RIP protocol names and related documentation
 
 commit 039a65d0e4f33f8432caae78cd919d2fd2052eea
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Feb 24 14:05:11 2017 +0100
 
     Nexthop: Fixed hostentry
@@ -11382,7 +12116,7 @@ Date:   Thu Feb 23 16:32:07 2017 +0100
     Thanks to Lennert Buytenhek for the patch.
 
 commit 93f50ca31757fc8e416093e0c73681e070294a3d
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Feb 22 14:02:03 2017 +0100
 
     Nest: names for nhu_state values
@@ -11391,14 +12125,14 @@ Date:   Wed Feb 22 14:02:03 2017 +0100
     so I spent less than the same amount of time documenting it.
 
 commit b2b84359abd382c1ec5a266b211276fbae7da0fc
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Feb 22 12:02:28 2017 +0100
 
     Babel post-merge fixes
 
 commit c609d039860f97f400d2cf0e9ca2b4e87b3fd1cc
 Merge: 62e64905 2be9218a
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Feb 22 11:58:04 2017 +0100
 
     Merge branch 'int-new' into nexthop-merged
@@ -11497,7 +12231,7 @@ Date:   Fri Dec 23 23:03:26 2016 +0100
     Minor cleanups
 
 commit d311368bc58842552e25744a0aae9a09c42cda9f
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Feb 9 14:53:29 2016 +0100
 
     VPN4 and VPN6 literals
@@ -11507,13 +12241,13 @@ Date:   Tue Feb 9 14:53:29 2016 +0100
     to have the same format as for VPN4 (where it is defined by RFC 4364).
 
 commit d47c3d64b2733baea756f1bb37ef09f10d7f9644
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Aug 9 14:47:51 2016 +0200
 
     MPLS: Label stack concatenation for recursive routes
 
 commit d14f8c3c45f7e33a7e54ebc0d45bdb0295d70301
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Mar 4 12:55:50 2016 +0100
 
     Netlink: MPLS routes in kernel
@@ -11527,31 +12261,31 @@ Date:   Fri Mar 4 12:55:50 2016 +0100
     No support for BSD now, it may be added in the future.
 
 commit f2010f9c65ca69584c34c762fb3e5e957958478e
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Jun 13 15:49:53 2016 +0200
 
     Static: Protocol rework wrt. struct nexthop changes; MPLS label support
 
 commit 33ad6e0188b56f682a012ca1b782812c96285d51
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 2 14:37:18 2016 +0100
 
     MPLS: added net_addr_mpls variant of net_addr
 
 commit ec5e5d23faa482495c84163c4ae38d9a31bdc00f
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Jun 10 14:34:41 2016 +0200
 
     Nexthop: Support for label stack in nest
 
 commit 5b208e296fed0beddce16188478c5119df610d89
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Jun 7 11:46:07 2016 +0200
 
     Removing (struct rta)->cast. Never used.
 
 commit 4e276a8920ed0496836f002f144943ab42f120f6
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri May 6 15:48:35 2016 +0200
 
     Merged multipath and single-path data structures.
@@ -11574,7 +12308,7 @@ Date:   Wed Dec 21 16:46:47 2016 +0100
     NEWS and version update
 
 commit 2c33da507046c25d87741fe0ce7947985c8c7a10
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Dec 20 20:13:08 2016 +0100
 
     Netlink: fix occasional netlink hangs on busy machines
@@ -11646,7 +12380,7 @@ Date:   Wed Dec 7 18:28:07 2016 +0100
     BGP: Add support for flowspec (RFC 5575)
 
 commit b7605d5c953902b461e5c9e87aa3dfa60ddce5bc
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Dec 7 17:17:04 2016 +0100
 
     Doc: Example simple config
@@ -11675,14 +12409,14 @@ Date:   Wed Dec 7 15:36:15 2016 +0100
     Squashed flowspec branch from Pavel Tvrdik.
 
 commit b94e5e58dbd33f4d2b9d721c51a9c8c4d8f77bea
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Dec 7 15:35:35 2016 +0100
 
     RPKI: fixed some of the extended warnings
 
 commit ad88b94bca78e010357a6c7806e1d5e01701d4a7
 Merge: d15b0b0a af62c0f9
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Dec 7 15:30:46 2016 +0100
 
     Merge branch 'int-new-rpki-squashed' (early part) into int-new
@@ -11697,19 +12431,19 @@ Date:   Wed Dec 7 14:11:28 2016 +0100
     support for IPv4+IPv6 AFI and unicast+multicast SAFI.
 
 commit af62c0f9f1f6382fe88c8ae5e514f70c0b5b6d05
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Dec 7 14:15:35 2016 +0100
 
     LibSSH may be switched off together with RPKI
 
 commit cdbe1defa4b783715ed29d8d253a55d3efe0b9ed
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Dec 7 09:13:29 2016 +0100
 
     SSH: Commented quirk based on undocumented behavior of LibSSH
 
 commit f7f70bed8f5fd50873f92b6e119de8864c2631a8
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Dec 7 09:12:06 2016 +0100
 
     Make: upgrade Babel makefiles
@@ -12045,7 +12779,7 @@ Date:   Tue Nov 1 16:18:27 2016 +0100
     BSD: Fix build on OpenBSD broken by previous commit
 
 commit 3e236955c9369475872b9b86a58502fa777b50b9
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Oct 14 15:37:04 2016 +0200
 
     Build: switch on -Wextra, get rid of most of the warnings
@@ -12093,7 +12827,7 @@ Date:   Thu Oct 13 15:17:41 2016 +0200
     Filter: Expand testing of large community sets
 
 commit 2e7fb11a6e31324151c6db98df2fe26d2d6cffab
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Oct 12 14:16:34 2016 +0200
 
     Fixed memory bloating on kernel merge paths together with export filter.
@@ -12268,7 +13002,7 @@ Date:   Thu Sep 29 13:28:18 2016 +0200
     BFD headline will appear in Table of Contents again.
 
 commit ccd2a3eda24230df550e9880f4340fc6341c8f52
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Sep 29 12:00:53 2016 +0200
 
     Kernel socket missing err_hook fix
@@ -12673,13 +13407,13 @@ Date:   Sat Jun 4 12:38:06 2016 +0200
     Small typo in documentation example, submitted by Felix Eckhofer.
 
 commit 9dbcb11cb50167e959536e5a564ee9aafae509c6
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon May 30 14:28:22 2016 +0200
 
     Unix IO: Tried to fix strange behavior after POLLHUP or POLLERR.
 
 commit 925aa14912329bafff38a9e5a3f675809ff97785
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue May 17 13:19:18 2016 +0200
 
     After-master-merge simple fixes.
@@ -12711,13 +13445,13 @@ Date:   Tue May 17 15:21:49 2016 +0200
 
 commit 5af7b59660be615fbbd7c20b92b71321c003c43a
 Merge: d39d41fb b66a9e2f
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri May 13 13:48:04 2016 +0200
 
     Merge branch 'int-new' of gitlab.labs.nic.cz:labs/bird into int-new
 
 commit d39d41fbda2ec86ea2bac27308eb4fb16ecc4702
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri May 13 13:46:46 2016 +0200
 
     Hash: Fix of previous commit
@@ -12756,7 +13490,7 @@ Date:   Thu May 12 17:49:12 2016 +0200
     Merge remote-tracking branch 'origin/master' into int-new
 
 commit 54ac0beceedb9b36eb58dd8599ba903c668382f6
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu May 12 16:16:25 2016 +0200
 
     Hash: fixed rta hashing wrt. structure padding
@@ -12793,20 +13527,20 @@ Date:   Tue May 10 16:45:35 2016 +0300
 
 commit 0c6dfe52369a59d7f3da8ee6bc7c505e3da5c064
 Merge: 7a7ac656 92912f06
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue May 10 14:30:49 2016 +0200
 
     Merge branch 'int-new' into int-new-merged
 
 commit 92912f063a94bd7c743a25628ca2073380e09ef4
 Merge: a8caff32 2003a184
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue May 10 14:21:15 2016 +0200
 
     Merge remote-tracking branch 'origin/rte-update' into int-new
 
 commit a8caff322f83f1303c408bbefc440aeea9e619a3
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Apr 27 14:45:14 2016 +0200
 
     Portability: Fixed C extension error generated by CLang.
@@ -12818,7 +13552,7 @@ Date:   Wed Apr 27 14:45:14 2016 +0200
     1 error generated.
 
 commit 7152e5efbb0fade868d5f2d2c7bc10ed52b3d19d
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Apr 12 11:14:54 2016 +0200
 
     Build system reworked to one global Makefile with includes and no nesting
@@ -12908,7 +13642,7 @@ Date:   Fri Apr 8 15:10:57 2016 +0200
     link state is up.
 
 commit 2003a1840731bd57365876e48c96c5a1ea0348cb
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Apr 8 13:08:03 2016 +0200
 
     Route update: move table lookup from protocols into rte_update2().
@@ -12919,7 +13653,7 @@ Date:   Fri Apr 8 13:08:03 2016 +0200
 
 commit 7a7ac656829223713f9e6bcef63d2b5a5efce7d2
 Merge: 4bdf1881 06edbb67
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Apr 8 12:09:31 2016 +0200
 
     Merge branch 'master' into int-new-channels
@@ -12934,14 +13668,14 @@ Date:   Thu Apr 7 12:20:45 2016 +0200
     to the current working directory.
 
 commit 4bdf1881dc6230b742d7efcaad8eeac4ed25f445
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Apr 4 16:17:11 2016 +0200
 
     Channelize: rt_notify arg conversion table -> channel
 
 commit 0c8c8151fc1fb0dbfcd682153f50192ea1369884
 Merge: a815d62d 1a7daab1
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Apr 7 09:58:31 2016 +0200
 
     Merge branch 'int-new-channels' of gitlab.labs.nic.cz:labs/bird into int-new-channels
@@ -12997,7 +13731,7 @@ Date:   Wed Mar 23 18:25:15 2016 +0100
     Wow, the original code (and the bug) is almost 17 years old.
 
 commit ea0a8be2ff5afb8385a69cc0df70984e0fd3a570
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 30 16:21:32 2016 +0200
 
     IO/Poll: fix mistaken variable merge
@@ -13006,7 +13740,7 @@ Date:   Wed Mar 30 16:21:32 2016 +0200
     not much clear, keeping this to keep the former behaviour.
 
 commit 54bb032d21d25a2221877e15325e79add10278ec
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 23 01:45:37 2016 +0100
 
     Birdlib: Modify lists to avoid problems with pointer aliasing rules
@@ -13059,13 +13793,13 @@ Date:   Wed Mar 9 17:37:44 2016 +0100
 
 commit 62a4ad365760afae485ae61c5aab734012545be4
 Merge: 9036bbf2 9c92f692
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Mar 22 13:23:55 2016 +0100
 
     Merge remote-tracking branch 'origin/poll'
 
 commit 9c92f69272de3795f7289969e815d99a93d0d9b3
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Mar 18 11:44:28 2016 +0100
 
     Unix: Substituted select -> poll also in congestion checker
@@ -13086,13 +13820,13 @@ Date:   Tue Mar 15 10:29:32 2016 +0100
     BGP: Add documentaion for extended messages
 
 commit fd926ed4eea319b94bd0e09e093b90846bcb169b
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Mar 15 14:57:49 2016 +0100
 
     Poll: Prevent the improbable case of EAGAIN after POLLIN
 
 commit e1c13a5a7b86f2ba09178300bad960224658c833
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 9 12:12:02 2016 +0100
 
     Unix: Rework of select-loop to poll-loop
@@ -13120,7 +13854,7 @@ Date:   Tue Feb 2 18:14:53 2016 +0100
 
 commit ce95af7a5f5159033e569a7ccedce0e20bb5d913
 Merge: b25509e5 e3f506f9
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Feb 25 18:25:53 2016 +0100
 
     Merge branch 'master' of gitlab.labs.nic.cz:labs/bird
@@ -13132,7 +13866,7 @@ Date:   Thu Feb 25 18:16:59 2016 +0100
     OSPF: Multicast ability is irrelevant for stub interfaces
 
 commit b25509e5128e6f2a856cd4a07bb78f3d6b7fc789
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Jan 20 15:23:17 2016 +0100
 
     All the current pthread implementations are OK and working with us.
@@ -13140,7 +13874,7 @@ Date:   Wed Jan 20 15:23:17 2016 +0100
     No more need to disable pthread for specific BSD's.
 
 commit a815d62d5902fb84c28c77726dbe94fc7528bf36
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Feb 19 15:51:16 2016 +0100
 
     Hash: typecast error fix
@@ -13174,7 +13908,7 @@ Date:   Thu Feb 11 16:38:28 2016 +0100
     caused a crash when the hold timer from the old connection fired.
 
 commit 9a74622ca1994669cdb3bac0bb2f6df2febd2744
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Feb 10 13:26:07 2016 +0100
 
     Updated RTA hashes to 32-bit values.
@@ -13224,7 +13958,7 @@ Date:   Mon Feb 8 16:08:50 2016 +0100
     ==00:00:09:31.755 24718==
 
 commit 2a013bb3a01174fac3a841fd825ac4f13f3ea84d
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Feb 1 10:25:31 2016 +0100
 
     Fixed sigsegv for missing proto->rt_notify hook
@@ -13232,7 +13966,7 @@ Date:   Mon Feb 1 10:25:31 2016 +0100
     If rt_notify is NULL, the export must always stay DOWN.
 
 commit ade389b326ddf2caaf08d7d3be8b3a1066ea7c97
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Feb 1 09:22:18 2016 +0100
 
     BSD: compilation error fix
@@ -13266,25 +14000,25 @@ Date:   Wed Jan 27 12:25:30 2016 +0100
     RIP: Fix DBG output
 
 commit 74d94167631ffd1b10709460510a1e3c8fc0e904
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Jan 25 10:29:06 2016 +0100
 
     RIPng: fixed misrejection of host routes
 
 commit 2fad92144ee2e3a818a7510554d2144e46c3a4c8
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Jan 21 15:46:33 2016 +0100
 
     BSD: fix no-return warning
 
 commit 3f35816136f1b57067d5ce426b031e4e3583085c
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Jan 21 10:59:52 2016 +0100
 
     BSD: Explicitly dropping routes with mismatched AF's.
 
 commit 0e965f69914313857a95d03b2e6136d3e84019dd
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Jan 20 15:23:17 2016 +0100
 
     All the current pthread implementations are OK and working with us.
@@ -13352,7 +14086,7 @@ Date:   Wed Jan 20 14:55:37 2016 +0100
       }
 
 commit 8109eb765fe92f4d47b497b3e2b24b59841c3487
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Jan 7 14:45:01 2016 +0100
 
     BSD integration fixes
@@ -13364,7 +14098,7 @@ Date:   Thu Jan 14 10:03:50 2016 +0100
     NET ROAx: add max_pxlen, fix format
 
 commit 9a883adf954c2f68085a398e8ab38bd54831cf52
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Jan 11 11:03:11 2016 +0100
 
     Net address format: Do not print the -4 or -6 suffix in %I4 and %I6
@@ -13389,13 +14123,13 @@ Date:   Tue Jan 12 11:27:38 2016 +0100
     ROA change printf 'ASN: xxx' to 'ASxxx'
 
 commit 6ffa8f53931e2ae8becf8ec6ef09db88737a6a06
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Jan 7 12:02:54 2016 +0100
 
     Hidden AF_INET* inside sysdep/
 
 commit 5b218c3d9bf9357aed0acf535bdfc6684cc5cda4
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Jan 7 11:29:05 2016 +0100
 
     BFD: split of v4/v6 sockets
@@ -13425,7 +14159,7 @@ Date:   Tue Dec 29 15:34:48 2015 +0100
     Move ID allocator to a separate file and use it also in OSPF
 
 commit 9a70c8d6c38155d8abb6d814563b9eefc134e901
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Dec 29 13:01:00 2015 +0100
 
     Netlink: Removed forgotten if-stub (caused strange errors)
@@ -13437,7 +14171,7 @@ Date:   Thu Dec 24 15:52:03 2015 +0100
     Follow-up work on integration
 
 commit 70b90dde23a684c4d32aa53685f76a73ecba941d
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Dec 22 09:45:09 2015 +0100
 
     Better fix of missing AF_INET6? definition in lib/socket.h
@@ -13453,7 +14187,7 @@ Date:   Mon Dec 21 20:16:05 2015 +0100
     Returned user data pointers have offset relative to fib_node.
 
 commit 67aa88336a91e635753ba42df45d7de5e191ed35
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Dec 21 18:23:08 2015 +0100
 
     BSD wants to include sys/socket.h in lib/socket.h (AF_INET6? definitions)
@@ -13497,7 +14231,7 @@ Date:   Sun Dec 20 16:58:37 2015 +0100
     KRT: Integration of IPv4/IPv6 in sysdep/linux
 
 commit 7fd4143eadd5af6e1ad7825d7d7506ad021bf1ad
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Dec 18 11:57:38 2015 +0100
 
     Integrated address print lengths
@@ -13505,19 +14239,19 @@ Date:   Fri Dec 18 11:57:38 2015 +0100
     Minor changes by Ondrej Santiago Zajicek
 
 commit 9656dce72eead158e6da3ad560720bb0addfe7e2
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Dec 16 15:30:44 2015 +0100
 
     ROA code switchoff
 
 commit aedd3a6babbaf35becb7770f73f30b20b464393f
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Dec 16 10:43:58 2015 +0100
 
     Implemented missing prefix manipulation functions
 
 commit 5e173e9f631913f68cf38d57a69c3ce6faf60d1e
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Dec 16 10:25:12 2015 +0100
 
     Stop perusing f_prefix for non-prefix-set uses
@@ -13525,7 +14259,7 @@ Date:   Wed Dec 16 10:25:12 2015 +0100
     Multiple changes by Ondrej Santiago Zajicek
 
 commit d7661fbe9dea980c61daa01a11a9aa59fa7be426
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Dec 11 15:35:37 2015 +0100
 
     Removed BITS_PER_IP_ADDRESS, MAX_PREFIX_LENGTH, BIRD_AF
@@ -13536,7 +14270,7 @@ Date:   Fri Dec 11 15:35:37 2015 +0100
     Squashing and minor changes by Ondrej Santiago Zajicek
 
 commit 9b136840d90cce887cd139054c3f0a7d8b9f57d2
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Dec 7 16:24:18 2015 +0100
 
     Netlink and BSD: Integrating IPv4 and IPv6
@@ -13570,7 +14304,7 @@ Date:   Tue Nov 24 15:21:11 2015 +0100
     Merge branch 'master' into rip-new
 
 commit ad27615760e2795da3efe5e97c0e888281d5ca59
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Nov 10 14:59:41 2015 +0100
 
     Netlink: attribute validation before parsing
@@ -13653,7 +14387,7 @@ Date:   Mon Nov 9 09:14:26 2015 +0100
     Fix compiling with --enable-debug option
 
 commit 9ddbfbddf87462bbf50437bdc1d44499a5c223e7
-Author: Jan Moskyto Matejka <mq@ucw.cz>
+Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Nov 3 14:42:41 2015 +0100
 
     Netlink: Allow more than 256 routing tables.

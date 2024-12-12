@@ -532,14 +532,14 @@ krt_learn_init(struct krt_proto *p)
 }
 
 static void
-krt_dump(struct proto *P)
+krt_dump(struct proto *P, struct dump_request *dreq)
 {
   struct krt_proto *p = (struct krt_proto *) P;
 
   if (!KRT_CF->learn)
     return;
-  debug("KRT: Table of inheritable routes\n");
-  rt_dump(p->krt_table);
+  RDUMP("KRT: Table of inheritable routes\n");
+  rt_dump(dreq, p->krt_table);
 }
 
 #endif
@@ -805,7 +805,7 @@ krt_got_route_async(struct krt_proto *p, rte *e, int new, s8 src)
 
 static timer *krt_scan_all_timer;
 static int krt_scan_all_count;
-static _Bool krt_scan_all_tables;
+static bool krt_scan_all_tables;
 
 static void
 krt_scan_all(timer *t UNUSED)

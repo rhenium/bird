@@ -422,6 +422,11 @@ channel_roa_subscribe_filter(struct channel *c, int dir)
       found = 1;
       break;
 
+    case FI_ASPA_CHECK_EXPLICIT:
+      tab = fi->i_FI_ASPA_CHECK_EXPLICIT.rtc->table;
+      if (valid) channel_roa_subscribe(c, tab, dir);
+      found = 1;
+      break;
     default:
       break;
     }
@@ -1688,27 +1693,27 @@ channel_graceful_restart_unlock(struct channel *c)
  * the internals.
  */
 void
-protos_dump_all(void)
+protos_dump_all(struct dump_request *dreq)
 {
-  debug("Protocols:\n");
+  RDUMP("Protocols:\n");
 
   struct proto *p;
   WALK_LIST(p, proto_list)
   {
-    debug("  protocol %s state %s\n", p->name, p_states[p->proto_state]);
+    RDUMP("  protocol %s state %s\n", p->name, p_states[p->proto_state]);
 
     struct channel *c;
     WALK_LIST(c, p->channels)
     {
-      debug("\tTABLE %s\n", c->table->name);
+      RDUMP("\tTABLE %s\n", c->table->name);
       if (c->in_filter)
-	debug("\tInput filter: %s\n", filter_name(c->in_filter));
+	RDUMP("\tInput filter: %s\n", filter_name(c->in_filter));
       if (c->out_filter)
-	debug("\tOutput filter: %s\n", filter_name(c->out_filter));
+	RDUMP("\tOutput filter: %s\n", filter_name(c->out_filter));
     }
 
     if (p->proto->dump && (p->proto_state != PS_DOWN))
-      p->proto->dump(p);
+      p->proto->dump(p, dreq);
   }
 }
 
@@ -2135,7 +2140,7 @@ proto_cmd_show(struct proto *p, uintptr_t verbose, int cnt)
   buf[0] = 0;
   if (p->proto->get_status)
     p->proto->get_status(p, buf);
-  tm_format_time(tbuf, &config->tf_proto, p->last_state_change);
+  tm_format_time(tbuf, (this_cli->tf ?: &config->tf_proto), p->last_state_change);
   cli_msg(-1002, "%-10s %-10s %-10s %-6s %-12s  %s",
 	  p->name,
 	  p->proto->name,

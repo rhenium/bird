@@ -15,6 +15,7 @@
 #include "lib/net.h"
 
 struct ea_list;
+struct adata;
 struct protocol;
 struct proto;
 struct rte_src;
@@ -320,6 +321,7 @@ static inline net *net_get(rtable *tab, const net_addr *addr) { return (net *) f
 net *net_get(rtable *tab, const net_addr *addr);
 net *net_route(rtable *tab, const net_addr *n);
 int net_roa_check(rtable *tab, const net_addr *n, u32 asn);
+enum aspa_result aspa_check(rtable *tab, const struct adata *path, bool force_upstream);
 rte *rte_find(net *net, struct rte_src *src);
 rte *rte_get_temp(struct rta *, struct rte_src *src);
 void rte_update2(struct channel *c, const net_addr *n, rte *new, struct rte_src *src);
@@ -330,13 +332,13 @@ void rt_refresh_begin(rtable *t, struct channel *c);
 void rt_refresh_end(rtable *t, struct channel *c);
 void rt_modify_stale(rtable *t, struct channel *c);
 void rt_schedule_prune(rtable *t);
-void rte_dump(rte *);
+void rte_dump(struct dump_request *, rte *);
 void rte_free(rte *);
 rte *rte_do_cow(rte *);
 static inline rte * rte_cow(rte *r) { return (r->flags & REF_COW) ? rte_do_cow(r) : r; }
 rte *rte_cow_rta(rte *r, linpool *lp);
-void rt_dump(rtable *);
-void rt_dump_all(void);
+void rt_dump(struct dump_request *, rtable *);
+void rt_dump_all(struct dump_request *);
 int rt_feed_channel(struct channel *c);
 void rt_feed_channel_abort(struct channel *c);
 int rte_update_in(struct channel *c, const net_addr *n, rte *new, struct rte_src *src);
@@ -536,6 +538,7 @@ const char *ea_custom_name(uint ea);
 #define EA_MPLS_LABEL		EA_CODE(PROTOCOL_NONE, 1)
 #define EA_MPLS_POLICY		EA_CODE(PROTOCOL_NONE, 2)
 #define EA_MPLS_CLASS		EA_CODE(PROTOCOL_NONE, 3)
+#define EA_ASPA_PROVIDERS	EA_CODE(PROTOCOL_NONE, 4)
 
 #define EA_CODE_MASK 0xffff
 #define EA_CUSTOM_BIT 0x8000
@@ -605,7 +608,7 @@ struct ea_walk_state {
 eattr *ea_find(ea_list *, unsigned ea);
 eattr *ea_walk(struct ea_walk_state *s, uint id, uint max);
 uintptr_t ea_get_int(ea_list *, unsigned ea, uintptr_t def);
-void ea_dump(ea_list *);
+void ea_dump(struct dump_request *, ea_list *);
 void ea_sort(ea_list *);		/* Sort entries in all sub-lists */
 unsigned ea_scan(ea_list *);		/* How many bytes do we need for merged ea_list */
 void ea_merge(ea_list *from, ea_list *to); /* Merge sub-lists to allocated buffer */
@@ -655,7 +658,7 @@ ea_set_attr(ea_list **to, struct linpool *pool, uint id, uint flags, uint type, 
 }
 
 static inline void
-ea_unset_attr(ea_list **to, struct linpool *pool, _Bool local, uint code)
+ea_unset_attr(ea_list **to, struct linpool *pool, bool local, uint code)
 {
   struct ea_one_attr_list *ea = lp_alloc(pool, sizeof(*ea));
   *ea = (struct ea_one_attr_list) {
@@ -715,8 +718,8 @@ void rta__free(rta *r);
 static inline void rta_free(rta *r) { if (r && !--r->uc) rta__free(r); }
 rta *rta_do_cow(rta *o, linpool *lp);
 static inline rta * rta_cow(rta *r, linpool *lp) { return rta_is_cached(r) ? rta_do_cow(r, lp) : r; }
-void rta_dump(rta *);
-void rta_dump_all(void);
+void rta_dump(struct dump_request *, rta *);
+void rta_dump_all(struct dump_request *);
 void rta_show(struct cli *, rta *);
 
 u32 rt_get_igp_metric(rte *rt);
@@ -779,5 +782,11 @@ int rt_flowspec_check(rtable *tab_ip, rtable *tab_flow, const net_addr *n, rta *
 #define ROA_UNKNOWN	0
 #define ROA_VALID	1
 #define ROA_INVALID	2
+
+enum aspa_result {
+  ASPA_UNKNOWN = 0,
+  ASPA_VALID,
+  ASPA_INVALID,
+};
 
 #endif

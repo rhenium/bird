@@ -10,6 +10,7 @@
 #define _BIRD_BIRDLIB_H_
 
 #include "lib/alloca.h"
+#include <stdarg.h>
 
 /* Ugly structure offset handling macros */
 
@@ -24,6 +25,7 @@ struct align_probe { char x; long int y; };
 
 #define MIN_(a,b) (((a)<(b))?(a):(b))
 #define MAX_(a,b) (((a)>(b))?(a):(b))
+#define CLAMP(a,l,h) (((a)<(l)) ? (l) : (((a)>(h)) ? (h) : (a)))
 
 #ifndef PARSER
 #undef MIN
@@ -75,7 +77,18 @@ static inline int u64_cmp(u64 i1, u64 i2)
 #define NORET __attribute__((noreturn))
 #define UNUSED __attribute__((unused))
 #define PACKED __attribute__((packed))
-#define NONNULL(...) __attribute__((nonnull((__VA_ARGS__))))
+#define NONNULL(...) __attribute__((nonnull(__VA_ARGS__)))
+#define ALLOC_SIZE(...) __attribute__((alloc_size(__VA_ARGS__)))
+
+#if __GNUC__ >= 10
+#define ACCESS_READ(...) __attribute__((access(read_only, __VA_ARGS__)))
+#define ACCESS_WRITE(...) __attribute__((access(write_only, __VA_ARGS__)))
+#define ACCESS_RW(...) __attribute__((access(read_write, __VA_ARGS__)))
+#else
+#define ACCESS_READ(...)
+#define ACCESS_WRITE(...)
+#define ACCESS_RW(...)
+#endif
 
 #define STATIC_ASSERT(EXP) _Static_assert(EXP, #EXP)
 #define STATIC_ASSERT_MSG(EXP,MSG) _Static_assert(EXP, MSG)
@@ -148,6 +161,7 @@ void log_msg(const char *msg, ...);
 void log_rl(struct tbf *rl, const char *msg, ...);
 void die(const char *msg, ...) NORET;
 void bug(const char *msg, ...) NORET;
+void vlog(int class, const char *msg, va_list args);
 
 #define L_DEBUG "\001"			/* Debugging messages */
 #define L_TRACE "\002"			/* Protocol tracing */
@@ -228,5 +242,16 @@ static inline u64 u64_hash0(u64 v, u32 p, u64 acc)
 
 static inline u32 u64_hash(u64 v)
 { return hash_value(u64_hash0(v, HASH_PARAM, 0)); }
+
+/* Dumping */
+struct dump_request {
+  u64 size;
+  btime begin;
+  uint indent, offset;
+  void (*write)(struct dump_request *, const char *fmt, ...);
+  void (*report)(struct dump_request *, int state, const char *fmt, ...);
+};
+
+#define RDUMP(...)  dreq->write(dreq, __VA_ARGS__)
 
 #endif
