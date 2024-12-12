@@ -16,7 +16,7 @@ Build-Depends-Indep:
  linuxdoc-tools-latex,
  opensp,
  texlive-latex-extra,
-Maintainer: Jakub Ružička <jakub.ruzicka@nic.cz>
+Maintainer: Jakub Ružička <jru@debian.org>
 Uploaders:
  Ondřej Surý <ondrej@debian.org>,
 Standards-Version: 4.6.2
