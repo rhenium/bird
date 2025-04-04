@@ -56,6 +56,7 @@ struct nl_sock
 };
 
 #define NL_RX_SIZE 32768
+#define NL_TX_SIZE 32768
 
 #define NL_OP_DELETE	0
 #define NL_OP_ADD	(NLM_F_CREATE|NLM_F_EXCL)
@@ -1303,15 +1304,6 @@ krt_capable(rte *e)
   }
 }
 
-static inline int
-nh_bufsize(struct nexthop *nh)
-{
-  int rv = 0;
-  for (; nh != NULL; nh = nh->next)
-    rv += RTNH_LENGTH(RTA_LENGTH(sizeof(ip_addr)));
-  return rv;
-}
-
 static int
 nl_send_route(struct krt_proto *p, rte *e, int op)
 {
@@ -1319,17 +1311,15 @@ nl_send_route(struct krt_proto *p, rte *e, int op)
   net *net = e->net;
   rta *a = e->attrs;
   ea_list *eattrs = a->eattrs;
-  int bufsize = 128 + KRT_METRICS_MAX*8 + nh_bufsize(&(a->nh));
   u32 priority = 0;
 
   struct {
     struct nlmsghdr h;
     struct rtmsg r;
-    char buf[0];
-  } *r;
+    char buf[NL_TX_SIZE];
+  } _r, *r = &_r;
 
-  int rsize = sizeof(*r) + bufsize;
-  r = alloca(rsize);
+  int rsize = sizeof(_r);
 
   DBG("nl_send_route(%N,op=%x)\n", net->n.addr, op);
 
