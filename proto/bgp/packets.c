@@ -1047,8 +1047,8 @@ bgp_rx_open(struct bgp_conn *conn, byte *pkt, uint len)
       conn->hold_time, conn->keepalive_time, p->remote_as, p->remote_id, conn->as4_session);
 
   bgp_schedule_packet(conn, NULL, PKT_KEEPALIVE);
-  bgp_start_timer(conn->hold_timer, conn->hold_time);
-  bgp_start_timer(conn->send_hold_timer, conn->send_hold_time);
+  bgp_start_timer(conn->hold_timer, conn->hold_time, 0);
+  bgp_start_timer(conn->send_hold_timer, conn->send_hold_time, 0);
   bgp_conn_enter_openconfirm_state(conn);
 }
 
@@ -2806,7 +2806,7 @@ bgp_rx_update(struct bgp_conn *conn, byte *pkt, uint len)
   if (conn->state != BS_ESTABLISHED)
   { bgp_error(conn, 5, fsm_err_subcode[conn->state], NULL, 0); return; }
 
-  bgp_start_timer(conn->hold_timer, conn->hold_time);
+  bgp_start_timer(conn->hold_timer, conn->hold_time, 0);
 
   struct lp_state tmpp;
   lp_save(tmp_linpool, &tmpp);
@@ -3098,7 +3098,7 @@ bgp_send(struct bgp_conn *conn, uint type, uint len)
 
   int success = sk_send(sk, len);
   if (success && ((conn->state == BS_ESTABLISHED) || (conn->state == BS_OPENCONFIRM)))
-    bgp_start_timer(conn->send_hold_timer, conn->send_hold_time);
+    bgp_start_timer(conn->send_hold_timer, conn->send_hold_time, 0);
 
   return success;
 }
@@ -3154,7 +3154,7 @@ bgp_fire_tx(struct bgp_conn *conn)
   {
     conn->packets_to_send &= ~(1 << PKT_KEEPALIVE);
     BGP_TRACE(D_PACKETS, "Sending KEEPALIVE");
-    bgp_start_timer(conn->keepalive_timer, conn->keepalive_time);
+    bgp_start_timer(conn->keepalive_timer, conn->keepalive_time, 1);
     return bgp_send(conn, PKT_KEEPALIVE, BGP_HEADER_LENGTH);
   }
   else while (conn->channels_to_send)
@@ -3262,7 +3262,7 @@ bgp_tx(sock *sk)
 
   /* Pending message was passed to kernel */
   if ((conn->state == BS_ESTABLISHED) || (conn->state == BS_OPENCONFIRM))
-    bgp_start_timer(conn->send_hold_timer, conn->send_hold_time);
+    bgp_start_timer(conn->send_hold_timer, conn->send_hold_time, 0);
 
   DBG("BGP: TX hook\n");
   uint max = 1024;
@@ -3465,7 +3465,7 @@ bgp_rx_keepalive(struct bgp_conn *conn)
   struct bgp_proto *p = conn->bgp;
 
   BGP_TRACE(D_PACKETS, "Got KEEPALIVE");
-  bgp_start_timer(conn->hold_timer, conn->hold_time);
+  bgp_start_timer(conn->hold_timer, conn->hold_time, 0);
 
   if (conn->state == BS_OPENCONFIRM)
   { bgp_conn_enter_established_state(conn); return; }
