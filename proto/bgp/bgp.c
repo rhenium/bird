@@ -1491,9 +1491,18 @@ bgp_hold_timeout(timer *t)
   /* If there is something in input queue, we are probably congested
      and perhaps just not processed BGP packets in time. */
 
-  if (sk_rx_ready(conn->sk) > 0)
+  if (sk_rx_ready(conn->sk) > 0) {
     bgp_start_timer(conn->hold_timer, 10, 0);
-  else if ((conn->state == BS_ESTABLISHED) && p->llgr_ready)
+    return;
+  }
+
+  if (p->cf->soft_hold_time) {
+    log(L_WARN "%s: Hold timer soft-expired", p->p.name);
+    bgp_start_timer(conn->hold_timer, 10, 0);
+    return;
+  }
+
+  if ((conn->state == BS_ESTABLISHED) && p->llgr_ready)
   {
     BGP_TRACE(D_EVENTS, "Hold timer expired");
     bgp_handle_graceful_restart(p);
