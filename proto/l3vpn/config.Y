@@ -92,7 +92,7 @@ l3vpn_proto:
 
 l3vpn_targets:
    ec_item { f_tree_only_rt($1); $$ = $1; }
- | '[' ec_items ']' { f_tree_only_rt($2); $$ = build_tree($2); }
+ | '[' ec_items comma_opt ']' { f_tree_only_rt($2); $$ = build_tree($2); }
  ;
 
 
