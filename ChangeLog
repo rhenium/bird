@@ -1,3 +1,166 @@
+commit 371342f33b47a9b52750d4e18ad50380062c3625
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Wed Sep 3 16:15:50 2025 +0200
+
+    NEWS and version update
+
+commit 067f361d9b6e2e1a0fa5d3bd62900e23b6ded4bb
+Author: Evann DREUMONT <53308142+LeGmask@users.noreply.github.com>
+Date:   Tue Sep 2 16:23:34 2025 +0200
+
+    Nest: Function aspa_check() should return ASPA_INVALID for paths containing AS_SET
+    
+    The aspa_check() uses as_path_getlen() to estimate the size of a buffer,
+    which does not work for AS_SET segments, because as_path_getlen() returns
+    length 1 for them regardless of their length. This may cause buffer
+    overflow and crash.
+    
+    As AS_SET segments are not valid for ASPA verification, we can just
+    handle them explicitly. See https://datatracker.ietf.org/doc/html/draft-ietf-sidrops-aspa-verification#section-6
+    
+    Co-Authored-By: Alarig <alarig@swordarmor.fr>
+    
+    Minor changes by committer.
+
+commit 8f5b21964ece066d15794cf9d17be5b3906fe596
+Author: Ondrej Zajicek <santiago@crfreenet.org>
+Date:   Tue May 6 14:50:53 2025 +0200
+
+    Conf: Fix invalid check in text_or_ipa grammar
+    
+    Can cause crash when a bad expression is used.
+
+commit 3ed060184e23ad431c2c8d9dd1350b056843b09f
+Author: David Petera <david.petera@nic.cz>
+Date:   Wed Aug 20 16:45:06 2025 +0200
+
+    CI: Add test of user and groups before and after package installation
+    
+    Also fix typo and add more descriptive logging to installation test
+
+commit 9af5c30717cb2a7bf83cdd6ed9bce1b8a3648af8
+Author: David Petera <david.petera@nic.cz>
+Date:   Tue Aug 19 18:05:22 2025 +0200
+
+    CI: Add debian trixie to pipeline
+
+commit 3a813f00fd16ce1bb7874fc864e30cfca98bff0c
+Author: David Petera <david.petera@nic.cz>
+Date:   Wed Aug 20 18:04:37 2025 +0200
+
+    CI: Fix installation on newer debian-based distros
+    
+    Package 'adduser' needs to be installed explicitly
+
+commit 0c96a31e1bd62f313d6fe2ef1ddfaaa965f9ba7d
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Jun 19 21:12:52 2025 +0200
+
+    CI: Limit log bloating for netlab runners
+    
+    There is no useful configurable file size limit for netlab, allowing
+    the job to eat up all the disk. Thus we limit it directly in the script
+    by setting ulimit -f to 1G.
+
+commit 4d288af9c1a0a32cb121aa13e71bda8afcf5db3b
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Jun 12 11:55:21 2025 +0200
+
+    CI: Fix tests for merge requests
+    
+    The branch name check needed to be extended to include merge requests.
+    Now for merge requests, we generate a fake branch name.
+
+commit 68c4b72a061e40d022356dc6939b8c2fbef8c2d3
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu Jun 12 11:52:32 2025 +0200
+
+    CI: Fix netlab failure artifact collection
+    
+    When implementing artifact collection for netlab,
+    I forgot that the coredumps and logs are generated outside the
+    repository. Moving the artifacts to the right place for collection.
+    
+    Introduced in 3d88a81f102783bd4af3d99db1e1f14d14050d6c.
+
+commit 2dd34199f6ac74bd4cf207f94bef571d0103be4b
+Author: Jana Babovakova <babovakova.jana@gmail.com>
+Date:   Tue May 27 12:42:13 2025 +0200
+
+    CI: Note on how to trigger image rebuild when adding new dockerfile.
+
+commit 71f8a0a4c6212420488947bf02977bf1bbc30457
+Author: Jana Babovakova <babovakova.jana@gmail.com>
+Date:   Tue May 27 12:34:45 2025 +0200
+
+    CI: Added Docker for Rocky Linux 8 and 9.
+    
+    Updated both to supported versions 8.10, 9.5.
+
+commit b5804527dcb2e83ace4ec861ba738f3dde736299
+Author: David Petera <david.petera@nic.cz>
+Date:   Wed May 7 16:02:09 2025 +0200
+
+    CI: Add package install tests.
+    
+    We are checking that generated BIRD packages can be installed and run.
+    Communication between bird and birdc is also tested.
+    
+    This fixes #202
+
+commit 762047945dd5e26b5f22bbf618f9d805db752095
+Author: David Petera <david.petera@nic.cz>
+Date:   Wed May 7 15:36:14 2025 +0200
+
+    CI: Add systemd installation to Fedora Dockerfiles and make exception in bird.spec for CentOS and OpenSUSE distros.
+
+commit d73eaffececea3ce622c709a183f9f6f31742172
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu May 22 17:57:00 2025 +0200
+
+    Gitlab: fix cleanup after failed netlab
+    
+    I forgot to add cd command to move to the right directory.
+
+commit b01eedcc36f501dc2dbb01bcde08e83b1f302e15
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Thu May 22 17:21:13 2025 +0200
+
+    CI: Stayrtr binary has moved elsewhere
+    
+    Installed our local version supporting RTRv2 and ASPA
+
+commit d69f3325e29de2f5d7db3c57e098885d71d6280d
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Sat May 10 20:17:34 2025 +0200
+
+    Gitlab: properly cleanup after failed netlab jobs
+    
+    Also keeps artifacts from failed netlab jobs to allow for
+    easier debugging
+
+commit d3d86fbe23d70f0a1ed26b6f550942653bba42d5
+Author: Maria Matejka <mq@ucw.cz>
+Date:   Sat May 10 15:02:58 2025 +0200
+
+    Version script: fix detached mode
+
+commit 29dc8b2a2a114536eac0c34cd781e6c2c1d33feb
+Author: xtex <xtexchooser@duck.com>
+Date:   Fri May 9 07:14:50 2025 -0400
+
+    Build: call tools/version with sh
+    
+    As tools/version has a shebang line, it should be
+    fine to just call it without specifying bash.
+    
+    Calling bash explicitly may lead to inconsistency,
+    as the first line of tools/version indicates /usr/bin/sh
+    but the script is always executed with bash.
+    And, it adds bash as a new build dependency.
+    
+    Signed-off-by: xtex <xtexchooser@duck.com>
+
 commit 7ef70b27ef907bba7479989a5376842c893b12bb
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Apr 29 20:30:45 2025 +0200
@@ -1243,7 +1406,7 @@ Date:   Tue Oct 8 19:34:51 2024 +0200
     Thanks to Mikhail Mayorov for bugreport.
 
 commit 163ab3130f6a890411402643818af388df5f5719
-Merge: 8dc2a36ae d4929d911
+Merge: 8dc2a36a d4929d91
 Author: Ondřej Zajíček <santiago@crfreenet.org>
 Date:   Mon Oct 7 16:35:55 2024 +0200
 
@@ -1544,7 +1707,7 @@ Date:   Thu Mar 21 15:59:26 2024 +0100
     This reverts commit 31aa62ae6d2e111e87c08b4b27a16ead968f0689.
 
 commit 46a4932574106315e2585d990199da7825863a85
-Merge: 66d6ac708 44e351d15
+Merge: 66d6ac70 44e351d1
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu Mar 21 15:58:52 2024 +0100
 
@@ -1814,7 +1977,7 @@ Date:   Wed Dec 13 03:48:12 2023 +0100
     Based on the patch from Alexander Zubkov <green@qrator.net>, thanks!
 
 commit 8cf1be6f67eaeb9bfd2fffe4a4bc9ae419adffd5
-Merge: 4aac1b259 bb094fb6c
+Merge: 4aac1b25 bb094fb6
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Dec 8 12:09:30 2023 +0100
 
@@ -1829,7 +1992,7 @@ Date:   Fri Dec 8 12:07:46 2023 +0100
     Having 4 functions doing almost the same is more mess than three macros.
 
 commit 4aac1b259fa94b99427f837564876baa2183ccb1
-Merge: bcf232742 54ddf90f6
+Merge: bcf23274 54ddf90f
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Dec 8 08:30:30 2023 +0100
 
@@ -2731,7 +2894,7 @@ Date:   Wed Aug 23 15:55:31 2023 +0200
     Based on the patch from Erin Shepherd, thanks!
 
 commit 5121101136cb80151a9361c63dc4822afeb44eef
-Merge: d2dbe8546 4558adabf
+Merge: d2dbe854 4558adab
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Aug 22 15:28:05 2023 +0200
 
@@ -2938,7 +3101,7 @@ Date:   Fri Jun 23 16:47:37 2023 +0200
     Allow to use shorter literals with explicit hex: prefix.
 
 commit 5f2ecb2298a6fe4b2fcd9efc0b39c36202496c2c
-Merge: f8bcb037b 52bae235b
+Merge: f8bcb037 52bae235
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Jun 22 17:25:18 2023 +0200
 
@@ -3229,7 +3392,7 @@ Date:   Fri Apr 21 19:29:17 2023 +0200
     16-way ones, so these tests generated false error. Block them for now.
 
 commit 52450bc96dcedbc30cbb2e282c6706ad9e5e5774
-Merge: d61505b03 f3b599afe
+Merge: d61505b0 f3b599af
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Apr 21 04:47:55 2023 +0200
 
@@ -3702,7 +3865,7 @@ Date:   Wed Jan 18 13:40:21 2023 +0100
      - Our printf uses %ld for s64 instead of long
 
 commit 6bb992cb04926895be57dc97e7d569ea15a07db1
-Merge: 973aa37e1 7144c9ca4
+Merge: 973aa37e 7144c9ca
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Jan 18 12:33:06 2023 +0100
 
@@ -4269,7 +4432,7 @@ Date:   Fri Oct 22 19:43:55 2021 +0200
     the OSPF route we would get a possible priority inversion.
 
 commit d2c1036a42881d413ec97203ede92a69f8cd218f
-Merge: dc28c6ed1 16ac6c3c7
+Merge: dc28c6ed 16ac6c3c
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Aug 18 22:07:50 2022 +0200
 
@@ -4288,7 +4451,7 @@ Date:   Thu Aug 18 17:44:00 2022 +0200
     Fixed initialization of Linux kernel route attributes
 
 commit bc4ad83dacb07ad6bb454b75d78daa2f9c953088
-Merge: 73abd91ac 082905a83
+Merge: 73abd91a 082905a8
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Aug 3 15:04:42 2022 +0200
 
@@ -4301,7 +4464,7 @@ Date:   Fri Jul 22 16:09:37 2022 +0200
     rip_rte_better() uses the IGP_METRIC_UNKNOWN instead of protocol-specific infinity
 
 commit 082905a8338b4ba20a08ada0d562bbc5e15c707b
-Merge: 2e484f8d2 ddb1bdf28
+Merge: 2e484f8d ddb1bdf2
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Wed Jul 27 00:47:24 2022 +0200
 
@@ -4351,7 +4514,7 @@ Date:   Mon Jul 25 00:11:40 2022 +0200
     Thanks to Daniel Gröber for the original patch.
 
 commit 2e484f8d2977186f6d97213827a66847738d2c31
-Merge: 4d48ede51 971721c9b
+Merge: 4d48ede5 971721c9
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Jul 24 20:08:02 2022 +0200
 
@@ -4425,21 +4588,21 @@ Date:   Mon Jul 11 13:04:01 2022 +0200
     Added forgotten route source locking in flowspec validation
 
 commit 2e5bfeb73ac25e236a24b6c1a88d0f2221ca303f
-Merge: d429bc5c8 cb339a306
+Merge: d429bc5c cb339a30
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Jul 11 11:08:10 2022 +0200
 
     Merge remote-tracking branch 'origin/master' into backport
 
 commit d429bc5c841a8e9d4c81786973edfa56d20a407e
-Merge: 7e9cede1f beb5f78ad
+Merge: 7e9cede1 beb5f78a
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Jul 11 10:41:17 2022 +0200
 
     Merge commit 'beb5f78a' into backport
 
 commit 7e9cede1fd1878fb4c00e793bccd0ca6c18ad452
-Merge: 652be92a2 b867c798c
+Merge: 652be92a b867c798
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Sun Jul 10 14:19:24 2022 +0200
 
@@ -4684,21 +4847,21 @@ Date:   Sat Jun 4 17:34:57 2022 +0200
     a downed peer from 20-30 min to <2 min and removed 40s latencies.
 
 commit 652be92a21f5575e5f74f6abe98eb4200b86776c
-Merge: f196b12c6 9e60b500c
+Merge: f196b12c 9e60b500
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon May 30 15:20:21 2022 +0200
 
     Merge remote-tracking branch 'origin/master' into haugesund-to-2.0
 
 commit f196b12c62633e382541ba156e6df1534860c568
-Merge: 097f15718 9eec503b2
+Merge: 097f1571 9eec503b
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon May 30 15:20:05 2022 +0200
 
     Merge commit '9eec503b251c3388579032b300d32640403d8612' into haugesund-to-2.0
 
 commit 097f1571821caa775aec3ada52a1b02b5ffc89bb
-Merge: 5299fb9db 692055e3d
+Merge: 5299fb9d 692055e3
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon May 30 15:17:52 2022 +0200
 
@@ -4950,14 +5113,14 @@ Date:   Wed Mar 9 13:27:49 2022 +0100
     Fixed a static assert in page allocator
 
 commit 9b6db9f9b8e561d215e1df01169b15a9dfaba1b9
-Merge: 19e727a24 5ddf98f6b
+Merge: 19e727a2 5ddf98f6
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 9 11:51:00 2022 +0100
 
     Merge remote-tracking branch 'origin/master' into haugesund
 
 commit 19e727a248d15e9f8871986ac286cf74b3d86e61
-Merge: 8a4bc4fdb 60880b539
+Merge: 8a4bc4fd 60880b53
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 9 11:28:34 2022 +0100
 
@@ -4970,14 +5133,14 @@ Date:   Fri Feb 11 22:29:13 2022 +0100
     BGP Flowspec validation: Removed in-route optimization for multithreading compatibility
 
 commit 24773af9e099530aa6ccf4c730ad31c452284228
-Merge: 83d9920f9 e42eedb91
+Merge: 83d9920f e42eedb9
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 9 11:01:44 2022 +0100
 
     Merge commit 'e42eedb9' into haugesund
 
 commit 83d9920f90738e4df75b3cf57335b43c094051cd
-Merge: ff47cd80d 5cff1d5f0
+Merge: ff47cd80 5cff1d5f
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 9 10:56:06 2022 +0100
 
@@ -4988,7 +5151,7 @@ Date:   Wed Mar 9 10:56:06 2022 +0100
           proto/pipe/pipe.c
 
 commit ff47cd80dd04bc11692248a40cbf52ee8d351064
-Merge: 9e60a1fbc d5a32563d
+Merge: 9e60a1fb d5a32563
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 9 10:50:38 2022 +0100
 
@@ -5007,7 +5170,7 @@ Date:   Wed Mar 9 10:30:33 2022 +0100
     Linpools with pages fixed to the final page allocator version
 
 commit eeec9ddbf2a3536417c6dd434da9a7dd2bbdaa42
-Merge: c78247f9b 0c59f7ff0
+Merge: c78247f9 0c59f7ff
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 9 09:13:55 2022 +0100
 
@@ -5082,7 +5245,7 @@ Date:   Wed Mar 2 10:52:09 2022 +0100
     Small improvement in directory test
 
 commit d071aca7aaf7a4add9e0d1d93029fb9a0fad560a
-Merge: fcb4dd0c8 2c1375913
+Merge: fcb4dd0c 2c137591
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 2 10:01:44 2022 +0100
 
@@ -5149,7 +5312,7 @@ Date:   Mon Feb 7 04:39:49 2022 +0100
     for internal allocators.
 
 commit 53a25406878ed686a58ec3e7379d6cb45b784942
-Merge: 4c6ee53f3 24600c642
+Merge: 4c6ee53f 24600c64
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Sun Feb 6 23:32:15 2022 +0100
 
@@ -7354,7 +7517,7 @@ Date:   Fri May 1 15:41:42 2020 +0200
     Fixed a harmless warning in production build
 
 commit 048eb2ddf1ee9587d9fa30cbb3f87d6f650a2133
-Merge: 17de3a023 59238768b
+Merge: 17de3a02 59238768
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri May 1 15:34:17 2020 +0200
 
@@ -8491,7 +8654,7 @@ Date:   Thu Jul 25 14:24:16 2019 +0200
     The formatting was broken due to longer date in 'since' column.
 
 commit cec40a74679821513e627f93b924067a404f6475
-Merge: 18f70a622 8263690e7
+Merge: 18f70a62 8263690e
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Wed Jul 24 15:38:32 2019 +0200
 
@@ -8571,7 +8734,7 @@ Date:   Mon Jul 15 16:23:18 2019 +0200
     IPv6 ECMP handling.
 
 commit 8263690e754a83b8f3c58bd0080a1628d6cba556
-Merge: efd7c87b5 1aec7112f
+Merge: efd7c87b 1aec7112
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Jul 15 16:07:16 2019 +0200
 
@@ -8647,7 +8810,7 @@ Date:   Wed Jul 10 16:46:31 2019 +0200
     Filter: Minor cleanups
 
 commit b2a4feeb4c877ff56d9b2ebd8119225c53ea40db
-Merge: eac9250fd 422a93342
+Merge: eac9250f 422a9334
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Jul 10 11:27:08 2019 +0200
 
@@ -8678,7 +8841,7 @@ Date:   Tue Jul 9 15:25:40 2019 +0200
     Doc: Fix typo in BGP dynamic names feature description
 
 commit 74a38adb6b4b4bf2a67e7a779a7c95b0ef1b9894
-Merge: 1322e205e 2872ab927
+Merge: 1322e205 2872ab92
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Jul 9 14:53:15 2019 +0200
 
@@ -8739,14 +8902,14 @@ Date:   Thu Jul 4 13:34:42 2019 +0200
     When priority is reconfigured locally, we need to trigger DR election.
 
 commit eac9250fd5b10809830361b94438339b3b31b270
-Merge: 8816b6cdd 026bfedb3
+Merge: 8816b6cd 026bfedb
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Jul 3 11:09:52 2019 +0200
 
     Merge branch 'master' into mq-filter-stack
 
 commit 8816b6cdd98d24535eece6b5e35730aac57cd9f7
-Merge: c376555ce 84ac62d39
+Merge: c376555c 84ac62d3
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Jul 3 08:44:42 2019 +0200
 
@@ -8931,7 +9094,7 @@ Date:   Thu Jun 27 15:55:48 2019 +0200
     Filter: A little cleanup of M4 interpreter generator
 
 commit a8ab54d18d3af8e7dc9811ab8e3ba9a105131a25
-Merge: 63e762046 2e0777317
+Merge: 63e76204 2e077731
 Author: Maria Matejka <mq@jmq.cz>
 Date:   Tue Jun 25 22:40:05 2019 +0200
 
@@ -9178,7 +9341,7 @@ Date:   Fri Mar 15 20:54:01 2019 +0100
     capabilities disabled, handle that as implicit IPv4 unicast.
 
 commit 8d65add626b34256879a3e83855af3c0fa8ce4e7
-Merge: 2f02c25e3 5d511948c
+Merge: 2f02c25e 5d511948
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Mon Mar 18 12:54:40 2019 +0100
 
@@ -9630,7 +9793,7 @@ Date:   Sat Feb 9 16:15:01 2019 +0100
     As we do not have much usage for it yet.
 
 commit cd16538fc91778e31f8241f62ee47056f099c051
-Merge: 6e8fb6685 f9b97f1c6
+Merge: 6e8fb668 f9b97f1c
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Sat Feb 9 15:53:16 2019 +0100
 
@@ -10059,7 +10222,7 @@ Date:   Mon Dec 10 02:11:42 2018 +0100
     Thanks to Cybertinus for a bugreport.
 
 commit 9a5ef043c11ad9fba00557dedcc0d7ae0d2794e9
-Merge: 0e4920632 265419a36
+Merge: 0e492063 265419a3
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Dec 6 09:55:34 2018 +0100
 
@@ -10614,7 +10777,7 @@ Date:   Tue Jun 19 16:16:08 2018 +0200
     way too slow. The cached pointer is faster.
 
 commit 1ef23f05ee00394e6a2748f658b73c20d3ff7c45
-Merge: 13c0be19d caa9d03d6
+Merge: 13c0be19 caa9d03d
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Jun 19 14:32:16 2018 +0200
 
@@ -10857,7 +11020,7 @@ Date:   Thu Mar 22 13:30:10 2018 +0100
     Date added.
 
 commit 966602602a0f24942bee3ab0492bbb9197e71aa1
-Merge: 440628126 4841804ff
+Merge: 44062812 4841804f
 Author: Ondrej Filip <feela@network.cz>
 Date:   Thu Mar 22 13:25:58 2018 +0100
 
@@ -10884,7 +11047,7 @@ Date:   Tue Mar 20 19:28:26 2018 +0100
     The old one does not work with 2.0.x.
 
 commit 89ac4dd3c433cae865d5339efe5e682d4506044d
-Merge: bcb4af81f 8a871e890
+Merge: bcb4af81 8a871e89
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Mon Mar 19 13:29:39 2018 +0100
 
@@ -10919,7 +11082,7 @@ Date:   Sat Mar 17 17:14:02 2018 +0100
     Thanks to Joshua McQuistan for the bugreport.
 
 commit 8a871e890a7198f7cbaff5c75033160ae3ad68f3
-Merge: e95705f00 e8bc64e30
+Merge: e95705f0 e8bc64e3
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 14 12:57:16 2018 +0100
 
@@ -10969,7 +11132,7 @@ Date:   Wed Feb 28 16:57:50 2018 +0100
     convertible to ASN in BIRD.
 
 commit e95705f00c9e297cd6dde1e8fa60bee4a4d539f2
-Merge: d1ba927b3 74bfd2f97
+Merge: d1ba927b 74bfd2f9
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Mar 13 17:02:49 2018 +0100
 
@@ -10989,7 +11152,7 @@ Date:   Tue Mar 13 12:08:37 2018 +0100
     Date:   Tue Mar 2 19:49:28 1999 +0000
 
 commit d1ba927b369c91ddb2143b686ca4c1be53e46e64
-Merge: f2f5a7d94 7c601e6b7
+Merge: f2f5a7d9 7c601e6b
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Mar 13 16:51:04 2018 +0100
 
@@ -11034,7 +11197,7 @@ Date:   Tue Mar 6 16:03:35 2018 +0100
     Config: Dropped the ipv4:netmask4 syntax for IPv4 prefixes.
 
 commit d0f47327f81a278d6adb3d0a6c235ea715798d01
-Merge: 1561ee799 2d6d4b805
+Merge: 1561ee79 2d6d4b80
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Wed Mar 7 17:41:49 2018 +0100
 
@@ -11051,7 +11214,7 @@ Date:   Wed Mar 7 17:35:24 2018 +0100
     Thanks to Leo Vandewoestijne for the bugreport.
 
 commit 44062812600bd29f8edf30ebc871ff218069c5a2
-Merge: 6f46465af 1561ee799
+Merge: 6f46465a 1561ee79
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Feb 27 06:08:03 2018 +0100
 
@@ -11148,7 +11311,7 @@ Date:   Wed Jan 24 13:55:12 2018 +0100
     Nest: remove duplicate function
 
 commit 75d98b6013c19598b1d3ba5e05e8f84525e8678a
-Merge: ace3072e0 d6cf99615
+Merge: ace3072e d6cf9961
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue Jan 23 18:29:32 2018 +0100
 
@@ -11309,7 +11472,7 @@ Date:   Wed Jan 3 14:12:00 2018 +0100
     ROA: Fix reconfiguration
 
 commit 9bd8cb7c3ca23524cb7d69ee503e24658ad2ee42
-Merge: d493d0f18 cce6ba4da
+Merge: d493d0f1 cce6ba4d
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue Jan 2 16:59:59 2018 +0100
 
@@ -11401,7 +11564,7 @@ Date:   Wed Dec 13 14:49:55 2017 +0100
     Lib: Minor fix
 
 commit cb21c5ffa92494b1a4bf110605509de3326b6c3d
-Merge: 71c51aa4a 1e11918c8
+Merge: 71c51aa4 1e11918c
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Dec 13 10:29:10 2017 +0100
 
@@ -11540,21 +11703,21 @@ Date:   Fri Dec 8 02:26:17 2017 +0100
     BGP: Autoconfigure BGP next hops from preferred addresses
 
 commit 830ba75e6dd369c3e64d122f0537cc85211e56e6
-Merge: 46434a3ca 1e8721e2a
+Merge: 46434a3c 1e8721e2
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Thu Dec 7 21:54:47 2017 +0100
 
     Merge commit '1e8721e2aeccfbc3f533e8b8abc07582cee77e9a' into int-new
 
 commit 46434a3cad99260b5a659e5df874eab4615bcb36
-Merge: 4ff15a75c 7b2c5f3d2
+Merge: 4ff15a75 7b2c5f3d
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Thu Dec 7 18:35:46 2017 +0100
 
     Merge commit '7b2c5f3d2826e3175bf31b1c36056c9efc587a2b' into int-new
 
 commit 4ff15a75c56531fa2d3858d8250dcef1af4e75b6
-Merge: cd80c9b07 98bb80a24
+Merge: cd80c9b0 98bb80a2
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Thu Dec 7 17:41:09 2017 +0100
 
@@ -12023,7 +12186,7 @@ Date:   Mon Sep 4 22:32:45 2017 +0200
     Thanks to Eugene Sevastyanov for the original patch.
 
 commit 96eace1ea70d7c2bc13672fbeba104d34d8ede4c
-Merge: 08b6a617e 5c4dfe0c3
+Merge: 08b6a617 5c4dfe0c
 Author: Michal 'vorner' Vaner <michal.vaner@nic.cz>
 Date:   Mon Sep 4 13:30:13 2017 +0200
 
@@ -12119,7 +12282,7 @@ Date:   Wed Aug 9 13:35:55 2017 +0200
     A TODO file last updated 5 years ago is useless.
 
 commit 69f73992477a0e29f939f9e2722f705c4ad72a38
-Merge: 5a41eed26 b3fae3a81
+Merge: 5a41eed2 b3fae3a8
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Wed Aug 9 12:46:27 2017 +0200
 
@@ -12266,7 +12429,7 @@ Date:   Thu Jun 8 12:18:16 2017 +0200
     Thanks to Toke Høiland-Jørgensen <toke@toke.dk> for the patch.
 
 commit 801fd81efea5bf51fe459d951e4be95119798b2b
-Merge: 77810030d 33f7fbc42
+Merge: 77810030 33f7fbc4
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Wed May 31 14:12:03 2017 +0200
 
@@ -12279,7 +12442,7 @@ Date:   Wed May 31 13:31:03 2017 +0200
     CLI: Fix bug in symbol handling introduced in previous patches
 
 commit 77810030d2556e3af659d354a2b3d661f58dd735
-Merge: a1dc52676 4fec43067
+Merge: a1dc5267 4fec4306
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue May 30 14:44:37 2017 +0200
 
@@ -12292,7 +12455,7 @@ Date:   Tue May 30 14:43:49 2017 +0200
     Workaround for older bisons
 
 commit a1dc5267602062562f9adca7acfbbc2fee3b315e
-Merge: 4b2aef885 b7761af34
+Merge: 4b2aef88 b7761af3
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Thu May 25 23:37:50 2017 +0200
 
@@ -12309,7 +12472,7 @@ Date:   Thu May 25 23:30:39 2017 +0200
     according to needs.
 
 commit 4b2aef8857a9ac23015e410930d2162d945892f0
-Merge: 6aaaa6351 c72b660b7
+Merge: 6aaaa635 c72b660b
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue May 23 18:45:33 2017 +0200
 
@@ -12368,7 +12531,7 @@ Date:   Thu May 18 14:51:36 2017 +0200
     When shift count >= width of type the behavior is undefined.
 
 commit 5a9169e152779ac6f99e2eccb79a2a2f6e2c76b2
-Merge: 7d5e61a66 78e4dac99
+Merge: 7d5e61a6 78e4dac9
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Thu May 18 14:28:03 2017 +0200
 
@@ -12397,7 +12560,7 @@ Date:   Thu May 18 12:05:09 2017 +0200
     Space in action branch breaks build on some platforms.
 
 commit 9b701e69cc812260788eced3370c7e65cd0e25fe
-Merge: d19617f06 d6e01ff90
+Merge: d19617f0 d6e01ff9
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Wed May 17 17:37:27 2017 +0200
 
@@ -12422,14 +12585,14 @@ Date:   Wed May 17 16:05:07 2017 +0200
     Fix build on systems with dirty headers
 
 commit d19617f06b4526bccc2fc5e5e15c43c754b99a4d
-Merge: 144c10fad 31874783c
+Merge: 144c10fa 31874783
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Wed May 17 14:50:00 2017 +0200
 
     Merge remote-tracking branch 'origin/int-new' into int-new
 
 commit 144c10fad1ed6a2520abd1c43501ce00ea2699db
-Merge: 1c5b4c5d5 a01e951d0
+Merge: 1c5b4c5d a01e951d
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Wed May 17 14:38:04 2017 +0200
 
@@ -12463,7 +12626,7 @@ Date:   Tue May 16 10:35:10 2017 +0200
     Bird readline client saves its history.
 
 commit 1c5b4c5d5b937fe6bbc3a599296e40a05f022b33
-Merge: fd1f355b7 b845ea097
+Merge: fd1f355b b845ea09
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue May 16 14:18:25 2017 +0200
 
@@ -12514,7 +12677,7 @@ Date:   Mon May 15 12:10:51 2017 +0200
     Nest: split route show into separate file
 
 commit fd1f355b7b24f354f7d57f127911b4fd98354b34
-Merge: 525a88d87 71652572e
+Merge: 525a88d8 71652572
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue May 9 17:37:38 2017 +0200
 
@@ -12527,7 +12690,7 @@ Date:   Tue May 9 16:46:41 2017 +0200
     Minor autoconf cleanup and documentation update
 
 commit 525a88d87930d01d4301e2723dda3dca208cd3d4
-Merge: 95639d957 5d6dc9304
+Merge: 95639d95 5d6dc930
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue May 9 14:07:14 2017 +0200
 
@@ -12575,7 +12738,7 @@ Date:   Sat Apr 29 00:36:35 2017 +0200
     Minor fixes
 
 commit e919601aaf29615edb2a231e58a358c2c5c9d286
-Merge: 5ca4bd5d9 33b6c292c
+Merge: 5ca4bd5d 33b6c292
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Fri Apr 28 11:19:12 2017 +0200
 
@@ -12600,7 +12763,7 @@ Date:   Wed Apr 26 14:11:28 2017 +0200
     Test: Fix broken test for filters
 
 commit 69fddac0525b1b0c940d778a161ed3a0a742ed6f
-Merge: 93a3661c1 b29499996
+Merge: 93a3661c b2949999
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Apr 26 12:30:22 2017 +0200
 
@@ -12731,7 +12894,7 @@ Date:   Tue Mar 28 18:14:32 2017 +0200
     Netlink: Fix device route delete
 
 commit 5dbeb87ec96157ca95c84d881e014614dd3164a3
-Merge: 2282030b2 d1b8fe93f
+Merge: 2282030b d1b8fe93
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Mar 28 17:35:57 2017 +0200
 
@@ -12781,7 +12944,7 @@ Date:   Wed Mar 22 15:00:07 2017 +0100
     Based on patches from Jan Matejka.
 
 commit ead7b8f498ddefc0b7373cbba78f9a7ba1dddaa9
-Merge: da3cf9eae 61e501da8
+Merge: da3cf9ea 61e501da
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Mar 22 14:54:00 2017 +0100
 
@@ -12918,7 +13081,7 @@ Date:   Wed Feb 22 12:02:28 2017 +0100
     Babel post-merge fixes
 
 commit c609d039860f97f400d2cf0e9ca2b4e87b3fd1cc
-Merge: 62e64905b 2be9218a3
+Merge: 62e64905 2be9218a
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Feb 22 11:58:04 2017 +0100
 
@@ -12966,7 +13129,7 @@ Date:   Fri Feb 17 22:54:06 2017 +0100
     Thanks to Lennert Buytenhek for tracking and reporting the bug.
 
 commit c259669fa33ca13b5c6ae60eb8ffa0874ddc01b2
-Merge: 82f42ea09 da65a3d89
+Merge: 82f42ea0 da65a3d8
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Wed Feb 8 14:34:48 2017 +0100
 
@@ -13202,7 +13365,7 @@ Date:   Wed Dec 7 15:35:35 2016 +0100
     RPKI: fixed some of the extended warnings
 
 commit ad88b94bca78e010357a6c7806e1d5e01701d4a7
-Merge: d15b0b0a1 af62c0f9f
+Merge: d15b0b0a af62c0f9
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Wed Dec 7 15:30:46 2016 +0100
 
@@ -13485,7 +13648,7 @@ Date:   Wed Nov 9 16:36:34 2016 +0100
      current int-new branch.
 
 commit 8860e991f6650e47cfe6c1af595fe4fe92a4edfd
-Merge: cc5b93f72 c8cafc8eb
+Merge: cc5b93f7 c8cafc8e
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue Nov 8 19:27:58 2016 +0100
 
@@ -13498,7 +13661,7 @@ Date:   Tue Nov 8 17:46:29 2016 +0100
     Minor code cleanups
 
 commit cc5b93f72db80abd1262a0a5e1d8400ceef54385
-Merge: 5de0e848d f51b1f556
+Merge: 5de0e848 f51b1f55
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue Nov 8 17:03:31 2016 +0100
 
@@ -13928,7 +14091,7 @@ Date:   Tue Aug 30 12:43:46 2016 +0200
     check.
 
 commit 768d013267bd2a52bab70ba6d413f49365fb31e3
-Merge: 678c97f21 d107ef78d
+Merge: 678c97f2 d107ef78
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue Aug 23 17:35:26 2016 +0200
 
@@ -14231,7 +14394,7 @@ Date:   Tue May 17 15:21:49 2016 +0200
     SKF_V6ONLY are to be removed.
 
 commit 5af7b59660be615fbbd7c20b92b71321c003c43a
-Merge: d39d41fbd b66a9e2f3
+Merge: d39d41fb b66a9e2f
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri May 13 13:48:04 2016 +0200
 
@@ -14244,7 +14407,7 @@ Date:   Fri May 13 13:46:46 2016 +0200
     Hash: Fix of previous commit
 
 commit b66a9e2f3376b4cb07ef4cc318f70a9c794f407a
-Merge: 659f80f26 3f2c7600f
+Merge: 659f80f2 3f2c7600
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Thu May 12 21:47:50 2016 +0200
 
@@ -14263,14 +14426,14 @@ Date:   Thu May 12 21:29:04 2016 +0200
     We don't need bvsnprintf() in BIRD client
 
 commit 776d6b2c05fe8b14e5ec357eca24fe59c549bfa4
-Merge: af678af0d 54ac0bece
+Merge: af678af0 54ac0bec
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Thu May 12 18:11:12 2016 +0200
 
     Merge remote-tracking branch 'origin/int-new' into int-new
 
 commit af678af0d5c9ef3d8afdc0789b33dd0c40b6d6e5
-Merge: 286e2011d 8e433d6a5
+Merge: 286e2011 8e433d6a
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Thu May 12 17:49:12 2016 +0200
 
@@ -14313,14 +14476,14 @@ Date:   Tue May 10 16:45:35 2016 +0300
     Signed-off-by: Stijn Tintel <stijn@linux-ipv6.be>
 
 commit 0c6dfe52369a59d7f3da8ee6bc7c505e3da5c064
-Merge: 7a7ac6568 92912f063
+Merge: 7a7ac656 92912f06
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue May 10 14:30:49 2016 +0200
 
     Merge branch 'int-new' into int-new-merged
 
 commit 92912f063a94bd7c743a25628ca2073380e09ef4
-Merge: a8caff322 2003a1840
+Merge: a8caff32 2003a184
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue May 10 14:21:15 2016 +0200
 
@@ -14439,7 +14602,7 @@ Date:   Fri Apr 8 13:08:03 2016 +0200
     side of the route-creation routine.
 
 commit 7a7ac656829223713f9e6bcef63d2b5a5efce7d2
-Merge: 4bdf1881d 06edbb67e
+Merge: 4bdf1881 06edbb67
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Fri Apr 8 12:09:31 2016 +0200
 
@@ -14461,7 +14624,7 @@ Date:   Mon Apr 4 16:17:11 2016 +0200
     Channelize: rt_notify arg conversion table -> channel
 
 commit 0c8c8151fc1fb0dbfcd682153f50192ea1369884
-Merge: a815d62d5 1a7daab12
+Merge: a815d62d 1a7daab1
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Apr 7 09:58:31 2016 +0200
 
@@ -14579,7 +14742,7 @@ Date:   Wed Mar 9 17:37:44 2016 +0100
     Thanks to Pavel Tvrdik for noticing it.
 
 commit 62a4ad365760afae485ae61c5aab734012545be4
-Merge: 9036bbf2b 9c92f6927
+Merge: 9036bbf2 9c92f692
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Tue Mar 22 13:23:55 2016 +0100
 
@@ -14640,7 +14803,7 @@ Date:   Tue Feb 2 18:14:53 2016 +0100
     Fix typo
 
 commit ce95af7a5f5159033e569a7ccedce0e20bb5d913
-Merge: b25509e51 e3f506f9b
+Merge: b25509e5 e3f506f9
 Author: Maria Matejka <mq@ucw.cz>
 Date:   Thu Feb 25 18:25:53 2016 +0100
 
@@ -15071,7 +15234,7 @@ Date:   Wed Nov 25 15:52:58 2015 +0100
     BGP: Update capability number from IANA for extended messages
 
 commit 04ae8ddaa15b72c265dc7cf038b733d235198754
-Merge: d44e686e9 33b4f40ac
+Merge: d44e686e 33b4f40a
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Wed Nov 25 14:24:35 2015 +0100
 
@@ -15084,7 +15247,7 @@ Date:   Fri Nov 13 16:08:28 2015 +0100
     MD5: Mormalize naming style
 
 commit 90f78507f4a13673ccf0ba7c786b43d9e882fca7
-Merge: 8eb8e546d ad2761576
+Merge: 8eb8e546 ad276157
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Tue Nov 24 15:21:11 2015 +0100
 
@@ -15117,7 +15280,7 @@ Date:   Tue Nov 24 13:47:28 2015 +0100
     Minor changes to SHA hash functions
 
 commit 12d752ef24ab507d249a60098ec98dcf28b70036
-Merge: 1e4891e48 f312a837e
+Merge: 1e4891e4 f312a837
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Mon Nov 23 11:32:18 2015 +0100
 
@@ -15245,7 +15408,7 @@ Date:   Tue Nov 3 11:08:57 2015 +0100
     Thanks to Alexander V. Chernikov for the patch.
 
 commit 8eb8e546dc8cc647fcfa4a3a17dfa8ab36b00958
-Merge: 8465dccb0 acb04cfdc
+Merge: 8465dccb acb04cfd
 Author: Ondrej Zajicek (work) <santiago@crfreenet.org>
 Date:   Sat Oct 17 14:44:34 2015 +0200
 
@@ -15761,7 +15924,7 @@ Date:   Sat Feb 21 11:46:14 2015 +0100
     Configurable fast shutdown of a BGP session when an interface loses link.
 
 commit 7730553b7eeb33d21e5597f110334ca584ad532d
-Merge: 0da562a7c ec2194fa7
+Merge: 0da562a7 ec2194fa
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sat Feb 21 11:39:45 2015 +0100
 
@@ -15847,7 +16010,7 @@ Date:   Thu Oct 16 18:05:54 2014 +0200
     __attribute__((packed)) added. Thank to Maksim Tamarsky
 
 commit 78342404ff573e85e396f0611014b90cea9b4c0a
-Merge: 178a197af cfdea7b85
+Merge: 178a197a cfdea7b8
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Oct 14 17:23:34 2014 +0200
 
@@ -16017,7 +16180,7 @@ Date:   Mon May 5 11:05:12 2014 +0200
     Thanks to Sergey Popovich for the original patch.
 
 commit 5a3905fe905ab1cc1a58fe9e6a4284f7d5057d13
-Merge: 66370eac1 7d9ab86b7
+Merge: 66370eac 7d9ab86b
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun May 4 11:59:50 2014 +0200
 
@@ -16062,7 +16225,7 @@ Date:   Wed Apr 23 13:54:28 2014 +0200
     Thanks to Peter Christensen for the original patch.
 
 commit 4dd24f05f384ac14546d4bebbfcb0ecf9a976ec6
-Merge: 1cb0f83d2 6c6ebd64c
+Merge: 1cb0f83d 6c6ebd64
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Wed Apr 23 13:52:15 2014 +0200
 
@@ -16183,7 +16346,7 @@ Date:   Mon Mar 24 12:56:56 2014 +0100
     Reformat bird.sgml to have consistent line length.
 
 commit c980f8002e0f0578d5e715d48d65d9fb9a0c5a70
-Merge: 2e84b4e82 227af309e
+Merge: 2e84b4e8 227af309
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Mar 24 12:41:43 2014 +0100
 
@@ -16255,7 +16418,7 @@ Date:   Fri Feb 7 11:46:01 2014 +0100
     Fixes autoconf check for ncurses.
 
 commit 5c200e0a4d26d183e04fda43de16340521002c40
-Merge: 4a5eb284c 080ed4d8c
+Merge: 4a5eb284 080ed4d8
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu Feb 6 20:15:05 2014 +0100
 
@@ -16319,7 +16482,7 @@ Date:   Thu Feb 6 17:46:01 2014 +0100
      - Use ifa->ifname instead of ifa->iface->name
 
 commit f48fa14214301382b2e6b134788a7506b61b664f
-Merge: 6601a1483 300e4008f
+Merge: 6601a148 300e4008
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu Feb 6 16:47:43 2014 +0100
 
@@ -16344,7 +16507,7 @@ Date:   Tue Jan 21 23:43:22 2014 +0100
     Small doc update.
 
 commit 6601a14831cdd32fc671ebc9dc299d2be427e489
-Merge: 2d0b7e24a 283c7dfad
+Merge: 2d0b7e24 283c7dfa
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Dec 10 22:30:46 2013 +0100
 
@@ -16377,7 +16540,7 @@ Date:   Tue Nov 26 22:37:24 2013 +0100
     Fixes some bugs and uses generic hash implementation.
 
 commit 283c7dfada53a6dee6a8a17ecab492ffafd44b66
-Merge: 736e143fa 0bb4e37db
+Merge: 736e143f 0bb4e37d
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Nov 25 18:42:47 2013 +0100
 
@@ -16488,7 +16651,7 @@ Date:   Sat Nov 23 13:26:52 2013 +0100
     Added a few sentences about symbol names.
 
 commit 736e143fa50607fcd88132291e96089b899af979
-Merge: 094d2bdb7 2b3d52aa4
+Merge: 094d2bdb 2b3d52aa
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sat Nov 23 11:50:34 2013 +0100
 
@@ -16539,7 +16702,7 @@ Date:   Fri Nov 22 18:45:57 2013 +0100
     Adds check for buffer size in OSPF LSA flood.
 
 commit 0aeac9cb7f9887374ce0258c8653f9518529bf08
-Merge: 8931425d0 7c9930f9c
+Merge: 8931425d 7c9930f9
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Nov 22 02:43:41 2013 +0100
 
@@ -16772,7 +16935,7 @@ Date:   Tue Sep 10 12:58:24 2013 +0200
     Thanks to Sergey Popovich for a bugreport.
 
 commit d27e127aa996d500fed21be2bbbe888cafecb830
-Merge: bff9ce513 b0a8c7fc8
+Merge: bff9ce51 b0a8c7fc
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Sep 10 12:54:57 2013 +0200
 
@@ -17054,7 +17217,7 @@ Date:   Mon Apr 29 22:08:05 2013 +0200
     Thanks to Peter Christensen for the bugfix.
 
 commit 32622d0ea366406f3afa14bb9edb4855d6979786
-Merge: efd6d12b9 a5e9f3d26
+Merge: efd6d12b a5e9f3d2
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Apr 23 02:54:13 2013 +0200
 
@@ -17481,7 +17644,7 @@ Date:   Wed Aug 8 14:10:31 2012 +0200
     DragonFly support add - thanks to john@marino.st
 
 commit 60c412b9368fd7c3b0a8df2200f02140adcb0cf3
-Merge: 3fe1d9e4a 94e2f1c11
+Merge: 3fe1d9e4 94e2f1c1
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue Aug 7 11:15:23 2012 +0200
 
@@ -17546,7 +17709,7 @@ Date:   Wed Jul 18 19:29:33 2012 +0200
     Thanks Kelly Cochran for suggestion and draft patch.
 
 commit abced4a91495e27fe86b142bc1967cec53bab3dc
-Merge: fc06fb624 761702644
+Merge: fc06fb62 76170264
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Jul 16 14:44:45 2012 +0200
 
@@ -17559,7 +17722,7 @@ Date:   Mon Jul 16 14:44:45 2012 +0200
             proto/bgp/bgp.c
 
 commit 761702644397886bd3c1be10fd55c01485b7c454
-Merge: 26822d8fe 553e40546
+Merge: 26822d8f 553e4054
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Jul 16 10:41:29 2012 +0200
 
@@ -17578,7 +17741,7 @@ Date:   Sat Jul 7 10:40:00 2012 +0200
     Implements RDNSS and DNSSL support for RAdv.
 
 commit 3fe1d9e4a40663b93b59f5b6f9d61af9dc6a8ae6
-Merge: 72b2db8db 95127cbbb
+Merge: 72b2db8d 95127cbb
 Author: Ondrej Filip <feela@network.cz>
 Date:   Tue May 15 23:40:37 2012 +0200
 
@@ -17609,7 +17772,7 @@ Date:   Fri May 11 12:01:27 2012 +0200
     Fixes a bug in RA_ACCEPTED handling.
 
 commit 72b2db8db7534c52e928618410ec1f18787752c8
-Merge: 2795700c3 95616c820
+Merge: 2795700c 95616c82
 Author: Ondrej Filip <feela@network.cz>
 Date:   Fri May 11 00:01:29 2012 +0200
 
@@ -17643,7 +17806,7 @@ Date:   Thu May 3 12:25:15 2012 +0200
     Implements build options to specify socket dir and suffix.
 
 commit 2795700c3158fa52b6cf957e9d0b9ad4a27c67a5
-Merge: 1f85226ec bf4220733
+Merge: 1f85226e bf422073
 Author: Ondrej Filip <feela@network.cz>
 Date:   Wed May 2 11:10:40 2012 +0200
 
@@ -17720,7 +17883,7 @@ Date:   Fri Apr 27 00:04:51 2012 +0200
     Some minor fixes.
 
 commit 1f85226ecb76d3803b8fe37eb0891c45a6557dcd
-Merge: 92f8f7e3a d9b77cc28
+Merge: 92f8f7e3 d9b77cc2
 Author: Ondrej Filip <feela@network.cz>
 Date:   Thu Apr 26 17:03:53 2012 +0200
 
@@ -17735,7 +17898,7 @@ Date:   Tue Apr 24 23:39:57 2012 +0200
     And also fixes some minor bugs in limits.
 
 commit 3589546af4baa4d349409a318f8c9658dd11b3cc
-Merge: 7d0a31dee cca970666
+Merge: 7d0a31de cca97066
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Apr 24 23:37:01 2012 +0200
 
@@ -17796,14 +17959,14 @@ Date:   Sun Apr 15 15:28:29 2012 +0200
     Thanks to Alexander V. Chernikov for the original patch.
 
 commit 3e17e380598b9a512bb369f51a4cf55da269f608
-Merge: 00a09f3c3 ae8b30016
+Merge: 00a09f3c ae8b3001
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Apr 15 15:17:03 2012 +0200
 
     Merge branch 'master' into rt-accepted
 
 commit ae8b300164a975597f9b6caea0b205af2e4db30b
-Merge: d360f129e ed7c4b0cd
+Merge: d360f129 ed7c4b0c
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Apr 15 15:15:05 2012 +0200
 
@@ -17828,7 +17991,7 @@ Date:   Mon Apr 9 14:19:28 2012 +0200
     Small bugfix in error message related to reconfiguration.
 
 commit bf2abe2f515d7b7aaed5fb4f37af82169adcd2f2
-Merge: fb829de69 c0adf7e9f
+Merge: fb829de6 c0adf7e9
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Mar 30 11:04:12 2012 +0200
 
@@ -17850,7 +18013,7 @@ Date:   Wed Mar 28 18:40:04 2012 +0200
     maximum number of routes flushed in one step.
 
 commit cb3cf95859d81c711337738f004675f43c8bbb0e
-Merge: c9df01d32 16fc65acc
+Merge: c9df01d3 16fc65ac
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Mar 25 20:59:13 2012 +0200
 
@@ -18530,7 +18693,7 @@ Date:   Tue May 10 02:42:17 2011 +0200
     linux capabilities CAP_NET_* are kept.
 
 commit 46bb7e0d176a4dc0a47bb406988f92fb29cceaf4
-Merge: b8cc390e7 b7c489810
+Merge: b8cc390e b7c48981
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri May 6 22:09:44 2011 +0200
 
@@ -18567,7 +18730,7 @@ Date:   Sun May 1 17:16:05 2011 +0200
     There may be more IP address records with the same IP.
 
 commit 5964569c23829ec93fcf671a2582be01c8aebecf
-Merge: acc93efd4 d600909da
+Merge: acc93efd d600909d
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Apr 29 19:03:19 2011 +0200
 
@@ -18616,7 +18779,7 @@ Date:   Tue Apr 5 11:41:18 2011 +0200
     Minor fixes.
 
 commit bf27abd6d4a20448f5b4c80e9aa9258dc8670f62
-Merge: 4ef095060 a5b84ab54
+Merge: 4ef09506 a5b84ab5
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Apr 1 13:56:42 2011 +0200
 
@@ -19306,7 +19469,7 @@ Date:   Tue Apr 27 18:29:01 2010 +0200
     A fix in OSPFv3 next_hop calculation.
 
 commit 96599c957baa9c82bde91d610ce4f519aead05e9
-Merge: ba1301725 9d1ee1388
+Merge: ba130172 9d1ee138
 Author: Ondrej Filip <feela@majklik.network.cz>
 Date:   Tue Apr 27 11:28:44 2010 +0200
 
@@ -19350,7 +19513,7 @@ Date:   Sat Apr 24 15:18:21 2010 +0200
     OSPFv2 and OSPFv3 (previously it displayed stubnets in OSPFv2).
 
 commit 1d44ddf20f3ecef864d4bd20355251839fcd10ee
-Merge: 3b89a2327 6bc414d61
+Merge: 3b89a232 6bc414d6
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Wed Apr 21 21:52:10 2010 +0200
 
@@ -19517,7 +19680,7 @@ Date:   Mon Mar 29 19:29:03 2010 +0200
      - Documentation updates.
 
 commit eb0f129fcedcecbee85403095abad8f59b82683c
-Merge: b1c030b0b 48cff379a
+Merge: b1c030b0 48cff379
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Mar 26 18:53:31 2010 +0100
 
@@ -19593,7 +19756,7 @@ Date:   Wed Mar 17 12:19:22 2010 +0100
     - Fixes socket name path check and other error handling in CLI init.
 
 commit 4e3bfd9006ba3033a814a392f9bf4bbca060c8a9
-Merge: e8da1bd0b cda2dfb7a
+Merge: e8da1bd0 cda2dfb7
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Mar 15 00:39:45 2010 +0100
 
@@ -19612,7 +19775,7 @@ Date:   Sun Mar 14 16:36:59 2010 +0100
     Temporary OSPF commit - sockets.
 
 commit 54305181f6ee3af57dd3d15d53ea2e851b36ed23
-Merge: e7b76b976 afa9f66c2
+Merge: e7b76b97 afa9f66c
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu Mar 11 18:55:59 2010 +0100
 
@@ -19681,7 +19844,7 @@ Date:   Sun Feb 21 14:34:53 2010 +0100
     Fix configure to enable warnings and fix most of them.
 
 commit 9e43ccf07b96597ef098955a07383d826938cd2d
-Merge: e285bd236 89534cdae
+Merge: e285bd23 89534cda
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Feb 21 10:15:49 2010 +0100
 
@@ -19803,7 +19966,7 @@ Date:   Wed Feb 10 16:18:17 2010 +0100
     NEWS and version update.
 
 commit fae9be7782a161bdf93c83884d62941a34cbe518
-Merge: 7d1966689 0efd64627
+Merge: 7d196668 0efd6462
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Wed Feb 10 14:59:26 2010 +0100
 
@@ -19881,7 +20044,7 @@ Date:   Tue Feb 2 00:03:46 2010 +0100
     Because we don't want to have a limit on a function/filter length.
 
 commit 1a7a4e59a22f903a0be791f229e86ab881593851
-Merge: 41677025e 1960d2035
+Merge: 41677025 1960d203
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu Jan 28 16:00:16 2010 +0100
 
@@ -19923,7 +20086,7 @@ Date:   Wed Jan 13 14:53:33 2010 +0100
     Comment update.
 
 commit 974363c172e026b00be5f78ec585dda1e402b6f6
-Merge: 99f5fc14c 844e0f65d
+Merge: 99f5fc14 844e0f65
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Jan 8 22:20:09 2010 +0100
 
@@ -19936,7 +20099,7 @@ Date:   Fri Jan 8 22:19:41 2010 +0100
     A partial vlink fix.
 
 commit 844e0f65dbab98f71f2a5631277a720613d4d7a5
-Merge: 3242ab437 fc33143f0
+Merge: 3242ab43 fc33143f
 Author: Ondrej Filip <feela@majklik.network.cz>
 Date:   Fri Jan 8 21:19:03 2010 +0100
 
@@ -20039,7 +20202,7 @@ Date:   Tue Dec 22 10:49:39 2009 +0100
     Show command cleanups.
 
 commit 0ad19261bf551ef49a1565e21e384ec749ec16d4
-Merge: c4ae53858 67b24e7c1
+Merge: c4ae5385 67b24e7c
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Dec 22 01:34:01 2009 +0100
 
@@ -20066,14 +20229,14 @@ Date:   Mon Dec 21 11:50:42 2009 +0100
     Change default LOCAL_PREF attribute to 100 (suggested value by RFC 4277).
 
 commit ba9a122142a3d42137c129fabaef097702d44801
-Merge: 0225ea4ed c4199e303
+Merge: 0225ea4e c4199e30
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Dec 20 22:57:44 2009 +0100
 
     Merge branch 'ospf3' into new
 
 commit c4199e30313c88c0911060a5b5f3cc181ceedb37
-Merge: f2d7da742 ea7ada380
+Merge: f2d7da74 ea7ada38
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Sun Dec 20 22:56:09 2009 +0100
 
@@ -20106,7 +20269,7 @@ Date:   Sat Dec 19 18:45:46 2009 +0100
     NEWS and version update.
 
 commit 0225ea4eddb44bd9dd4f112e512325cbf80134d3
-Merge: 43c1ceccb f2d7da742
+Merge: 43c1cecc f2d7da74
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Dec 15 00:32:13 2009 +0100
 
@@ -20137,7 +20300,7 @@ Date:   Mon Dec 14 21:17:15 2009 +0100
     Implements route reload for OSPF.
 
 commit 63542845dfb6d2277f93f77ad9ca3ad8bbaddd09
-Merge: 34a877cca 8a7fb8858
+Merge: 34a877cc 8a7fb885
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Dec 14 20:37:32 2009 +0100
 
@@ -20267,7 +20430,7 @@ Date:   Thu Nov 26 20:47:59 2009 +0100
     Implements BGP route refresh.
 
 commit 5e6f568115511e2bcf43c60dfdcbd7a35cb04b93
-Merge: 069bfcb53 1f8be1e46
+Merge: 069bfcb5 1f8be1e4
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Tue Nov 24 17:19:23 2009 +0100
 
@@ -20368,14 +20531,14 @@ Date:   Mon Nov 9 23:22:53 2009 +0100
     Use IPv6 checksums in OSPFv3.
 
 commit 3f22fa9e74c8643d3e4f7e3a7b4f2aa992ad09f5
-Merge: a6bc04d59 b7c0e93eb
+Merge: a6bc04d5 b7c0e93e
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Nov 9 22:54:39 2009 +0100
 
     Merge branch 'dev' into ospf3
 
 commit b7c0e93ebd40cdc4f6e89067a3e5f7293263c7f9
-Merge: 7965e17d6 f1f1e899b
+Merge: 7965e17d f1f1e899
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Nov 2 16:27:17 2009 +0100
 
@@ -20640,7 +20803,7 @@ Date:   Sun Aug 23 23:03:31 2009 +0200
     Version 1.1.2
 
 commit 2ef58837dcb7b78edc193bc9ef1da316bba86998
-Merge: 86975e584 5516a66d4
+Merge: 86975e58 5516a66d
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Aug 21 09:46:49 2009 +0200
 
@@ -20753,7 +20916,7 @@ Date:   Mon Aug 10 12:04:25 2009 +0200
     Fixes typo in Makefile
 
 commit b92c8e30191dd757c76239076eda82d0065f2348
-Merge: 54d70d3eb 71a9574a5
+Merge: 54d70d3e 71a9574a
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Aug 10 10:16:00 2009 +0200
 
@@ -20816,7 +20979,7 @@ Date:   Thu Jul 9 15:42:39 2009 +0200
     Fixed bug related to reconfiguration of BGP with MD5 passwords.
 
 commit dd7b4a13848f5a92b403a563e8e27a3cbdfc937f
-Merge: d1abbeacf bffd4c0b3
+Merge: d1abbeac bffd4c0b
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Jul 6 23:10:33 2009 +0200
 
@@ -20885,7 +21048,7 @@ Date:   Fri Jun 26 13:33:41 2009 +0200
     nobody noticed it already.
 
 commit 5004d02cb9df1f3ee231632a8e89929f4eb4f088
-Merge: 1876e18d3 99355da18
+Merge: 1876e18d 99355da1
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Fri Jun 26 01:06:12 2009 +0200
 
@@ -21128,7 +21291,7 @@ Date:   Fri May 29 13:32:24 2009 +0200
     Add 'primary' configuration option.
 
 commit 7c3d06b087946cbea4affa4a814e72b7a3556833
-Merge: f571473ef 4c2507da6
+Merge: f571473e 4c2507da
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu May 28 13:58:51 2009 +0200
 
@@ -21214,7 +21377,7 @@ Date:   Fri May 22 00:26:30 2009 +0200
     Better checks for M4 in configure.
 
 commit 6c84554b671fce473fe333ab3d8b548a0768882b
-Merge: f434d1917 4d176e145
+Merge: f434d191 4d176e14
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Thu May 21 09:26:59 2009 +0200
 
@@ -21983,7 +22146,7 @@ Date:   Tue Oct 28 16:10:42 2008 +0100
     Fixes some sloppiness of commit a3b70dc499b64f41aa776b5b4afee5c7bfb8dfa6.
 
 commit a98fbf0f12b5e83e25afa0f585ca6a4d4ac5f6bf
-Merge: a3b70dc49 1567edea8
+Merge: a3b70dc4 1567edea
 Author: Ondrej Zajicek <santiago@crfreenet.org>
 Date:   Mon Oct 27 00:20:22 2008 +0100
 
