@@ -44,7 +44,7 @@ exedir := @exedir@
 
 # Find out which version we are actually building
 # This is rewritten by the release tools by hardcoded version
-VERSION := 2.17.1
+VERSION := 2.17.2
 
 CFLAGS += -DBIRD_VERSION='"$(VERSION)"'
 
