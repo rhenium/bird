@@ -8,10 +8,6 @@ if [ "$1" = "configure" ]; then
     fi
 
     dpkg-statoverride --list /etc/bird > /dev/null || dpkg-statoverride --update --add bird bird 0750 /etc/bird
-
-    ucf /usr/share/bird2/bird.conf /etc/bird/bird.conf
-    ucfr -f bird2 /etc/bird/bird.conf
-    dpkg-statoverride --list /etc/bird/bird.conf > /dev/null || dpkg-statoverride --update --add bird bird 0640 /etc/bird/bird.conf
 fi
 
 #DEBHELPER#
