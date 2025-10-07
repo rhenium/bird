@@ -1,3 +1,22 @@
+bird2 (200:2.17.1p40+rhe25-20251007-1) unstable; urgency=medium
+
+  * Rebased 200:2.17.1p17+rhe24-20250528-1 on top of current master. Upstream
+    master appears to include all patches in 2.17.2, but it was apparently
+    tagged outside the branch.
+  * Allow trailing comma in set literals in filter.
+  * Allow modification of AIGP metric values, at the expense of strict
+    compliance with RFC 7311.
+  * Better logging in BFD protocol.
+  * Allow setting BGP AGGREGATOR attribute in filter.
+  * Fix jitter application to BGP filters as specified in RFC 4271 section 10.
+  * Changes that are still included, but can probably be dropped now:
+    + Introduce 'attach_mls([<label stack>])' filter function.
+    + Partially fixed buffer overflow bug with kernel route installing.
+    + Added "soft hold time on" configuration to BGP for debugging my other BGP
+      speaker.
+
+ -- Kazuki Yamaguchi <k@rhe.jp>  Tue, 07 Oct 2025 11:48:47 +0900
+
 bird2 (2.17.2-1) unstable; urgency=medium
 
   * New upstream version 2.17.2
