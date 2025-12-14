@@ -1,0 +1,17 @@
+From: Marco d'Itri <md@linux.it>
+Subject: adapt the version generator script for the Debian packaging
+
+Forwarded: not-needed
+
+--- a/tools/version
++++ b/tools/version
+@@ -6,6 +6,9 @@ set -e
+ toplevel="$(readlink -f $(dirname $0)/../)"
+ RELEASE_VERSION=$(cat "$toplevel/VERSION")
+ 
++# ignore everything when building the Debian package from the Debian git tree
++git() { false; }
++
+ # Not in a git repo, or no git installed.
+ if ! git status --porcelain > /dev/null; then
+   echo $RELEASE_VERSION
