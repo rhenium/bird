@@ -43,7 +43,9 @@ Copyright: 2015-2016 Pavel Tvrdík
 License: GPL-2+
 
 Files: debian/*
-Copyright: 2010-2013 Ondřej Surý <ondrej@debian.org>
+Copyright: 2010-2020 Ondřej Surý <ondrej@debian.org>
+           2021-2025 Jakub Ružička <jru@debian.org>
+           2025 Marco d'Itri
 License: GPL-2+
 
 License: GPL-2+
