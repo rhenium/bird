@@ -16,7 +16,7 @@ Build-Depends-Indep:
  linuxdoc-tools-latex,
  opensp,
  texlive-latex-extra,
-Maintainer: Jakub Ružička <jru@debian.org>
+Maintainer: Marco d'Itri <md@linux.it>
 Standards-Version: 4.7.0
 Vcs-Browser: https://salsa.debian.org/debian/bird2
 Vcs-Git: https://salsa.debian.org/debian/bird2.git
