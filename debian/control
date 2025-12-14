@@ -18,8 +18,8 @@ Build-Depends-Indep:
  texlive-latex-extra,
 Maintainer: Marco d'Itri <md@linux.it>
 Standards-Version: 4.7.0
-Vcs-Browser: https://salsa.debian.org/debian/bird2
-Vcs-Git: https://salsa.debian.org/debian/bird2.git
+Vcs-Browser: https://salsa.debian.org/md/bird2
+Vcs-Git: https://salsa.debian.org/md/bird2.git -b debian/bird2/unstable
 Homepage: https://bird.network.cz/
 Rules-Requires-Root: no
 
