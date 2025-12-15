@@ -17,7 +17,7 @@ Build-Depends-Indep:
  opensp,
  texlive-latex-extra,
 Maintainer: Marco d'Itri <md@linux.it>
-Standards-Version: 4.7.0
+Standards-Version: 4.7.2.0
 Vcs-Browser: https://salsa.debian.org/md/bird2
 Vcs-Git: https://salsa.debian.org/md/bird2.git -b debian/bird2/unstable
 Homepage: https://bird.network.cz/
