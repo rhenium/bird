@@ -4,6 +4,9 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 DPKG_EXPORT_BUILDFLAGS = 1
 include /usr/share/dpkg/default.mk
 
+# enable verbose messages from the Makefiles
+export VERBOSE=1
+
 COMMON_FLAGS=\
 	--prefix=/usr \
 	--sysconfdir=/etc/bird \
