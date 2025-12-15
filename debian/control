@@ -47,6 +47,7 @@ Description: Internet Routing Daemon
 
 Package: bird2-doc
 Architecture: all
+Multi-Arch: foreign
 Section: doc
 Depends:
  ${misc:Depends},
