@@ -10,7 +10,7 @@ EnvironmentFile=-/etc/bird/envvars
 ExecStartPre=/usr/sbin/bird -p
 ExecReload=/usr/sbin/birdc configure
 ExecStart=/usr/sbin/bird -f -u $BIRD_RUN_USER -g $BIRD_RUN_GROUP $BIRD_ARGS
-Restart=on-abort
+Restart=on-abnormal
 ConfigurationDirectory=bird
 RuntimeDirectory=bird
 
