@@ -1,5 +1,7 @@
 [Unit]
 Description=BIRD Internet Routing Daemon
+Documentation=man:bird(8)
+Documentation=file:/usr/share/doc/bird2/bird.html
 After=network.target
 
 [Service]
