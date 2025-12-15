@@ -16,8 +16,6 @@ if test "$1" = "purge"; then
 	    ucf --purge /etc/bird/bird.conf
 	    ucfr --purge bird2 /etc/bird/bird.conf
 	fi
-
-	deluser --quiet bird > /dev/null || true
     fi
 fi
 

@@ -4,6 +4,7 @@ Priority: optional
 Build-Depends:
  bison,
  debhelper-compat (= 13),
+ dh-sequence-installsysusers,
  docbook-xsl,
  flex,
  libncurses-dev,
@@ -27,7 +28,6 @@ Architecture: linux-any
 Pre-Depends:
  ${misc:Pre-Depends},
 Depends:
- adduser,
  ucf,
  ${misc:Depends},
  ${shlibs:Depends},
