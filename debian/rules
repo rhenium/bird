@@ -29,9 +29,6 @@ override_dh_auto_build-indep:
 override_dh_auto_install:
 	dh_auto_install --destdir=debian/tmp
 
-override_dh_installinit:
-	dh_installinit --name=bird --restart-after-upgrade
-
 override_dh_installsystemd:
 	dh_installsystemd --name=bird --restart-after-upgrade
 
