@@ -5,7 +5,8 @@ Documentation=file:/usr/share/doc/bird2/bird.html
 After=network.target
 
 [Service]
-EnvironmentFile=/etc/bird/envvars
+Environment="BIRD_RUN_USER=bird BIRD_RUN_GROUP=bird"
+EnvironmentFile=-/etc/bird/envvars
 ExecStartPre=/usr/sbin/bird -p
 ExecReload=/usr/sbin/birdc configure
 ExecStart=/usr/sbin/bird -f -u $BIRD_RUN_USER -g $BIRD_RUN_GROUP $BIRD_ARGS

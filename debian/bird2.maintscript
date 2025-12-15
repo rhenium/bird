@@ -1,1 +1,2 @@
+rm_conffile /etc/bird/envvars 2.17.3-1~
 rm_conffile /etc/init.d/bird 2.17.3-1~
