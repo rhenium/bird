@@ -2,6 +2,7 @@
 Description=BIRD Internet Routing Daemon
 Documentation=man:bird(8)
 Documentation=file:/usr/share/doc/bird2/bird.html
+ConditionPathExists=/etc/bird/bird.conf
 After=network.target
 
 [Service]

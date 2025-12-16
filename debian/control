@@ -28,7 +28,6 @@ Architecture: linux-any
 Pre-Depends:
  ${misc:Pre-Depends},
 Depends:
- ucf,
  ${misc:Depends},
  ${shlibs:Depends},
 Conflicts:

@@ -1,20 +1,24 @@
 #!/bin/sh
 set -e
 
-if test "$1" = "purge"; then
+install_desired() {
+  dpkg-query --showformat='${Status}' --show "$1" 2> /dev/null | grep -qE '^install '
+}
 
-    # Check if there is no collision of ownership of /etc/bird/bird.conf
-    if ! command -v ucf ucfr >/dev/null || ucfr bird2 /etc/bird/bird.conf 2>/dev/null; then
-	for ext in '~' '%' .bak .ucf-new .ucf-old .ucf-dist;  do
-	    rm -f /etc/bird/bird.conf$ext
-	done
-	rm -f /etc/bird/bird.conf
-	if command -v ucf ucfr >/dev/null; then
-	    ucf --purge /etc/bird/bird.conf
-	    ucfr --purge bird2 /etc/bird/bird.conf
-	fi
-    fi
-fi
+cleanup_config() {
+  # do not delete the configuration if bird or bird3 are being installed
+  if install_desired bird || install_desired bird3; then
+    return
+  fi
+
+  rm -f /etc/bird/bird.conf
+}
+
+case "$1" in
+  purge)
+    cleanup_config "$@"
+    ;;
+esac
 
 #DEBHELPER#
 
