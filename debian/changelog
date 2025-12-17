@@ -1,3 +1,17 @@
+bird2 (2.17.3-1) unstable; urgency=medium
+
+  * New upstream release.
+  * New maintainer.
+  * Use Restart=on-abnormal instead of on-abort. (Closes: #1099513)
+  * Do not install an example /etc/bird/bird.conf anymore, because there
+    is no useful BIRD configuration that can be enabled by default.
+  * Create /etc/bird/ with standard permissions: the local admin can
+    use appropriate permission for bird.conf if access to it needs to
+    be restricted.
+  * Create the bird user with no home directory for added security.
+
+ -- Marco d'Itri <md@linux.it>  Wed, 17 Dec 2025 15:18:00 +0100
+
 bird2 (2.17.2-1) unstable; urgency=medium
 
   * New upstream version 2.17.2
