@@ -11,7 +11,6 @@ Build-Depends:
  libreadline-dev,
  libssh-dev,
  m4,
- quilt,
  xsltproc,
 Build-Depends-Indep:
  linuxdoc-tools-latex,
