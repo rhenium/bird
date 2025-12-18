@@ -6,7 +6,7 @@ ConditionPathExists=/etc/bird/bird.conf
 After=network.target
 
 [Service]
-Environment="BIRD_RUN_USER=bird BIRD_RUN_GROUP=bird"
+Environment=BIRD_RUN_USER=bird BIRD_RUN_GROUP=bird
 EnvironmentFile=-/etc/bird/envvars
 ExecStartPre=/usr/sbin/bird -p
 ExecReload=/usr/sbin/birdc configure
