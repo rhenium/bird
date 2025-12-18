@@ -1,3 +1,9 @@
+bird2 (2.17.3-2) unstable; urgency=medium
+
+  * bird.service: fix the Environment directive. (Closes: #1123567)
+
+ -- Marco d'Itri <md@linux.it>  Thu, 18 Dec 2025 20:55:46 +0100
+
 bird2 (2.17.3-1) unstable; urgency=medium
 
   * New upstream release.
