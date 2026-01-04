@@ -76,6 +76,8 @@ struct bgp_af_desc {
 
 struct bgp_config {
   struct proto_config c;
+  /* Beginning here, all options must be comparable by memcmp().
+   * Do not add anything above unless you want this comment to become futile. */
   u32 local_as, remote_as;
   ip_addr local_ip;			/* Source address to use */
   ip_addr remote_ip;
@@ -86,6 +88,7 @@ struct bgp_config {
   int multihop;				/* Number of hops if multihop */
   int strict_bind;			/* Bind listening socket to local address */
   int free_bind;			/* Bind listening socket with SKF_FREEBIND */
+  int onlink;				/* Enable direct connection to a host not configured on any iface */
   int ttl_security;			/* Enable TTL security [RFC 5082] */
   int compare_path_lengths;		/* Use path lengths when selecting best route */
   int med_metric;			/* Compare MULTI_EXIT_DISC even between routes from differen ASes */
@@ -103,6 +106,7 @@ struct bgp_config {
   u32 rr_cluster_id;			/* Route reflector cluster ID, if different from local ID */
   int rr_client;			/* Whether neighbor is RR client of me */
   int rs_client;			/* Whether neighbor is RS client of me */
+  int ipv4;				/* Use IPv4 connection, i.e. remote_ip is IPv4 */
   u32 confederation;			/* Confederation ID, or zero if confeds not active */
   int confederation_member;		/* Whether neighbor AS is member of our confederation */
   int passive;				/* Do not initiate outgoing connection */
@@ -144,6 +148,7 @@ struct bgp_config {
   const char *password;			/* Password used for MD5 authentication */
   struct ao_config *ao_keys;		/* Keys for TCP-AO authentication */
   net_addr *remote_range;		/* Allowed neighbor range for dynamic BGP */
+  struct iface_patt *ipatt;		/* Interface patterns for dynamic strict bind */
   const char *dynamic_name;		/* Name pattern for dynamic BGP */
   int dynamic_name_digits;		/* Minimum number of digits for dynamic names */
   int check_link;			/* Use iface link state for liveness detection */
@@ -309,8 +314,15 @@ struct bgp_ao_state {
 
 struct bgp_socket {
   node n;				/* Node in global bgp_sockets */
+  list requests;			/* Listen requests */
   sock *sk;				/* Real listening socket */
-  u32 uc;				/* Use count */
+  struct bgp_socket_params {
+    ip_addr addr;			/* Local address to bind to */
+    struct iface *iface;		/* Local interface to bind to */
+    struct iface *vrf;			/* VRF to bind to */
+    uint port;				/* Local port to bind to (mandatory) */
+    uint flags;				/* Additional SKF_* flags */
+  } params;
 };
 
 struct bgp_stats {
@@ -351,6 +363,13 @@ struct bgp_conn {
   uint hold_time, keepalive_time, send_hold_time;	/* Times calculated from my and neighbor's requirements */
 };
 
+struct bgp_listen_request {
+  node sn;				/* Node in bgp_socket list */
+  node pn;				/* Node in bgp_proto list */
+  struct bgp_socket *sock;		/* Assigned socket */
+  struct bgp_socket_params params;
+};
+
 struct bgp_proto {
   struct proto p;
   const struct bgp_config *cf;		/* Shortcut to BGP configuration */
@@ -383,7 +402,7 @@ struct bgp_proto {
   struct bgp_conn incoming_conn;	/* Incoming connection we have neither accepted nor rejected yet */
   struct object_lock *lock;		/* Lock for neighbor connection */
   struct neighbor *neigh;		/* Neighbor entry corresponding to remote ip, NULL if multihop */
-  struct bgp_socket *sock;		/* Shared listening socket */
+  list listen;				/* Requests for shared listening sockets */
   struct bfd_request *bfd_req;		/* BFD request, if BFD is used */
   struct birdsock *postponed_sk;	/* Postponed incoming socket for dynamic BGP */
   struct bgp_ao_state ao;

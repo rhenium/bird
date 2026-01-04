@@ -73,7 +73,7 @@ bgp_proto_start: proto_start BGP {
      BGP_CFG->enable_hostname = 0;
      BGP_CFG->capabilities = 2;
      BGP_CFG->interpret_communities = 1;
-     BGP_CFG->allow_as_sets = 1;
+     BGP_CFG->allow_as_sets = 0;
      BGP_CFG->default_local_pref = 100;
      BGP_CFG->gr_mode = BGP_GR_AWARE;
      BGP_CFG->gr_time = 120;
@@ -103,6 +103,7 @@ bgp_nbr_opts:
  | bgp_nbr_opts AS expr { BGP_CFG->remote_as = $3; }
  | bgp_nbr_opts INTERNAL { BGP_CFG->peer_type = BGP_PT_INTERNAL; }
  | bgp_nbr_opts EXTERNAL { BGP_CFG->peer_type = BGP_PT_EXTERNAL; }
+ | bgp_nbr_opts ONLINK { BGP_CFG->onlink = 1; }
  ;
 
 bgp_cease_mask:
@@ -166,7 +167,9 @@ bgp_proto:
      net_copy(n, &($4));
      BGP_CFG->remote_range = n;
    }
- | bgp_proto INTERFACE TEXT ';' { BGP_CFG->iface = if_get_by_name($3); }
+ | bgp_proto INTERFACE text ';' { BGP_CFG->iface = if_get_by_name($3); }
+ | bgp_proto INTERFACE RANGE iface_patt_init iface_patt_list_nopx ';' { BGP_CFG->ipatt = this_ipatt; }
+ | bgp_proto ONLINK bool ';' { BGP_CFG->onlink = $3; }
  | bgp_proto RR CLUSTER ID idval ';' { BGP_CFG->rr_cluster_id = $5; }
  | bgp_proto RR CLIENT bool ';' { BGP_CFG->rr_client = $4; }
  | bgp_proto RS CLIENT bool ';' { BGP_CFG->rs_client = $4; }
@@ -296,7 +299,7 @@ tcp_ao_key_opt:
        cf_error("Unknown algorithm for TCP-AO");
      this_ao_key->key.algorithm = $2;
    }
- | SECRET bytestring_text ';' {
+ | SECRET bytestring_or_text ';' {
      if ($2.type == T_BYTESTRING)
      {
        this_ao_key->key.key = $2.val.bs->data;
@@ -307,7 +310,7 @@ tcp_ao_key_opt:
        this_ao_key->key.key = $2.val.s;
        this_ao_key->key.keylen = strlen($2.val.s);
      }
-     else bug("Bad bytestring_text");
+     else bug("Bad bytestring_or_text");
 
      if (this_ao_key->key.keylen > AO_MAX_KEY_LENGTH)
        cf_error("TCP-AO secret too long");
@@ -423,6 +426,7 @@ bgp_channel_item:
  | NEXT HOP SELF bgp_nh { BGP_CC->next_hop_self = $4; }
  | NEXT HOP KEEP bgp_nh { BGP_CC->next_hop_keep = $4; }
  | NEXT HOP PREFER GLOBAL { BGP_CC->next_hop_prefer = NHP_GLOBAL; }
+ | NEXT HOP PREFER LOCAL  { BGP_CC->next_hop_prefer = NHP_LOCAL;  }
  | LINK LOCAL NEXT HOP FORMAT bgp_llnh { BGP_CC->llnh_format = $6; }
  | MANDATORY bool { BGP_CC->mandatory = $2; }
  | MISSING LLADDR bgp_lladdr { cf_warn("%s.%s: Missing lladdr option is deprecated and ignored, remove it", this_proto->name, this_channel->name); }

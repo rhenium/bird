@@ -38,7 +38,7 @@ ospf_iface_finish(void)
   ip->passwords = get_passwords();
 
   if (ospf_cfg_is_v2() && (ip->autype == OSPF_AUTH_CRYPT) && (ip->helloint < 5))
-    cf_warn("Hello or poll interval less that 5 makes cryptographic authenication prone to replay attacks");
+    cf_warn("Hello or poll interval less that 5 makes cryptographic authentication prone to replay attacks");
 
   if ((ip->autype == OSPF_AUTH_NONE) && (ip->passwords != NULL))
     cf_warn("Password option without authentication option does not make sense");
@@ -561,7 +561,7 @@ lsadb_args:
  | lsadb_args GLOBAL { $$ = $1; $$->scope = LSA_SCOPE_AS; }
  | lsadb_args AREA idval { $$ = $1; $$->scope = LSA_SCOPE_AREA; $$->area = $3; }
  | lsadb_args LINK { $$ = $1; $$->scope = 1; /* hack, 0 is no filter */ }
- | lsadb_args TYPE NUM { $$ = $1; $$->type = $3; }
+ | lsadb_args TYPE expr { $$ = $1; $$->type = $3; }
  | lsadb_args LSID idval { $$ = $1; $$->lsid = $3; }
  | lsadb_args SELF { $$ = $1; $$->router = SH_ROUTER_SELF; }
  | lsadb_args ROUTER idval { $$ = $1; $$->router = $3; }

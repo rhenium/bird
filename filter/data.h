@@ -218,7 +218,7 @@ struct f_trie_walk_state
 };
 
 struct f_tree *f_new_tree(void);
-struct f_tree *build_tree(struct f_tree *);
+struct f_tree *build_tree(struct f_tree *, bool merge);
 const struct f_tree *find_tree(const struct f_tree *t, const struct f_val *val);
 const struct f_tree *find_tree_linear(const struct f_tree *t, const struct f_val *val);
 int same_tree(const struct f_tree *t0, const struct f_tree *t2);
@@ -324,6 +324,8 @@ int lclist_match_set(const struct adata *list, const struct f_tree *set);
 const struct adata *clist_filter(struct linpool *pool, const struct adata *list, const struct f_val *set, int pos);
 const struct adata *eclist_filter(struct linpool *pool, const struct adata *list, const struct f_val *set, int pos);
 const struct adata *lclist_filter(struct linpool *pool, const struct adata *list, const struct f_val *set, int pos);
+
+const struct adata *bytestring_append(struct linpool *pool, const struct adata *v1, const struct adata *v2);
 
 
 /* Special undef value for paths and clists */

@@ -164,6 +164,7 @@ radv_prepare_prefixes(struct radv_iface *ifa)
 
     existing->onlink = pc->onlink;
     existing->autonomous = pc->autonomous;
+    existing->pd_preferred = pc->pd_preferred;
 
     existing->cf = pc;
   }

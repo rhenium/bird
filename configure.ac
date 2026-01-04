@@ -80,6 +80,11 @@ AC_ARG_WITH([iproutedir],
   [given_iproutedir="yes"]
 )
 
+AC_ARG_WITH([debugsrcdir],
+  [AS_HELP_STRING([--with-debugsrcdir=PATH], [path to installed source files for package build])],
+  [debugsrcdir="$with_debugsrcdir"]
+)
+
 AC_ARG_VAR([FLEX], [location of the Flex program])
 AC_ARG_VAR([BISON], [location of the Bison program])
 AC_ARG_VAR([M4], [location of the M4 program])
@@ -340,6 +345,10 @@ AC_MSG_CHECKING([protocols])
 protocols=`echo "$with_protocols" | sed 's/,/ /g'`
 if test "$protocols" = no ; then protocols= ; fi
 for a in $protocols ; do
+  if test "$a" = bfd && ! test "$enable_pthreads" = yes ; then
+    AC_MSG_RESULT([failed])
+    AC_MSG_ERROR([Protocol $a requires pthreads])
+  fi
   if ! test -f $srcdir/proto/$a/Makefile ; then
     AC_MSG_RESULT([failed])
     AC_MSG_ERROR([Requested protocol $a not found])
@@ -417,6 +426,11 @@ if test "$enable_debug" = yes ; then
   if test "$enable_debug_expensive" = yes ; then
     AC_DEFINE([ENABLE_EXPENSIVE_CHECKS], [1], [Define to 1 if you want to run expensive consistency checks.])
   fi
+fi
+
+if test -n "$debugsrcdir" ; then
+  CFLAGS="$CFLAGS -ffile-prefix-map=$srcdir=$debugsrcdir -ffile-prefix-map=`readlink -f $srcdir`=$debugsrcdir"
+  LDFLAGS="$LDFLAGS -ffile-prefix-map=$srcdir=$debugsrcdir -ffile-prefix-map=`readlink -f $srcdir`=$debugsrcdir"
 fi
 
 if test "$enable_compact_tries" = yes ; then

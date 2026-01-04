@@ -21,12 +21,16 @@ configuration - something in config which is not keyword.
 <book>
 
 <title>BIRD {{ VERSION }} User's Guide
+
 <author>
 Ondrej Filip <it/&lt;feela@network.cz&gt;/,
 Martin Mares <it/&lt;mj@ucw.cz&gt;/,
 Maria Matejka <it/&lt;mq@jmq.cz&gt;/,
 Ondrej Zajicek <it/&lt;santiago@crfreenet.org&gt;/
 </author>
+
+<date></date>
+<documentid>bird-userdoc</documentid>
 
 <abstract>
 This document contains user documentation for the BIRD Internet Routing Daemon project.
@@ -499,6 +503,12 @@ followed by any combination of letters, numbers and underscores (e.g. <cf/R123/,
 <cf/my_filter/, <cf/bgp5/) or you can enclose the name into apostrophes (<cf/'/)
 and than you can use any combination of numbers, letters, underscores, hyphens,
 dots and colons (e.g.  <cf/'1:strange-name'/, <cf/'-NAME-'/, <cf/'cool::name'/).
+
+<p>In most cases where options use an argument that is a basic data type (e.g.
+number, string, IP address) it is possible to use a named constant (defined
+by <ref id="opt-define" name="define"> statement), or a constant expression
+enclosed in parenthesis (e.g. <cf/(2 + 2)/). These expressions use
+<ref id="filters" name="the BIRD filter language">.
 
 <p>Here is an example of a simple config file. It enables synchronization of
 routing tables with OS kernel, learns network interfaces and runs RIP on all
@@ -1607,17 +1617,21 @@ in the foot).
 	This is a string of characters. There are no ways to modify strings in
 	filters. You can pass them between functions, assign them to variables
 	of type <cf/string/, print such variables, use standard string
-	comparison operations (e.g. <cf/=, !=, &lt;, &gt;, &lt;=, &gt;=/), but
-	you can't concatenate two strings. String literals are written as
-	<cf/"This is a string constant"/. Additionally matching (<cf/&tilde;,
-	!&tilde;/) operators could be used to match a string value against
-	a shell pattern (represented also as a string).
+	comparison operations (e.g. <cf/=, !=, &lt;, &gt;, &lt;=, &gt;=/), and
+	concatenate two strings with <cf>append(<m/A/, <m/B/)</cf> function or
+	<cf/++/ operator.
+
+	String literals are written as <cf/"This is a string constant"/.
+	Additionally matching (<cf/&tilde;, !&tilde;/) operators could be used
+	to match a string value against a shell pattern (represented also as a
+	string).
 
 	<tag><label id="type-bytestring">bytestring</tag>
 	This is a sequence of arbitrary bytes. There are no ways to modify
 	bytestrings in filters. You can pass them between functions, assign
-	them to variables of type <cf/bytestring/, print such values, and
-	compare bytestings (<cf/=, !=/).
+	them to variables of type <cf/bytestring/, print such values, compare
+	bytestings (<cf/=, !=/), and concatenate two bytestrings with
+	<cf>append(<m/A/, <m/B/)</cf> function or <cf/++/ operator.
 
 	Bytestring literals are written as a sequence of hexadecimal digit
 	pairs, optionally colon-separated. A bytestring specified this way
@@ -1913,6 +1927,8 @@ parentheses <cf/(a*(b+c))/, comparison <cf/(a=b, a!=b, a&lt;b, a&gt;=b)/.</p>
 
 <p>Logical operations include unary not (<cf/!/), and (<cf/&amp;&amp;/), and or
 (<cf/&verbar;&verbar;/).</p>
+
+<p>Strings and bytestrings can be concatenated with <cf/++/ operator.</p>
 
 <p>Special operators include (<cf/&tilde;/, <cf/!&tilde;/) for "is (not) element
 of a set" operation - it can be used on:
@@ -2931,8 +2947,10 @@ protocol bgp [<name>] {
 		max long lived stale time <number>;
 	};
 	local [<ip>] [port <number>] [as <number>];
-	neighbor [<ip> | range <prefix>] [port <number>] [as <number>] [internal|external];
+	neighbor [<ip> | range <prefix>] [onlink] [port <number>] [as <number>] [internal|external];
 	interface "<text>";
+	interface range <interface pattern>;
+	onlink <switch>;
 	direct;
 	multihop [<number>];
 	source address <ip>;
@@ -3045,7 +3063,14 @@ protocol bgp [<name>] {
 	instances are spawned for incoming BGP connections (if source address
 	matches the network prefix). It is possible to mix regular BGP instances
 	with dynamic BGP instances and have multiple dynamic BGP instances with
-	different ranges.
+        different ranges. These spawned dynamic BGP instances share the parent
+        configuration, therefore by reconfiguring the parent protocol forces
+        reconfiguration of the spawned protocols.
+
+        When the neighbor range is changed, all the spawned dynamic instances
+        shut down. Reconfiguration clears all dynamic instances which were
+        previously disabled by the <cf/disable/ CLI command. This may re-enable
+	connection of some clients otherwise blocked by the disabled instance.
 
 	<tag><label id="bgp-iface">interface "<m/text/"</tag>
 	Define interface we should use for link-local BGP IPv6 sessions.
@@ -3053,6 +3078,38 @@ protocol bgp [<name>] {
 	(e.g., <cf/neighbor fe80::1234%eth0 as 65000;/). The option may also be
 	used for non link-local sessions when it is necessary to explicitly
 	specify an interface, but only for direct (not multihop) sessions.
+
+	<tag><label id="bgp-iface-range">interface range <m/interface pattern/</tag>
+	Set interface pattern to which the connection will be bound. This is
+	mostly useful with the <cf/neighbor range/ option and either link-local
+	addresses or with the <cf/onlink/ option where it's not known up front
+	which interface the connection comes on but it needs to stay there.
+
+	This option requires <cf/strict bind/ to be on and creates a separate
+	listening socket for every single interface matching the pattern. If the
+        local address is set, it also requires this exact address to be set on
+        that interface to create a listening socket.
+
+	Also see <cf/strict bind/ and <cf/free bind/.
+
+	<tag><label id="bgp-onlink">onlink <m/switch/</tag>
+	For a direct neighbor, the BGP session starts immediately without
+	waiting for the neighbor's address to appear on any interface.
+	This option requires an interface to be configured. Next hops
+	of all routes from this session also have the <cf/onlink/ attribute.
+
+	This option may generally lead to weird behavior without other
+	configuration in place. One may e.g. need to insert a working route
+	for the given neighbor manually to allow for ACKs from the incoming
+	connection to be routed back correctly. That route may also need to
+	be announced via IGP, or <cf/next hop self/ in iBGP may be needed.
+
+	When trying setups with no neighbor route in containerized environments,
+	we got some results with <cf/strict bind/. As of Linux 6.12, we can't
+	recommend running that setup though.
+
+	Onlink behavior may also be specified inside the <cf/neighbor/ option.
+	Default: disabled.
 
 	<tag><label id="bgp-direct">direct</tag>
 	Specify that the neighbor is directly connected. The IP address of the
@@ -3090,19 +3147,33 @@ protocol bgp [<name>] {
 
 	<tag><label id="bgp-strict-bind">strict bind <m/switch/</tag>
 	Specify whether BGP listening socket should be bound to a specific local
-	address (the same as the <cf/source address/) and associated interface,
+	address (the same as the <cf/source address/) and associated interface
 	or to all addresses. Binding to a specific address could be useful in
 	cases like running multiple BIRD instances on a machine, each using its
-	IP address. Note that listening sockets bound to a specific address and
-	to all addresses collide, therefore either all BGP protocols (of the
-	same address family and using the same local port) should have set
-	<cf/strict bind/, or none of them. Default: disabled.
+	IP address.
+
+	Note that listening sockets bound to a specific address and
+	to all addresses collide. Also listening sockets bound
+	to a specific interface and to all interfaces may behave weirdly.
+	Therefore, all BGP protocols (of the same address family and using
+	the same local port) should have set <cf/strict bind/, or none of them,
+	and in the same way, all should have a <cf/interface/ or <cf/interface range/
+	or none of them.
+
+	Default: disabled.
 
 	<tag><label id="bgp-free-bind">free bind <m/switch/</tag>
 	Use IP_FREEBIND socket option for the listening socket, which allows
 	binding to an IP address not (yet) assigned to an interface. Note that
 	all BGP instances that share a listening socket should have the same
-	value of the <cf/freebind/ option. Default: disabled.
+	value of the <cf/free bind/ option.
+
+	If <cf/interface range/ is set together with a local address
+	and <cf/free bind/ as well, it creates a free-bind listening socket
+	for every interface regardless of the assigned address. This is
+	an experimental feature.
+
+	Default: disabled.
 
 	<tag><label id="bgp-check-link">check link <m>switch</m></tag>
 	BGP could use hardware link state into consideration.  If enabled,
@@ -3277,14 +3348,15 @@ protocol bgp [<name>] {
 	other means. Default: 0 (no local AS number allowed).
 
 	<tag><label id="bgp-allow-as-sets">allow as sets <m/switch/</tag>
-	AS path attribute received with BGP routes may contain not only
-	sequences of AS numbers, but also sets of AS numbers. These rarely used
-	artifacts are results of inter-AS route aggregation. AS sets are
-	deprecated (<rfc id="6472">), and likely to be rejected in the future,
-	as they complicate security features like RPKI validation. When this
-	option is disabled, then received AS paths with AS sets are rejected as
-	malformed and corresponding BGP updates are treated as withdraws.
-	Default: on.
+	Historically, AS path attribute received with BGP routes may have
+	contained not only sequences of AS numbers, but also sets of AS numbers.
+	These rarely used artifacts were results of inter-AS route aggregation.
+	AS sets are deprecated (<rfc id="6472">, <rfc id="9774">) and AS paths
+	containing them (or AS confed sets) are considered malformed.
+	Corresponding BGP updates are therefore treated as withdraws.
+        When this option is enabled, then received AS paths containing these
+        deprecated AS sets or AS confed sets are accepted.
+	Default: off (since 2.18 and 3.2).
 
 	<tag><label id="bgp-enforce-first-as">enforce first as <m/switch/</tag>
 	Routes received from an EBGP neighbor are generally expected to have the
@@ -3675,19 +3747,23 @@ be used in explicit configuration.
 	BGP session (if acceptable), or the preferred address of an associated
 	interface.
 
-	<tag><label id="bgp-next-hop-prefer">next hop prefer global</tag>
-	Prefer global IPv6 address to link-local IPv6 address for immediate next
-	hops of received routes. For IPv6 routes, the Next Hop attribute may
-	contain both a global IP address and a link-local IP address. For IBGP
-	sessions, the global IP address is resolved (<ref id="bgp-gateway"
-	name="gateway recursive">) through an IGP routing table
-	(<ref id="bgp-igp-table" name="igp table">) to get an immediate next
-	hop. If the resulting IGP route is a direct route (i.e., the next hop is
-	a direct neighbor), then the link-local IP address from the Next Hop
-	attribute is used as the immediate next hop. This option change it to
-	use the global IP address instead. Note that even with this option
-	enabled a route may end with a link-local immediate next hop when the
-	IGP route has one. Default: disabled.
+	<tag><label id="bgp-next-hop-prefer">next hop prefer global|local</tag>
+	For IPv6 routes, the Next Hop attribute may contain both a global IP
+	address and a link-local IP address. For IBGP sessions, the global IP
+	address is resolved (<ref id="bgp-gateway" name="gateway recursive">)
+	through an IGP routing table (<ref id="bgp-igp-table" name="igp table">)
+	to get an immediate next hop. If the resulting IGP route is a direct
+	route (i.e., the next hop is a direct neighbor), then the link-local
+	IP address from the Next Hop attribute is used as the immediate next hop.
+	This option changes it to prefer global or link-local IP address,
+	respectively. Note that even with this option set to global, route may
+	end with a link-local immediate next hop when the IGP route has one.
+
+	When set to <cf/local/, prefer link-local IPv6 addresses over global
+	addresses for immediate next hops of received routes. When set to
+	<cf/global/, prefer global IPv6 address to link-local IPv6 address for
+	immediate next hops of received routes. Default: global in direct mode
+	(EBGP), local in recursive mode (IBGP).
 
 	<tag><label id="bgp-link-local-next-hop-format">link local next hop format native|single|double</tag>
 	For IPv6 routes, BGP assumes that the Next Hop attribute contains a
@@ -3921,7 +3997,6 @@ direction (re-export of routes to the BGP neighbor):
 
 <itemize>
 	<item><cf/export/
-	<item><cf/next hop address/
 	<item><cf/next hop self/
 	<item><cf/next hop keep/
 	<item><cf/link local next hop format/
@@ -3948,6 +4023,7 @@ direction (re-export of routes to the BGP neighbor):
 	<item><cf/require hostname/
 	<item><cf/require graceful restart/
 	<item><cf/require long lived graceful restart/
+	<item><cf/interface range/ if the already existing option is updated to another value.
 </itemize>
 
 <p>Channel options that cause a restart when changed:
@@ -3958,6 +4034,7 @@ direction (re-export of routes to the BGP neighbor):
 	<item><cf/graceful restart/
 	<item><cf/long lived graceful restart/
 	<item><cf/long lived stale time/
+	<item><cf/next hop address/
 	<item><cf/extended next hop/
 	<item><cf/add paths/
 	<item><cf/import table/
@@ -3973,6 +4050,10 @@ incompatible with the current protocol state):
 	<item><cf/min long lived stale time/
 	<item><cf/max long lived stale time/
 </itemize>
+
+<p>All these configuration changes apply also to the spawned dynamic BGP sessions
+and therefore reconfiguring the parent protocol may lead to shutdown of some or all
+of the dynamic BGP sessions.
 
 <sect1>Attributes
 <label id="bgp-attr">
@@ -4520,18 +4601,18 @@ could have up to 5 channels: <cf/ipv4/, <cf/ipv6/, <cf/vpn4/, <cf/vpn6/, and
 	<tag><label id="l3vpn-rd">rd <m/rd/</tag>
 	A shorthand for the option <cf/route distinguisher/.
 
-	<tag><label id="l3vpn-import-target">import target <m/ec/|<m/ec-set/</tag>
+	<tag><label id="l3vpn-import-target">import target <m/ec/|<m/ec-set/|none|all</tag>
 	Route target extended communities specifying which routes should be
 	imported. Either one community or a set. A route is imported if there is
 	non-empty intersection between extended communities of the route and the
 	import target of the L3VPN protocol. Mandatory.
 
-	<tag><label id="l3vpn-export-target">export target <m/ec/|<m/ec-set/</tag>
+	<tag><label id="l3vpn-export-target">export target <m/ec/|<m/ec-set/|none</tag>
 	Route target extended communities that are attached to the route in the
 	export direction. Either one community or a set. Other route target
 	extended communities are removed. Mandatory.
 
-	<tag><label id="l3vpn-route-target">route target <m/ec/|<m/ec-set/</tag>
+	<tag><label id="l3vpn-route-target">route target <m/ec/|<m/ec-set/|none</tag>
 	A shorthand for both <cf/import target/ and <cf/export target/.
 </descrip>
 
@@ -5704,6 +5785,11 @@ custom option type 38 value hex:0e:10:20:01:0d:b8:00:0a:00:0b:00:00:00:00;
 	This option specifies whether hosts may use the advertised prefix for
 	stateless autoconfiguration. Default: yes
 
+	<tag><label id="radv-prefix-pd-preferred">pd preferred<m/switch/</tag>
+	This option specifies whether hosts should use prefix delegation in DHCPv6
+	instead of using stateless address autoconfiguration (SLAAC).
+	Default: no.
+
 	<tag><label id="radv-prefix-valid-lifetime">valid lifetime <m/expr/ [sensitive <m/switch/]</tag>
 	This option specifies the time (in seconds) how long (after the
 	receipt of RA) the prefix information is valid, i.e., autoconfigured
@@ -6702,23 +6788,21 @@ versions of BIRD:
 (<HTMLURL URL="mailto:bird-users@network.cz" name="bird-users@network.cz">)
 where you can share your experiences with the other users and consult
 your problems with the authors. To subscribe to the list, visit
-<HTMLURL URL="http://bird.network.cz/?m_list" name="http://bird.network.cz/?m_list">.
-The home page of BIRD can be found at <HTMLURL URL="http://bird.network.cz/" name="http://bird.network.cz/">.
+<HTMLURL URL="https://bird.network.cz/mailman/listinfo/bird-users" name="https://bird.network.cz/mailman/listinfo/bird-users">.
+The home page of BIRD can be found at <HTMLURL URL="http://bird.nic.cz/" name="http://bird.nic.cz/">.
 
 <p>BIRD is a relatively young system and it probably contains some bugs. You can
 report any problems to the bird-users list and the authors will be glad to solve
 them, but before you do so, please make sure you have read the available
 documentation and that you are running the latest version (available at
-<HTMLURL URL="ftp://bird.network.cz/pub/bird" name="bird.network.cz:/pub/bird">).
+<HTMLURL URL="https://bird.nic.cz/get-bird" name="https://bird.nic.cz/get-bird">).
 (Of course, a patch which fixes the bug is always welcome as an attachment.)
 
 <p>If you want to understand what is going inside, Internet standards are a good
 and interesting reading. You can get them from
-<HTMLURL URL="ftp://ftp.rfc-editor.org/" name="ftp.rfc-editor.org"> (or a
-nicely sorted version from <HTMLURL URL="ftp://atrey.karlin.mff.cuni.cz/pub/rfc"
-name="atrey.karlin.mff.cuni.cz:/pub/rfc">).
+<HTMLURL URL="ftp://ftp.rfc-editor.org/" name="ftp.rfc-editor.org">.
 
-<p><it/Good luck!/
+<p><it/Good luck and happy routing!/
 
 </book>
 

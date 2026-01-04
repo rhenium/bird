@@ -144,6 +144,8 @@ static void bgp_update_bfd(struct bgp_proto *p, const struct bfd_options *bfd);
 static int bgp_disable_ao_keys(struct bgp_proto *p);
 static int bgp_incoming_connection(sock *sk, uint dummy UNUSED);
 static void bgp_listen_sock_err(sock *sk UNUSED, int err);
+static int bgp_listen_open(struct bgp_proto *, struct bgp_listen_request *);
+static void bgp_listen_close(struct bgp_proto *, struct bgp_listen_request *);
 
 /**
  * bgp_open - open a BGP instance
@@ -157,36 +159,73 @@ static void bgp_listen_sock_err(sock *sk UNUSED, int err);
 static int
 bgp_open(struct bgp_proto *p)
 {
-  struct bgp_socket *bs = NULL;
-  struct iface *ifa = p->cf->strict_bind ? p->cf->iface : NULL;
-  ip_addr addr = p->cf->strict_bind ? p->cf->local_ip :
-    (p->ipv4 ? IPA_NONE4 : IPA_NONE6);
-  uint port = p->cf->local_port;
-  uint flags = p->cf->free_bind ? SKF_FREEBIND : 0;
-  uint flag_mask = SKF_FREEBIND;
+  /* Interface-patterned listening sockets are created from the
+   * interface notifier. By default, listen to nothing.
+   *
+   * Also dynamically spawned protocol do not need a listening socket,
+   * they already have their parent's one and the requests are actually
+   * ignored when looking for the accepting protocol. */
+  if (p->cf->ipatt || p->cf->c.parent)
+    return 0;
 
   /* We assume that cf->iface is defined iff cf->local_ip is link-local */
+  struct bgp_listen_request *req = mb_allocz(p->p.pool, sizeof *req);
+  req->params = (struct bgp_socket_params) {
+    .iface = p->cf->strict_bind ? p->cf->iface : NULL,
+    .vrf = p->p.vrf,
+    .addr = p->cf->strict_bind && ipa_nonzero(p->cf->local_ip) ? p->cf->local_ip :
+      (p->ipv4 ? IPA_NONE4 : IPA_NONE6),
+    .port = p->cf->local_port,
+    .flags = p->cf->free_bind ? SKF_FREEBIND : 0,
+  };
 
+  return bgp_listen_open(p, req);
+}
+
+#define bgp_listen_debug(p, a, msg, args...) do { \
+  if ((p)->p.debug & D_IFACES) \
+    log(L_TRACE "%s: Listening socket at %I%J port %u (vrf %s) flags %u: " msg, \
+	(p)->p.name, (a)->addr, (a)->iface, (a)->port, \
+	(a)->vrf ? (a)->vrf->name : "default", (a)->flags, ## args); \
+} while (0)
+
+static int
+bgp_socket_match(const struct bgp_socket_params *a, const struct bgp_socket_params *b)
+{
+  return
+    ipa_equal(a->addr, b->addr) &&
+    a->iface == b->iface &&
+    a->vrf == b->vrf &&
+    a->port == b->port &&
+    a->flags == b->flags &&
+    1;
+}
+
+static int
+bgp_listen_open(struct bgp_proto *p, struct bgp_listen_request *req)
+{
+  ASSERT_DIE(!NODE_VALID(&req->pn));
+  ASSERT_DIE(!NODE_VALID(&req->sn));
+
+  struct bgp_socket *bs;
   WALK_LIST(bs, bgp_sockets)
-    if (ipa_equal(bs->sk->saddr, addr) &&
-	(bs->sk->sport == port) &&
-	(bs->sk->iface == ifa) &&
-	(bs->sk->vrf == p->p.vrf) &&
-	((bs->sk->flags & flag_mask) == flags))
+    if (bgp_socket_match(&bs->params, &req->params))
     {
-      bs->uc++;
-      p->sock = bs;
+      bgp_listen_debug(p, &req->params, "exists: %p", bs);
+      add_tail(&p->listen, &req->pn);
+      add_tail(&bs->requests, &req->sn);
+      req->sock = bs;
       return 0;
     }
 
   sock *sk = sk_new(proto_pool);
   sk->type = SK_TCP_PASSIVE;
   sk->ttl = 255;
-  sk->saddr = addr;
-  sk->sport = port;
-  sk->iface = ifa;
-  sk->vrf = p->p.vrf;
-  sk->flags = flags;
+  sk->saddr = req->params.addr;
+  sk->sport = req->params.port;
+  sk->iface = req->params.iface;
+  sk->vrf = req->params.vrf;
+  sk->flags = req->params.flags;
   sk->tos = IP_PREC_INTERNET_CONTROL;
   sk->rbsize = BGP_RX_BUFFER_SIZE;
   sk->tbsize = BGP_TX_BUFFER_SIZE;
@@ -197,12 +236,18 @@ bgp_open(struct bgp_proto *p)
     goto err;
 
   bs = mb_allocz(proto_pool, sizeof(struct bgp_socket));
+  memcpy(&bs->params, &req->params, sizeof bs->params);
   bs->sk = sk;
-  bs->uc = 1;
-  p->sock = bs;
   sk->data = bs;
+  req->sock = bs;
 
+  init_list(&bs->requests);
+  add_tail(&bs->requests, &req->sn);
+
+  add_tail(&p->listen, &req->pn);
   add_tail(&bgp_sockets, &bs->n);
+
+  bgp_listen_debug(p, &req->params, "create: %p", bs);
 
   return 0;
 
@@ -211,6 +256,26 @@ err:
   log(L_ERR "%s: Cannot open listening socket", p->p.name);
   rfree(sk);
   return -1;
+}
+
+static void
+bgp_listen_close(struct bgp_proto *p UNUSED, struct bgp_listen_request *req)
+{
+  struct bgp_socket *bs = req->sock;
+  ASSERT(bs);
+
+  rem_node(&req->pn);
+  rem_node(&req->sn);
+  if (!EMPTY_LIST(bs->requests))
+  {
+    bgp_listen_debug(p, &req->params, "unlink: %p", bs);
+    return;
+  }
+
+  bgp_listen_debug(p, &req->params, "free: %p", bs);
+  rfree(bs->sk);
+  rem_node(&bs->n);
+  mb_free(bs);
 }
 
 /**
@@ -222,16 +287,11 @@ err:
 static void
 bgp_close(struct bgp_proto *p)
 {
-  struct bgp_socket *bs = p->sock;
+  struct bgp_listen_request *req;
+  WALK_LIST_FIRST2(req, pn, p->listen)
+    bgp_listen_close(p, req);
 
-  ASSERT(bs && bs->uc);
-
-  if (--bs->uc)
-    return;
-
-  rfree(bs->sk);
-  rem_node(&bs->n);
-  mb_free(bs);
+  ASSERT_DIE(EMPTY_LIST(p->listen));
 }
 
 
@@ -276,7 +336,7 @@ bgp_same_ao_key(struct ao_key *a, struct ao_key *b)
 }
 
 static inline int
-bgp_sk_add_ao_key(struct bgp_proto *p, sock *sk, struct bgp_ao_key *key)
+bgp_sk_add_ao_key(struct bgp_proto *p, sock *sk, struct bgp_ao_key *key, const char *kind)
 {
   ip_addr prefix = p->cf->remote_ip;
   int pxlen = -1;
@@ -286,12 +346,16 @@ bgp_sk_add_ao_key(struct bgp_proto *p, sock *sk, struct bgp_ao_key *key)
   {
     sk_log_error(sk, p->p.name);
     log(L_ERR "%s: Cannot add TCP-AO key %d/%d to BGP %s socket",
-	p->p.name, key->key.send_id, key->key.recv_id,
-	((sk == p->sock->sk) ? "listening" : "session"));
+	p->p.name, key->key.send_id, key->key.recv_id, kind);
   }
 
   return rv;
 }
+
+static int
+bgp_sk_delete_ao_key(struct bgp_proto *p, sock *sk, struct bgp_ao_key *key,
+		     struct bgp_ao_key *backup, int current_key_id, int rnext_key_id,
+		     const char *kind);
 
 static int
 bgp_enable_ao_key(struct bgp_proto *p, struct bgp_ao_key *key)
@@ -300,26 +364,46 @@ bgp_enable_ao_key(struct bgp_proto *p, struct bgp_ao_key *key)
 
   BGP_TRACE(D_EVENTS, "Adding TCP-AO key %d/%d", key->key.send_id, key->key.recv_id);
 
-  /* Handle listening socket */
-  if (bgp_sk_add_ao_key(p, p->sock->sk, key) < 0)
-  {
-    key->failed = 1;
-    return -1;
-  }
-
-  key->active = 1;
+  /* Handle listening sockets */
+  struct bgp_listen_request *blr, *failed = NULL; node *nxt;
+  WALK_LIST2(blr, nxt, p->listen, pn)
+    if (bgp_sk_add_ao_key(p, blr->sock->sk, key, "listening") < 0)
+    {
+      failed = blr;
+      goto failA;
+    }
 
   /* Handle incoming socket */
   if (p->incoming_conn.sk)
-    if (bgp_sk_add_ao_key(p, p->incoming_conn.sk, key) < 0)
-      return -1;
+    if (bgp_sk_add_ao_key(p, p->incoming_conn.sk, key, "session (in)") < 0)
+      goto failA;
 
   /* Handle outgoing socket */
   if (p->outgoing_conn.sk)
-    if (bgp_sk_add_ao_key(p, p->outgoing_conn.sk, key) < 0)
-      return -1;
+    if (bgp_sk_add_ao_key(p, p->outgoing_conn.sk, key, "session (out)") < 0)
+      goto failB;
 
+  key->active = 1;
   return 0;
+
+failB:
+  /* Cleanup incoming socket */
+  if (p->incoming_conn.sk)
+    bgp_sk_delete_ao_key(p, p->incoming_conn.sk, key, NULL, -1, -1, "session (in)");
+
+failA:
+  /* Cleanup listening sockets */
+  WALK_LIST2(blr, nxt, p->listen, pn)
+  {
+    if (blr == failed)
+      break;
+
+    bgp_sk_delete_ao_key(p, blr->sock->sk, key, NULL, -1, -1, "listening");
+  }
+
+  /* Mark as failed */
+  key->failed = 1;
+  return -1;
 }
 
 struct bgp_active_keys {
@@ -330,7 +414,8 @@ struct bgp_active_keys {
 
 static int
 bgp_sk_delete_ao_key(struct bgp_proto *p, sock *sk, struct bgp_ao_key *key,
-		     struct bgp_ao_key *backup, int current_key_id, int rnext_key_id)
+		     struct bgp_ao_key *backup, int current_key_id, int rnext_key_id,
+		     const char *kind)
 {
   struct ao_key *set_current = NULL, *set_rnext = NULL;
 
@@ -358,8 +443,7 @@ bgp_sk_delete_ao_key(struct bgp_proto *p, sock *sk, struct bgp_ao_key *key,
   {
     sk_log_error(sk, p->p.name);
     log(L_ERR "%s: Cannot delete TCP-AO key %d/%d from BGP %s socket",
-	p->p.name, key->key.send_id, key->key.recv_id,
-	((sk == p->sock->sk) ? "listening" : "session"));
+	p->p.name, key->key.send_id, key->key.recv_id, kind);
   }
 
   return rv;
@@ -372,23 +456,28 @@ bgp_disable_ao_key(struct bgp_proto *p, struct bgp_ao_key *key, struct bgp_activ
 
   BGP_TRACE(D_EVENTS, "Deleting TCP-AO key %d/%d", key->key.send_id, key->key.recv_id);
 
+  /* Try to disable everywhere even if first fails */
+  int rv = 0;
+
   /* Handle listening socket */
-  if (bgp_sk_delete_ao_key(p, p->sock->sk, key, NULL, -1, -1) < 0)
-    return -1;
+  struct bgp_listen_request *blr; node *nxt;
+  WALK_LIST2(blr, nxt, p->listen, pn)
+    if (bgp_sk_delete_ao_key(p, blr->sock->sk, key, NULL, -1, -1, "listening") < 0)
+      rv = -1;
 
   key->active = 0;
 
   /* Handle incoming socket */
   if (p->incoming_conn.sk && info)
-    if (bgp_sk_delete_ao_key(p, p->incoming_conn.sk, key, info->backup, info->in_current, info->in_rnext) < 0)
-      return -1;
+    if (bgp_sk_delete_ao_key(p, p->incoming_conn.sk, key, info->backup, info->in_current, info->in_rnext, "session (in)") < 0)
+      rv = -1;
 
   /* Handle outgoing socket */
   if (p->outgoing_conn.sk && info)
-    if (bgp_sk_delete_ao_key(p, p->outgoing_conn.sk, key, info->backup, info->out_current, info->out_rnext) < 0)
-      return -1;
+    if (bgp_sk_delete_ao_key(p, p->outgoing_conn.sk, key, info->backup, info->out_current, info->out_rnext, "session (out)") < 0)
+      rv = -1;
 
-  return 0;
+  return rv;
 }
 
 static int
@@ -496,8 +585,7 @@ bgp_enable_ao_keys(struct bgp_proto *p)
   ASSERT(!p->incoming_conn.sk && !p->outgoing_conn.sk);
 
   WALK_LIST_(struct bgp_ao_key, key, p->ao.keys)
-    if (bgp_enable_ao_key(p, key) < 0)
-      goto fail;
+    bgp_enable_ao_key(p, key);
 
   p->ao.best_key = bgp_select_best_ao_key(p);
 
@@ -617,7 +705,7 @@ bgp_reconfigure_ao_keys(struct bgp_proto *p, const struct bgp_config *cf)
     WALK_LIST_DELSAFE(key, key2, old_keys)
       bgp_remove_ao_key(p, key, &info);
 
-    /* If some key removals failed */
+    /* If some key removals failed, restart */
     if (!EMPTY_LIST(old_keys))
       return 0;
   }
@@ -625,8 +713,7 @@ bgp_reconfigure_ao_keys(struct bgp_proto *p, const struct bgp_config *cf)
   /* Enable new keys */
   WALK_LIST_(struct bgp_ao_key, key, p->ao.keys)
     if (!key->active && !key->failed)
-      if (bgp_enable_ao_key(p, key) < 0)
-	return 0;
+      bgp_enable_ao_key(p, key);
 
   /* Update RNext key */
   if (bgp_update_rnext_ao_key(p) < 0)
@@ -700,14 +787,51 @@ bgp_setup_auth(struct bgp_proto *p, int enable)
       pxlen = net_pxlen(p->cf->remote_range);
     }
 
-    int rv = sk_set_md5_auth(p->sock->sk,
-			     p->cf->local_ip, prefix, pxlen, p->cf->iface,
-			     enable ? p->cf->password : NULL, p->cf->setkey);
+    /* Set/reset the MD5 password at all listening sockets */
+    int rv = 0;
+    struct bgp_listen_request *blr; node *nxt;
+    WALK_LIST2(blr, nxt, p->listen, pn)
+    {
+      rv = sk_set_md5_auth(blr->sock->sk,
+	  p->cf->local_ip, prefix, pxlen, p->cf->iface,
+	  enable ? p->cf->password : NULL, p->cf->setkey);
 
-    if (rv < 0)
-      sk_log_error(p->sock->sk, p->p.name);
+      if (rv < 0)
+      {
+	sk_log_error(blr->sock->sk, p->p.name);
 
-    return rv;
+	/* When disabling, just continue, there is nothing to salvage */
+	if (!enable)
+	  continue;
+
+	/* Trying to rewind from the listening sockets */
+	struct bgp_listen_request *failed = blr;
+	bool emsg = false;
+	WALK_LIST2(blr, nxt, p->listen, pn)
+	{
+	  if (blr == failed)
+	    break;
+
+	  int rrv = sk_set_md5_auth(blr->sock->sk,
+	      p->cf->local_ip, prefix, pxlen, p->cf->iface,
+	      NULL, p->cf->setkey);
+
+	  if (rrv < 0)
+	  {
+	    if (!emsg)
+	    {
+	      log(L_ERR "%s: Trying to rewind MD5 auth failed as well.");
+	      emsg = true;
+	    }
+
+	    sk_log_error(blr->sock->sk, p->p.name);
+	  }
+	}
+
+	/* One socket failed while enabling, the whole protocol failed. */
+	return rv;
+      }
+    }
   }
 
   return 0;
@@ -954,8 +1078,8 @@ bgp_decision(void *vp)
     bgp_down(p);
 }
 
-static struct bgp_proto *
-bgp_spawn(struct bgp_proto *pp, ip_addr remote_ip)
+static int
+bgp_spawn(struct bgp_proto *pp, sock *sk)
 {
   struct symbol *sym;
   char fmt[SYM_MAX_LEN];
@@ -972,9 +1096,16 @@ bgp_spawn(struct bgp_proto *pp, ip_addr remote_ip)
   cfg_mem = NULL;
 
   /* Just pass remote_ip to bgp_init() */
-  ((struct bgp_config *) sym->proto)->remote_ip = remote_ip;
+  struct bgp_config *cf = SKIP_BACK(struct bgp_config, c, sym->proto);
+  cf->remote_ip = sk->daddr;
+  cf->local_ip = sk->saddr;
+  cf->iface = sk->iface;
 
-  return (void *) proto_spawn(sym->proto, 0);
+  struct bgp_proto *p = SKIP_BACK(struct bgp_proto, p, proto_spawn(sym->proto, 0));
+  p->postponed_sk = sk;
+  rmove(sk, p->p.pool);
+
+  return 0;
 }
 
 void
@@ -1653,23 +1784,48 @@ bgp_find_proto(sock *sk)
   struct bgp_proto *best = NULL;
   struct bgp_proto *p;
 
-  /* sk->iface is valid only if src or dst address is link-local */
-  int link = ipa_is_link_local(sk->saddr) || ipa_is_link_local(sk->daddr);
+  /* sk->iface is valid only if src or dst address is link-local or if strict bind on interface is set */
+  bool link = ipa_is_link_local(sk->saddr) || ipa_is_link_local(sk->daddr);
 
   WALK_LIST(p, proto_list)
-    if ((p->p.proto == &proto_bgp) &&
-	(ipa_equal(p->remote_ip, sk->daddr) || bgp_is_dynamic(p)) &&
-	(!p->cf->remote_range || ipa_in_netX(sk->daddr, p->cf->remote_range)) &&
-	(p->p.vrf == sk->vrf) &&
-	(p->cf->local_port == sk->sport) &&
-	(!link || (p->cf->iface == sk->iface)) &&
-	(ipa_zero(p->cf->local_ip) || ipa_equal(p->cf->local_ip, sk->saddr)))
-    {
-      best = p;
+  {
+    /* Not a BGP */
+    if (p->p.proto != &proto_bgp)
+      continue;
 
-      if (!bgp_is_dynamic(p))
-	break;
-    }
+    /* Remote address configured but not the right one */
+    if (!ipa_equal(p->remote_ip, sk->daddr) && !bgp_is_dynamic(p))
+      continue;
+
+    /* Remote range configured but the remote address is not in it */
+    if (p->cf->remote_range && !ipa_in_netX(sk->daddr, p->cf->remote_range))
+      continue;
+
+    /* Not the right VRF */
+    if (p->p.vrf != sk->vrf)
+      continue;
+
+    /* Not the right local port */
+    if (p->cf->local_port != sk->sport)
+      continue;
+
+    /* Local address set but not matching */
+    if (!ipa_zero(p->cf->local_ip) && !ipa_equal(p->cf->local_ip, sk->saddr))
+      continue;
+
+    /* The interface set but not matching */
+    if ((link || p->cf->strict_bind) && p->cf->iface && (p->cf->iface != sk->iface))
+      continue;
+
+    /* Interface pattern configured and not matching */
+    if ((link || p->cf->strict_bind) && p->cf->ipatt && !iface_patt_match(p->cf->ipatt, sk->iface, NULL))
+      continue;
+
+    best = p;
+
+    if (!bgp_is_dynamic(p))
+      break;
+  }
 
   return best;
 }
@@ -1781,12 +1937,7 @@ bgp_incoming_connection(sock *sk, uint dummy UNUSED)
 
   /* For dynamic BGP, spawn new instance and postpone the socket */
   if (bgp_is_dynamic(p))
-  {
-    p = bgp_spawn(p, sk->daddr);
-    p->postponed_sk = sk;
-    rmove(sk, p->p.pool);
-    return 0;
-  }
+    return bgp_spawn(p, sk);
 
   rmove(sk, p->p.pool);
   bgp_setup_conn(p, &p->incoming_conn);
@@ -1825,6 +1976,96 @@ bgp_start_neighbor(struct bgp_proto *p)
     p->link_addr = p->neigh->iface->llv6->ip;
 
   bgp_initiate(p);
+}
+
+static bool
+bgp_iface_match(struct bgp_proto *p, struct iface *i)
+{
+  int ps = p->p.proto_state;
+
+  ASSERT_DIE(p->cf->ipatt);
+  ASSERT_DIE(p->cf->strict_bind);
+
+  if ((ps == PS_DOWN) || (ps == PS_STOP))
+    return false;
+
+  if (!iface_patt_match(p->cf->ipatt, i, NULL))
+    return false;
+
+  return true;
+}
+
+static void
+bgp_iface_update(struct bgp_proto *p, uint flags, struct iface *i)
+{
+  struct bgp_socket_params params = {
+    .iface = i,
+    .vrf = p->p.vrf,
+    .addr = ipa_nonzero(p->cf->local_ip) ? p->cf->local_ip : (p->ipv4 ? IPA_NONE4 : IPA_NONE6),
+    .port = p->cf->local_port,
+    .flags = p->cf->free_bind ? SKF_FREEBIND : 0,
+  };
+
+  if (flags & IF_CHANGE_UP)
+  {
+    struct bgp_listen_request *req = mb_allocz(p->p.pool, sizeof *req);
+    req->params = params;
+    bgp_listen_open(p, req);
+  }
+
+  if (flags & IF_CHANGE_DOWN)
+  {
+    struct bgp_listen_request *req; node *nxt;
+    WALK_LIST2(req, nxt, p->listen, pn)
+      if (bgp_socket_match(&req->params, &params))
+      {
+	bgp_listen_close(p, req);
+	mb_free(req);
+	break;
+      }
+  }
+}
+
+static void
+bgp_if_notify(struct proto *P, uint flags, struct iface *i)
+{
+  struct bgp_proto *p = (struct bgp_proto *) P;
+  ASSERT_DIE(ipa_zero(p->cf->local_ip));
+  if (bgp_iface_match(p, i))
+    bgp_iface_update(p, flags, i);
+}
+
+static void
+bgp_ifa_notify(struct proto *P, uint flags, struct ifa *i)
+{
+  struct bgp_proto *p = (struct bgp_proto *) P;
+  ASSERT_DIE(!ipa_zero(p->cf->local_ip));
+
+  if (ipa_equal(i->ip, p->cf->local_ip) && bgp_iface_match(p, i->iface))
+    bgp_iface_update(p, flags, i->iface);
+}
+
+static void
+bgp_if_reload(struct bgp_proto *p, struct iface_patt *patt)
+{
+  struct iface *iface;
+  struct ifa *a;
+
+  WALK_LIST(iface, iface_list)
+  {
+    bool old = iface_patt_match(p->cf->ipatt, iface, NULL);
+    bool new = iface_patt_match(patt, iface, NULL);
+
+    if (old == new)
+      continue;
+
+    if (ipa_zero(p->cf->local_ip) || p->cf->free_bind)
+      bgp_iface_update(p, old ? IF_CHANGE_DOWN : IF_CHANGE_UP, iface);
+    else
+      WALK_LIST(a, iface->addrs)
+	if (ipa_equal(a->ip, p->cf->local_ip))
+	  bgp_iface_update(p, old ? IF_CHANGE_DOWN : IF_CHANGE_UP, iface);
+  }
 }
 
 static void
@@ -2032,7 +2273,7 @@ bgp_start_locked(struct object_lock *lock)
     return;
   }
 
-  neighbor *n = neigh_find(&p->p, p->remote_ip, cf->iface, NEF_STICKY);
+  neighbor *n = neigh_find(&p->p, p->remote_ip, cf->iface, NEF_STICKY | (cf->onlink ? NEF_ONLINK : 0));
   if (!n)
   {
     log(L_ERR "%s: Invalid remote address %I%J", p->p.name, p->remote_ip, cf->iface);
@@ -2101,6 +2342,19 @@ bgp_start(struct proto *P)
 
   p->remote_id = 0;
   p->link_addr = IPA_NONE;
+
+  /* Initialize listening socket list */
+  init_list(&p->listen);
+
+  /* Setup interface notification hooks */
+  P->if_notify = NULL;
+  P->ifa_notify = NULL;
+  if (cf->ipatt) {
+    if (ipa_zero(cf->local_ip) || cf->free_bind)
+      P->if_notify = bgp_if_notify;
+    else
+      P->ifa_notify = bgp_ifa_notify;
+  }
 
   /* Initialize TCP-AO keys */
   init_list(&p->ao.keys);
@@ -2256,9 +2510,7 @@ bgp_init(struct proto_config *CF)
   p->rs_client = cf->rs_client;
   p->rr_client = cf->rr_client;
 
-  p->ipv4 = ipa_nonzero(cf->remote_ip) ?
-    ipa_is_ip4(cf->remote_ip) :
-    (cf->remote_range && (cf->remote_range->type == NET_IP4));
+  p->ipv4 = cf->ipv4;
 
   p->remote_ip = cf->remote_ip;
   p->remote_as = cf->remote_as;
@@ -2503,6 +2755,10 @@ bgp_postconfig(struct proto_config *CF)
   if (cf->check_link < 0)
     cf->check_link = !cf->multihop;
 
+  /* Detect IPv4 */
+  cf->ipv4 = ipa_nonzero(cf->remote_ip) ?
+    ipa_is_ip4(cf->remote_ip) :
+    (cf->remote_range && (cf->remote_range->type == NET_IP4));
 
   if (!cf->local_as)
     cf_error("Local AS number must be set");
@@ -2510,8 +2766,8 @@ bgp_postconfig(struct proto_config *CF)
   if (ipa_zero(cf->remote_ip) && !cf->remote_range)
     cf_error("Neighbor must be configured");
 
-  if (ipa_zero(cf->local_ip) && cf->strict_bind)
-    cf_error("Local address must be configured for strict bind");
+  if (ipa_zero(cf->local_ip) && !cf->ipatt && !cf->iface && cf->strict_bind)
+    cf_error("Local address or an interface must be configured for strict bind");
 
   if (!cf->remote_as && !cf->peer_type)
     cf_error("Remote AS number (or peer type) must be set");
@@ -2525,6 +2781,12 @@ bgp_postconfig(struct proto_config *CF)
   if (!cf->iface && (ipa_is_link_local(cf->local_ip) ||
 		     ipa_is_link_local(cf->remote_ip)))
     cf_error("Link-local addresses require defined interface");
+
+  if (cf->iface && cf->ipatt)
+    cf_error("Interface and interface range cannot be configured together");
+
+  if (cf->ipatt && !cf->strict_bind)
+    cf_error("Interface range needs strict bind");
 
   if (!(cf->capabilities && cf->enable_as4) && (cf->remote_as > 0xFFFF))
     cf_error("Neighbor AS number out of range (AS4 not available)");
@@ -2566,7 +2828,7 @@ bgp_postconfig(struct proto_config *CF)
 		       ipa_is_link_local(cf->remote_ip)))
     cf_error("Multihop BGP cannot be used with link-local addresses");
 
-  if (cf->multihop && cf->iface)
+  if (cf->multihop && (cf->iface || cf->ipatt))
     cf_error("Multihop BGP cannot be bound to interface");
 
   if (cf->multihop && cf->check_link)
@@ -2574,6 +2836,13 @@ bgp_postconfig(struct proto_config *CF)
 
   if (cf->multihop && cf->bfd && ipa_zero(cf->local_ip))
     cf_error("Multihop BGP with BFD requires specified local address");
+
+  if (cf->multihop && cf->onlink)
+    cf_error("Multihop BGP cannot be configured onlink");
+
+  if (cf->onlink && !cf->iface && !cf->ipatt &&
+      !cf->passive && !ipa_zero(cf->remote_ip))
+    cf_error("Active onlink BGP must have interface configured");
 
   if (!cf->gr_mode && cf->llgr_mode)
     cf_error("Long-lived graceful restart requires basic graceful restart");
@@ -2726,14 +2995,39 @@ static int
 bgp_reconfigure(struct proto *P, struct proto_config *CF)
 {
   struct bgp_proto *p = (void *) P;
-  const struct bgp_config *new = (void *) CF;
+  struct bgp_config *new = (void *) CF;
   const struct bgp_config *old = p->cf;
+
+  /* XXX: There is a section in documentation describing which configuration
+   * changes force BGP restart. When changing this function, you have to update
+   * also that part of documentation. */
 
   if (proto_get_router_id(CF) != p->local_id)
     return 0;
 
   if (bstrcmp(proto_get_hostname(CF), p->hostname))
     return 0;
+
+  /* Fix the virtual configuration so that memcpy does not fail */
+  if (old->c.parent)
+  {
+    new->remote_ip = old->remote_ip;
+    new->local_ip = old->local_ip;
+
+    /* Pre-check interfaces */
+    if (new->ipatt)
+    {
+      if (!old->iface || !iface_patt_match(new->ipatt, old->iface, NULL))
+	return 0;
+    }
+    else if (new->iface)
+    {
+      if (old->iface != new->iface)
+	return 0;
+    }
+
+    new->iface = old->iface;
+  }
 
   int same = !memcmp(((byte *) old) + sizeof(struct proto_config),
 		     ((byte *) new) + sizeof(struct proto_config),
@@ -2745,7 +3039,19 @@ bgp_reconfigure(struct proto *P, struct proto_config *CF)
     && !bstrcmp(old->dynamic_name, new->dynamic_name)
     && (old->dynamic_name_digits == new->dynamic_name_digits);
 
-  /* Reconfigure TCP-AP */
+  /* Reconfigure interface notification hooks */
+  same = same && (!P->if_notify == !(new->ipatt && ipa_zero(new->local_ip)));
+  same = same && (!P->ifa_notify == !(new->ipatt && !ipa_zero(new->local_ip)));
+
+  /* Differing pattern lists cause an update of the listening sockets
+   * and also if the connection is up, then active sockets. */
+  bool need_if_reload = same && new->ipatt && old->ipatt && !iface_plists_equal(new->ipatt, old->ipatt);
+  if (need_if_reload && !bgp_is_dynamic(p) && (
+	p->incoming_conn.sk && !iface_patt_match(new->ipatt, p->incoming_conn.sk->iface, NULL) ||
+	p->outgoing_conn.sk && !iface_patt_match(new->ipatt, p->outgoing_conn.sk->iface, NULL)))
+    same = 0;
+
+  /* Reconfigure TCP-AO */
   same = same && bgp_reconfigure_ao_keys(p, new);
 
   /* FIXME: Move channel reconfiguration to generic protocol code ? */
@@ -2793,6 +3099,9 @@ bgp_reconfigure(struct proto *P, struct proto_config *CF)
   if (p->start_state > BSS_PREPARE)
     bgp_update_bfd(p, new->bfd);
 
+  if (need_if_reload)
+    bgp_if_reload(p, new->ipatt);
+
   return 1;
 }
 
@@ -2830,17 +3139,32 @@ bgp_channel_reconfigure(struct channel *C, struct channel_config *CC, int *impor
   if ((new->gw_mode != old->gw_mode) ||
       (new->next_hop_prefer != old->next_hop_prefer) ||
       (new->aigp != old->aigp) ||
-      (new->cost != old->cost))
+      (new->cost != old->cost) ||
+      (new->c.preference != old->c.preference))
   {
-    /* import_changed itself does not force ROUTE_REFRESH when import_table is active */
+    /* Route refresh needed, these attributes are set by BGP itself
+     * and even if import table exists, we can't use it */
+
+    /* Route refresh impossible, restart is needed */
+    if ((c->c.channel_state == CS_UP) && !p->route_refresh)
+      return 0;
+
+    /* Force ROUTE_REFRESH with import table; otherwise
+     * it will be forced by import_changed set to 1 later */
     if (c->c.in_table && (c->c.channel_state == CS_UP))
       bgp_schedule_packet(p->conn, c, PKT_ROUTE_REFRESH);
+
+    /* Note that preference is already handled in channel_reconfigure(),
+       but we need it handle again here for the ROUTE_REFRESH trigger */
 
     *import_changed = 1;
   }
 
-  if (!ipa_equal(new->next_hop_addr, old->next_hop_addr) ||
-      (new->next_hop_self != old->next_hop_self) ||
+  /* Outgoing next hop setting is too complex to update, forcing restart. */
+  if (!ipa_equal(new->next_hop_addr, old->next_hop_addr))
+    return 0;
+
+  if ((new->next_hop_self != old->next_hop_self) ||
       (new->next_hop_keep != old->next_hop_keep) ||
       (new->llnh_format != old->llnh_format) ||
       (new->aigp != old->aigp) ||
@@ -3157,9 +3481,9 @@ bgp_show_proto_info(struct proto *P)
   cli_msg(-1006, "  BGP state:          %s", bgp_state_dsc(p));
 
   if (bgp_is_dynamic(p) && p->cf->remote_range)
-    cli_msg(-1006, "    Neighbor range:   %N", p->cf->remote_range);
+    cli_msg(-1006, "    Neighbor range:   %N%s", p->cf->remote_range, p->cf->onlink ? " onlink" : "");
   else
-    cli_msg(-1006, "    Neighbor address: %I%J", p->remote_ip, p->cf->iface);
+    cli_msg(-1006, "    Neighbor address: %I%J%s", p->remote_ip, p->cf->iface, p->cf->onlink ? " onlink" : "");
 
   if ((p->conn == &p->outgoing_conn) && (p->cf->remote_port != BGP_PORT))
     cli_msg(-1006, "    Neighbor port:    %u", p->cf->remote_port);
