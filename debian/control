@@ -1,6 +1,5 @@
 Source: bird2
 Section: net
-Priority: optional
 Build-Depends:
  bison,
  debhelper-compat (= 13),
@@ -17,7 +16,7 @@ Build-Depends-Indep:
  opensp,
  texlive-latex-extra,
 Maintainer: Marco d'Itri <md@linux.it>
-Standards-Version: 4.7.2.0
+Standards-Version: 4.7.4.1
 Vcs-Browser: https://salsa.debian.org/md/bird
 Vcs-Git: https://salsa.debian.org/md/bird.git -b debian/bird2/unstable
 Homepage: https://bird.network.cz/
