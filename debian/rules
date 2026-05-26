@@ -14,7 +14,6 @@ COMMON_FLAGS=\
 	--infodir=\$${prefix}/share/info \
 	--localstatedir=/var \
 	--runstatedir=/run/bird \
-	--docdir=\$${prefix}/share/bird2 \
 	--enable-client --with-protocols=all
 
 DB2MAN = /usr/share/sgml/docbook/stylesheet/xsl/nwalsh/manpages/docbook.xsl
