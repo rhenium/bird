@@ -70,7 +70,7 @@ man(1), man(7), http://www.tldp.org/HOWTO/Man-Page/
         <surname>Ružička</surname>
         <contrib>Updated this manpage for birdcl.</contrib>
         <address>
-          <email>jakub.ruzicka@nic.cz</email>
+          <email>jru@debian.org</email>
         </address>
       </author>
     </authorgroup>
