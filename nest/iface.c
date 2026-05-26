@@ -38,6 +38,8 @@ static pool *if_pool;
 
 list iface_list;
 
+ps_queue vlan_requests;
+
 static void if_recalc_preferred(struct iface *i);
 
 /**
@@ -130,6 +132,8 @@ if_what_changed(struct iface *i, struct iface *j)
     c |= IF_CHANGE_LINK;
   if (i->mtu != j->mtu)
     c |= IF_CHANGE_MTU;
+  if (i->attrs != j->attrs)
+    c |= IF_CHANGE_ATTRS;
   return c;
 }
 
@@ -140,6 +144,7 @@ if_copy(struct iface *to, struct iface *from)
   to->mtu = from->mtu;
   to->master_index = from->master_index;
   to->master = from->master;
+  to->attrs = from->attrs;
 }
 
 static inline void
@@ -301,6 +306,9 @@ if_update(struct iface *new)
   struct iface *i;
   unsigned c;
 
+  if (new->attrs && !rta_is_cached(new->attrs))
+    new->attrs = new->attrs->eattrs ? rta_lookup(new->attrs) : NULL;
+
   WALK_LIST(i, iface_list)
     if (!strcmp(new->name, i->name))
       {
@@ -316,11 +324,13 @@ if_update(struct iface *new)
 	    new->llv6 = i->llv6;
 	    new->sysdep = i->sysdep;
 	    memcpy(&new->addrs, &i->addrs, sizeof(i->addrs));
+	    rta_free(i->attrs);
 	    memcpy(i, new, sizeof(*i));
 	    i->flags &= ~IF_UP;		/* IF_TMP_DOWN will be added later */
 	    goto newif;
 	  }
 
+	rta_free(i->attrs);
 	if_copy(i, new);
 	if (c)
 	  if_notify_change(c, i);
@@ -712,6 +722,8 @@ if_init(void)
   if_pool = rp_new(&root_pool, "Interfaces");
   init_list(&iface_list);
   neigh_init(if_pool);
+
+  ps_init_queue(&vlan_requests, &root_pool, "VLAN bus");
 }
 
 /*

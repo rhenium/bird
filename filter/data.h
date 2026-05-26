@@ -43,6 +43,8 @@ enum f_type {
   T_ENUM_RA_PREFERENCE = 0x37,
   T_ENUM_AF = 0x38,
   T_ENUM_MPLS_POLICY = 0x39,
+  T_ENUM_NET_EVPN_TYPE = 0x3a,
+  T_ENUM_KBR_SOURCE = 0x3b,
 
 /* new enums go here */
   T_ENUM_EMPTY = 0x3f,	/* Special hack for atomic_aggr */
@@ -63,6 +65,7 @@ enum f_type {
   T_RD = 0x2a,		/* Route distinguisher for VPN addresses */
   T_PATH_MASK_ITEM = 0x2b,	/* Path mask item for path mask constructors */
   T_BYTESTRING = 0x2c,
+  T_MAC = 0x2d,
 
   T_ROUTE = 0x78,
   T_ROUTES_BLOCK = 0x79,
@@ -87,6 +90,7 @@ struct f_val {
     lcomm lc;
     vpn_rd rd;
     ip_addr ip;
+    mac_addr mac;
     const net_addr *net;
     const char *s;
     const struct adata *bs;

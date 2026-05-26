@@ -44,6 +44,7 @@ static const char * const f_type_str[] = {
   [T_ENUM_RA_PREFERENCE] = "enum ra_preference",
   [T_ENUM_AF]	= "enum af",
   [T_ENUM_MPLS_POLICY] = "enum mpls_policy",
+  [T_ENUM_NET_EVPN_TYPE] = "enum net_evpn_type",
 
   [T_IP]	= "ip",
   [T_NET]	= "prefix",
@@ -57,6 +58,7 @@ static const char * const f_type_str[] = {
   [T_LC]	= "lc",
   [T_LCLIST]	= "lclist",
   [T_RD]	= "rd",
+  [T_MAC]	= "mac",
 
   [T_ROUTE] = "route",
   [T_ROUTES_BLOCK] = "block of routes",
@@ -207,6 +209,8 @@ val_compare(const struct f_val *v1, const struct f_val *v2)
     return lcomm_cmp(v1->val.lc, v2->val.lc);
   case T_IP:
     return ipa_compare(v1->val.ip, v2->val.ip);
+  case T_MAC:
+    return mac_compare(v1->val.mac, v2->val.mac);
   case T_NET:
     return net_compare(v1->val.net, v2->val.net);
   case T_STRING:;
@@ -327,6 +331,10 @@ clist_set_type(const struct f_tree *set, struct f_val *v)
 
   switch (set->from.type)
   {
+  case T_INT:
+    v->type = T_INT;
+    return 1;
+
   case T_PAIR:
     v->type = T_PAIR;
     return 1;
@@ -534,7 +542,7 @@ val_in_range(const struct f_val *v1, const struct f_val *v2)
   if ((v1->type == T_INT) && (v2->type == T_PATH))
     return as_path_contains(v2->val.ad, v1->val.i, 1);
 
-  if (((v1->type == T_PAIR) || (v1->type == T_QUAD)) && (v2->type == T_CLIST))
+  if (((v1->type == T_INT) || (v1->type == T_PAIR) || (v1->type == T_QUAD)) && (v2->type == T_CLIST))
     return int_set_contains(v2->val.ad, v1->val.i);
   /* IP->Quad implicit conversion */
   if (val_is_ip4(v1) && (v2->type == T_CLIST))
@@ -635,6 +643,7 @@ val_format(const struct f_val *v, buffer *buf)
   case T_EC:	ec_format(buf2, v->val.ec); buffer_print(buf, "%s", buf2); return;
   case T_LC:	lc_format(buf2, v->val.lc); buffer_print(buf, "%s", buf2); return;
   case T_RD:	rd_format(v->val.rd, buf2, 1024); buffer_print(buf, "%s", buf2); return;
+  case T_MAC:	buffer_print(buf, "%6b", v->val.mac.addr); return;
   case T_PREFIX_SET: trie_format(v->val.ti, buf); return;
   case T_SET:	tree_format(v->val.t, buf); return;
   case T_ENUM:	buffer_print(buf, "(enum %x)%u", v->type, v->val.i); return;

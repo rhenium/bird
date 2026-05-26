@@ -45,8 +45,10 @@ enum protocol_class {
   PROTOCOL_BFD,
   PROTOCOL_BGP,
   PROTOCOL_BMP,
+  PROTOCOL_BRIDGE,
   PROTOCOL_DEVICE,
   PROTOCOL_DIRECT,
+  PROTOCOL_EVPN,
   PROTOCOL_KERNEL,
   PROTOCOL_L3VPN,
   PROTOCOL_OSPF,
@@ -105,8 +107,8 @@ void protos_dump_all(struct dump_request *);
  */
 
 extern struct protocol
-  proto_device, proto_radv, proto_rip, proto_static, proto_mrt,
-  proto_ospf, proto_perf, proto_l3vpn, proto_aggregator,
+  proto_device, proto_radv, proto_rip, proto_static, proto_mrt, proto_evpn,
+  proto_ospf, proto_perf, proto_l3vpn, proto_aggregator, proto_bridge,
   proto_pipe, proto_bgp, proto_bmp, proto_bfd, proto_babel, proto_rpki;
 
 /*
@@ -410,6 +412,9 @@ void proto_notify_state(struct proto *p, unsigned state);
 #define D_PACKETS 32		/* Packets sent/received */
 
 #ifndef PARSER
+#define TRACE_(proto, flags, msg, args...) \
+  do { if (proto->p.debug & flags) log(L_TRACE "%s: " msg, proto->p.name , ## args ); } while(0)
+
 #define TRACE(flags, msg, args...) \
   do { if (p->p.debug & flags) log(L_TRACE "%s: " msg, p->p.name , ## args ); } while(0)
 #endif

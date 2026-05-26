@@ -36,7 +36,8 @@ CF_KEYWORDS(BGP, LOCAL, NEIGHBOR, AS, HOLD, TIME, CONNECT, RETRY, KEEPALIVE,
 	DYNAMIC, RANGE, NAME, DIGITS, BGP_AIGP, AIGP, ORIGINATE, COST, ENFORCE,
 	FIRST, FREE, VALIDATE, BASE, ROLE, ROLES, PEER, PROVIDER, CUSTOMER,
 	RS_SERVER, RS_CLIENT, REQUIRE, BGP_OTC, GLOBAL, SEND, RECV, MIN, MAX,
-	AUTHENTICATION, NONE, MD5, AO, FORMAT, NATIVE, SINGLE, DOUBLE)
+	AUTHENTICATION, NONE, MD5, AO, FORMAT, NATIVE, SINGLE, DOUBLE,
+	BGP_PMSI_TUNNEL)
 
 CF_KEYWORDS(KEY, KEYS, SECRET, DEPRECATED, PREFERRED, ALGORITHM, CMAC, AES128)
 
@@ -148,6 +149,7 @@ bgp_proto:
  | bgp_proto proto_item ';'
  | bgp_proto bgp_proto_channel ';'
  | bgp_proto mpls_channel ';'
+ | bgp_proto nbrs_channel ';'
  | bgp_proto LOCAL bgp_loc_opts ';'
  | bgp_proto LOCAL ipa ipa_scope bgp_loc_opts ';' {
      BGP_CFG->local_ip = $3;
@@ -265,6 +267,7 @@ bgp_afi:
  | VPN6 MULTICAST	{ $$ = BGP_AF_VPN6_MC; }
  | FLOW4		{ $$ = BGP_AF_FLOW4; }
  | FLOW6		{ $$ = BGP_AF_FLOW6; }
+ | EVPN			{ $$ = BGP_AF_EVPN; }
  ;
 
 tcp_ao_key_start: KEY {
@@ -520,6 +523,8 @@ dynamic_attr: BGP_CLUSTER_LIST
 	{ $$ = f_new_dynamic_attr(EAF_TYPE_INT_SET, T_CLIST, EA_CODE(PROTOCOL_BGP, BA_CLUSTER_LIST));	$$.flags = BAF_OPTIONAL; } ;
 dynamic_attr: BGP_EXT_COMMUNITY
 	{ $$ = f_new_dynamic_attr(EAF_TYPE_EC_SET, T_ECLIST, EA_CODE(PROTOCOL_BGP, BA_EXT_COMMUNITY));	$$.flags = BAF_OPTIONAL | BAF_TRANSITIVE; } ;
+dynamic_attr: BGP_PMSI_TUNNEL
+	{ $$ = f_new_dynamic_attr(EAF_TYPE_OPAQUE, T_ENUM_EMPTY, EA_CODE(PROTOCOL_BGP, BA_PMSI_TUNNEL)); $$.flags = BAF_OPTIONAL | BAF_TRANSITIVE; } ;
 dynamic_attr: BGP_AIGP
 	{ $$ = f_new_dynamic_attr(EAF_TYPE_OPAQUE, T_ENUM_EMPTY, EA_CODE(PROTOCOL_BGP, BA_AIGP));	$$.flags = BAF_OPTIONAL; } ;
 dynamic_attr: BGP_LARGE_COMMUNITY

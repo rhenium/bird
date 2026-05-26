@@ -770,7 +770,7 @@ channel_config_new(const struct channel_class *cc, const char *name, uint net_ty
     if (!net_val_match(net_type, proto->protocol->channel_mask))
       cf_error("Unsupported channel type");
 
-    if (proto->net_type && (net_type != proto->net_type) && (net_type != NET_MPLS))
+    if (proto->net_type && (net_type != proto->net_type) && (net_type != NET_MPLS) && (net_type != NET_NEIGHBOR))
       cf_error("Different channel type");
 
     tab = new_config->def_tables[net_type];
@@ -1338,13 +1338,10 @@ protos_commit(struct config *new, struct config *old, int force_reconfig, int ty
   DBG("protos_commit:\n");
   if (old)
   {
+    /* First, add dynamic protocols to the new config */
     WALK_LIST(oc, old->protos)
     {
-      p = oc->proto;
-      sym = cf_find_symbol(new, oc->name);
-
-      /* Handle dynamic protocols */
-      if (!sym && oc->parent && !new->shutdown)
+      if (oc->parent && !cf_find_symbol(new, oc->name) && !new->shutdown)
       {
 	struct symbol *parsym = cf_find_symbol(new, oc->parent->name);
 	if (parsym && parsym->class == SYM_PROTO)
@@ -1359,6 +1356,12 @@ protos_commit(struct config *new, struct config *old, int force_reconfig, int ty
 	  cfg_mem = NULL;
 	}
       }
+    }
+
+    WALK_LIST(oc, old->protos)
+    {
+      p = oc->proto;
+      sym = cf_find_symbol(new, oc->name);
 
       if (sym && sym->class == SYM_PROTO && !new->shutdown)
       {
@@ -2241,7 +2244,10 @@ proto_cmd_reload(struct proto *p, uintptr_t dir, int cnt UNUSED)
 
   /* If the protocol in not UP, it has no routes */
   if (p->proto_state != PS_UP)
+  {
+    cli_msg(-8, "%s: is not UP", p->name);
     return;
+  }
 
   /* All channels must support reload */
   if (dir != CMD_RELOAD_OUT)

@@ -20,15 +20,12 @@
 #include <sys/random.h>
 #endif
 
+_Thread_local unsigned short random_state[3];
 
 u32
-random_u32(void)
+brandom(void)
 {
-  long int rand_low, rand_high;
-
-  rand_low = random();
-  rand_high = random();
-  return (rand_low & 0xffff) | ((rand_high & 0xffff) << 16);
+  return (u32) jrand48(random_state);
 }
 
 
@@ -56,12 +53,14 @@ read_urandom_fd(void *buf, uint count)
 void
 random_init(void)
 {
-  uint seed;
+  /* No global init needed */
+}
 
-  /* Get random bytes to trip any errors early and to seed random() */
-  random_bytes(&seed, sizeof(seed));
-
-  srandom(seed);
+void
+random_init_thread(void)
+{
+  /* Initialize thread-local random structure */
+  random_bytes(random_state, sizeof random_state);
 }
 
 void

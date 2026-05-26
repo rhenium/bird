@@ -27,10 +27,12 @@ struct eattr;
 
 #define BGP_AFI_IPV4		1
 #define BGP_AFI_IPV6		2
+#define BGP_AFI_L2VPN		25
 
 #define BGP_SAFI_UNICAST	1
 #define BGP_SAFI_MULTICAST	2
 #define BGP_SAFI_MPLS		4
+#define BGP_SAFI_EVPN		70
 #define BGP_SAFI_MPLS_VPN	128
 #define BGP_SAFI_VPN_MULTICAST	129
 #define BGP_SAFI_FLOW		133
@@ -53,6 +55,7 @@ struct eattr;
 #define BGP_AF_VPN6_MC		BGP_AF( BGP_AFI_IPV6, BGP_SAFI_VPN_MULTICAST )
 #define BGP_AF_FLOW4		BGP_AF( BGP_AFI_IPV4, BGP_SAFI_FLOW )
 #define BGP_AF_FLOW6		BGP_AF( BGP_AFI_IPV6, BGP_SAFI_FLOW )
+#define BGP_AF_EVPN		BGP_AF( BGP_AFI_L2VPN, BGP_SAFI_EVPN )
 
 
 struct bgp_write_state;
@@ -405,6 +408,7 @@ struct bgp_proto {
   list listen;				/* Requests for shared listening sockets */
   struct bfd_request *bfd_req;		/* BFD request, if BFD is used */
   struct birdsock *postponed_sk;	/* Postponed incoming socket for dynamic BGP */
+  struct channel *nbr_channel;		/* Neighbor channel for dynamic BGP */
   struct bgp_ao_state ao;
   struct bgp_stats stats;		/* BGP statistics */
   btime last_established;		/* Last time of enter/leave of established state */
@@ -419,6 +423,7 @@ struct bgp_proto {
   u8 last_error_class; 			/* Error class of last error */
   u32 last_error_code;			/* Error code of last error. BGP protocol errors
 					   are encoded as (bgp_err_code << 16 | bgp_err_subcode) */
+  bool claimed;				/* Claimed dynamic protocols are kept, unclaimed may be removed */
 };
 
 struct bgp_channel {
@@ -582,11 +587,17 @@ static inline int bgp_channel_is_ipv4(struct bgp_channel *c)
 static inline int bgp_channel_is_ipv6(struct bgp_channel *c)
 { return BGP_AFI(c->afi) == BGP_AFI_IPV6; }
 
+static inline int bgp_channel_is_l2vpn(struct bgp_channel *c)
+{ return BGP_AFI(c->afi) == BGP_AFI_L2VPN; }
+
 static inline int bgp_cc_is_ipv4(struct bgp_channel_config *c)
 { return BGP_AFI(c->afi) == BGP_AFI_IPV4; }
 
 static inline int bgp_cc_is_ipv6(struct bgp_channel_config *c)
 { return BGP_AFI(c->afi) == BGP_AFI_IPV6; }
+
+static inline int bgp_cc_is_l2vpn(struct bgp_channel_config *c)
+{ return BGP_AFI(c->afi) == BGP_AFI_L2VPN; }
 
 static inline int bgp_channel_is_role_applicable(struct bgp_channel *c)
 { return (c->afi == BGP_AF_IPV4 || c->afi == BGP_AF_IPV6); }
@@ -610,6 +621,8 @@ void bgp_check_config(struct bgp_config *c);
 void bgp_error(struct bgp_conn *c, unsigned code, unsigned subcode, byte *data, int len);
 void bgp_close_conn(struct bgp_conn *c);
 void bgp_update_startup_delay(struct bgp_proto *p);
+void bgp_add_nbr(struct bgp_proto *pp, const net_addr_nbr *nbr);
+void bgp_remove_nbr(struct bgp_proto *pp, const net_addr_nbr *nbr);
 void bgp_conn_enter_openconfirm_state(struct bgp_conn *conn);
 void bgp_conn_enter_established_state(struct bgp_conn *conn);
 void bgp_conn_enter_close_state(struct bgp_conn *conn);
@@ -629,6 +642,12 @@ static inline int
 rte_resolvable(rte *rt)
 {
   return rt->attrs->dest != RTD_UNREACHABLE;
+}
+
+static inline int
+bgp_is_dynamic(struct bgp_proto *p)
+{
+  return ipa_zero(p->remote_ip);
 }
 
 
@@ -701,9 +720,36 @@ void bgp_rt_notify(struct proto *P, struct channel *C, net *n, rte *new, rte *ol
 int bgp_preexport(struct channel *, struct rte *);
 int bgp_get_attr(const struct eattr *e, byte *buf, int buflen);
 void bgp_get_route_info(struct rte *, byte *buf);
+adata * bgp_pmsi_new_ingress_replication(linpool *pool, ip_addr addr, u32 label);
 int bgp_total_aigp_metric_(rte *e, u64 *metric, const struct adata **ad);
 
 byte * bgp_bmp_encode_rte(struct bgp_channel *c, byte *buf, byte *end, const net_addr *n, const struct rte *new, const struct rte_src *src);
+
+#define BGP_PMSI_TYPE_NO_INFO	0
+#define BGP_PMSI_TYPE_INGRESS_REPLICATION	6
+
+static inline uint
+bgp_pmsi_get_type(const adata *ad)
+{ return ad->data[1]; }
+
+static inline u32
+bgp_pmsi_get_label(const adata *ad)
+{ return get_u24(ad->data + 2); }
+
+static inline ip_addr
+bgp_pmsi_ir_get_endpoint(const adata *ad)
+{
+  uint dlen = ad->length - 5;
+  const byte *data = ad->data + 5;
+
+  if (dlen == sizeof(ip4_addr))
+    return ipa_from_ip4(get_ip4(data));
+  else if (dlen == sizeof(ip6_addr))
+    return ipa_from_ip6(get_ip6(data));
+  else
+    return IPA_NONE;
+}
+
 
 #define BGP_AIGP_METRIC		1
 #define BGP_AIGP_MAX		U64(0xffffffffffffffff)
@@ -771,6 +817,7 @@ byte *bgp_create_end_mark_(struct bgp_channel *c, byte *buf);
 #define BA_EXT_COMMUNITY	0x10	/* RFC 4360 */
 #define BA_AS4_PATH             0x11	/* RFC 6793 */
 #define BA_AS4_AGGREGATOR       0x12	/* RFC 6793 */
+#define BA_PMSI_TUNNEL		0x16	/* RFC 6514 */
 #define BA_AIGP			0x1a	/* RFC 7311 */
 #define BA_LARGE_COMMUNITY	0x20	/* RFC 8092 */
 #define BA_ONLY_TO_CUSTOMER	0x23	/* RFC 9234 */

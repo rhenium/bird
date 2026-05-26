@@ -15,8 +15,11 @@ const char * const net_label[] = {
   [NET_FLOW4]	= "flow4",
   [NET_FLOW6]	= "flow6",
   [NET_IP6_SADR]= "ipv6-sadr",
+  [NET_ETH]	= "eth",
   [NET_MPLS]	= "mpls",
   [NET_ASPA]	= "aspa",
+  [NET_EVPN]	= "evpn",
+  [NET_NEIGHBOR]= "neighbor",
 };
 
 const u16 net_addr_length[] = {
@@ -29,8 +32,11 @@ const u16 net_addr_length[] = {
   [NET_FLOW4]	= 0,
   [NET_FLOW6]	= 0,
   [NET_IP6_SADR]= sizeof(net_addr_ip6_sadr),
+  [NET_ETH]	= sizeof(net_addr_eth),
   [NET_MPLS]	= sizeof(net_addr_mpls),
   [NET_ASPA]	= sizeof(net_addr_aspa),
+  [NET_EVPN]	= 0,
+  [NET_NEIGHBOR]= sizeof(net_addr_nbr),
 };
 
 const u8 net_max_prefix_length[] = {
@@ -43,8 +49,11 @@ const u8 net_max_prefix_length[] = {
   [NET_FLOW4]	= IP4_MAX_PREFIX_LENGTH,
   [NET_FLOW6]	= IP6_MAX_PREFIX_LENGTH,
   [NET_IP6_SADR]= IP6_MAX_PREFIX_LENGTH,
+  [NET_ETH]	= 0,
   [NET_MPLS]	= 0,
   [NET_ASPA]	= 0,
+  [NET_EVPN]	= 0,
+  [NET_NEIGHBOR]= 0,
 };
 
 const u16 net_max_text_length[] = {
@@ -57,8 +66,11 @@ const u16 net_max_text_length[] = {
   [NET_FLOW4]	= 0,	/* "flow4 { ... }" */
   [NET_FLOW6]	= 0,	/* "flow6 { ... }" */
   [NET_IP6_SADR]= 92,	/* "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/128 from ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/128" */
+  [NET_ETH]	= 28,	/* "11:22:33:44:55:66 vlan 65535" */
   [NET_MPLS]	= 7,	/* "1048575" */
   [NET_ASPA]	= 10,	/* "4294967295" */
+  [NET_EVPN]	= 0,
+  [NET_NEIGHBOR]= 50,	/* "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff%4294967295" */
 };
 
 /* There should be no implicit padding in net_addr structures */
@@ -72,8 +84,17 @@ STATIC_ASSERT(sizeof(net_addr_roa6)	== 28);
 STATIC_ASSERT(sizeof(net_addr_flow4)	==  8);
 STATIC_ASSERT(sizeof(net_addr_flow6)	== 20);
 STATIC_ASSERT(sizeof(net_addr_ip6_sadr)	== 40);
+STATIC_ASSERT(sizeof(net_addr_eth)	== 12);
 STATIC_ASSERT(sizeof(net_addr_mpls)	==  8);
 STATIC_ASSERT(sizeof(net_addr_aspa)	==  8);
+STATIC_ASSERT(sizeof(net_addr_nbr)	== 24);
+
+STATIC_ASSERT(sizeof(net_addr_evpn_ead)		== 32);
+STATIC_ASSERT(sizeof(net_addr_evpn_mac)		== 24);
+STATIC_ASSERT(sizeof(net_addr_evpn_mac_ip)	== 40);
+STATIC_ASSERT(sizeof(net_addr_evpn_imet)	== 32);
+STATIC_ASSERT(sizeof(net_addr_evpn_es)		== 48);
+STATIC_ASSERT(sizeof(net_addr_evpn)		== 48);
 
 /* Ensure that all net_addr structures have the same alignment */
 STATIC_ASSERT(alignof(net_addr_ip4)	== alignof(net_addr));
@@ -87,8 +108,17 @@ STATIC_ASSERT(alignof(net_addr_flow6)	== alignof(net_addr));
 STATIC_ASSERT(alignof(net_addr_flow4)	== alignof(net_addr));
 STATIC_ASSERT(alignof(net_addr_flow6)	== alignof(net_addr));
 STATIC_ASSERT(alignof(net_addr_ip6_sadr) == alignof(net_addr));
+STATIC_ASSERT(alignof(net_addr_eth)	== alignof(net_addr));
 STATIC_ASSERT(alignof(net_addr_mpls)	== alignof(net_addr));
 STATIC_ASSERT(alignof(net_addr_aspa)	== alignof(net_addr));
+STATIC_ASSERT(alignof(net_addr_nbr)	== alignof(net_addr));
+
+STATIC_ASSERT(alignof(net_addr_evpn_ead)	== alignof(net_addr));
+STATIC_ASSERT(alignof(net_addr_evpn_mac)	== alignof(net_addr));
+STATIC_ASSERT(alignof(net_addr_evpn_mac_ip)	== alignof(net_addr));
+STATIC_ASSERT(alignof(net_addr_evpn_imet)	== alignof(net_addr));
+STATIC_ASSERT(alignof(net_addr_evpn_es)		== alignof(net_addr));
+STATIC_ASSERT(alignof(net_addr_evpn)		== alignof(net_addr));
 
 
 int
@@ -143,10 +173,24 @@ net_format(const net_addr *N, char *buf, int buflen)
     return flow6_net_format(buf, buflen, &n->flow6);
   case NET_IP6_SADR:
     return bsnprintf(buf, buflen, "%I6/%d from %I6/%d", n->ip6_sadr.dst_prefix, n->ip6_sadr.dst_pxlen, n->ip6_sadr.src_prefix, n->ip6_sadr.src_pxlen);
+  case NET_ETH:
+  {
+    int c = bsnprintf(buf, buflen, "%6b", &n->eth.mac);
+    ADVANCE(buf, buflen, c);
+
+    if (n->eth.vid)
+      c += bsnprintf(buf, buflen, " vlan %d", (int) n->eth.vid);
+
+    return c;
+  }
   case NET_MPLS:
     return bsnprintf(buf, buflen, "%u", n->mpls.label);
   case NET_ASPA:
     return bsnprintf(buf, buflen, "%u", n->aspa.asn);
+  case NET_EVPN:
+    return evpn_format(buf, buflen, &n->evpn);;
+  case NET_NEIGHBOR:
+    return bsnprintf(buf, buflen, "%I%%%u", n->nbr.addr, n->nbr.ifindex);
   }
 
   bug("unknown network type");
@@ -170,8 +214,11 @@ net_pxmask(const net_addr *a)
   case NET_IP6_SADR:
     return ipa_from_ip6(ip6_mkmask(net6_pxlen(a)));
 
+  case NET_ETH:
   case NET_MPLS:
   case NET_ASPA:
+  case NET_EVPN:
+  case NET_NEIGHBOR:
   default:
     return IPA_NONE;
   }
@@ -203,10 +250,16 @@ net_compare(const net_addr *a, const net_addr *b)
     return net_compare_flow6((const net_addr_flow6 *) a, (const net_addr_flow6 *) b);
   case NET_IP6_SADR:
     return net_compare_ip6_sadr((const net_addr_ip6_sadr *) a, (const net_addr_ip6_sadr *) b);
+  case NET_ETH:
+    return net_compare_eth((const net_addr_eth *) a, (const net_addr_eth *) b);
   case NET_MPLS:
     return net_compare_mpls((const net_addr_mpls *) a, (const net_addr_mpls *) b);
   case NET_ASPA:
     return net_compare_aspa((const net_addr_aspa *) a, (const net_addr_aspa *) b);
+  case NET_EVPN:
+    return net_compare_evpn((const net_addr_evpn *) a, (const net_addr_evpn *) b);
+  case NET_NEIGHBOR:
+    return net_compare_nbr((const net_addr_nbr *) a, (const net_addr_nbr *) b);
   }
   return 0;
 }
@@ -227,8 +280,11 @@ net_hash(const net_addr *n)
   case NET_FLOW4: return NET_HASH(n, flow4);
   case NET_FLOW6: return NET_HASH(n, flow6);
   case NET_IP6_SADR: return NET_HASH(n, ip6_sadr);
+  case NET_ETH: return NET_HASH(n, eth);
   case NET_MPLS: return NET_HASH(n, mpls);
   case NET_ASPA: return NET_HASH(n, aspa);
+  case NET_EVPN: return NET_HASH(n, evpn);
+  case NET_NEIGHBOR: return NET_HASH(n, nbr);
   default: bug("invalid type");
   }
 }
@@ -250,8 +306,11 @@ net_validate(const net_addr *n)
   case NET_FLOW4: return NET_VALIDATE(n, flow4);
   case NET_FLOW6: return NET_VALIDATE(n, flow6);
   case NET_IP6_SADR: return NET_VALIDATE(n, ip6_sadr);
+  case NET_ETH: return NET_VALIDATE(n, eth);
   case NET_MPLS: return NET_VALIDATE(n, mpls);
   case NET_ASPA: return NET_VALIDATE(n, aspa);
+  case NET_EVPN: return NET_VALIDATE(n, evpn);
+  case NET_NEIGHBOR: return NET_VALIDATE(n, nbr);
   default: return 0;
   }
 }
@@ -278,8 +337,11 @@ net_normalize(net_addr *N)
   case NET_IP6_SADR:
     return net_normalize_ip6_sadr(&n->ip6_sadr);
 
+  case NET_ETH:
   case NET_MPLS:
   case NET_ASPA:
+  case NET_EVPN:
+  case NET_NEIGHBOR:
     return;
   }
 }
@@ -306,8 +368,11 @@ net_classify(const net_addr *N)
   case NET_IP6_SADR:
     return ip6_zero(n->ip6_sadr.dst_prefix) ? (IADDR_HOST | SCOPE_UNIVERSE) : ip6_classify(&n->ip6_sadr.dst_prefix);
 
+  case NET_ETH:
   case NET_MPLS:
   case NET_ASPA:
+  case NET_EVPN:	/* ?? */
+  case NET_NEIGHBOR:
     return IADDR_HOST | SCOPE_UNIVERSE;
   }
 
@@ -340,8 +405,11 @@ ipa_in_netX(const ip_addr a, const net_addr *n)
     return ip6_zero(ip6_and(ip6_xor(ipa_to_ip6(a), net6_prefix(n)),
 			    ip6_mkmask(net6_pxlen(n))));
 
+  case NET_ETH:
   case NET_MPLS:
   case NET_ASPA:
+  case NET_EVPN:
+  case NET_NEIGHBOR:
   default:
     return 0;
   }

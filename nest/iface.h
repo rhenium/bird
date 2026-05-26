@@ -10,6 +10,7 @@
 #define _BIRD_IFACE_H_
 
 #include "lib/lists.h"
+#include "lib/pubsub.h"
 #include "lib/ip.h"
 
 extern list iface_list;
@@ -42,6 +43,13 @@ struct iface {
   struct ifa *llv6;			/* Primary link-local address for IPv6 */
   ip4_addr sysdep;			/* Arbitrary IPv4 address for internal sysdep use */
   list neighbors;			/* All neighbors on this interface */
+  struct rta *attrs;
+};
+
+enum iface_type {
+  IF_TYPE_UNDEF,
+  IF_TYPE_BRIDGE,
+  IF_TYPE_VXLAN,
 };
 
 #define IF_UP 1				/* Currently just IF_ADMIN_UP */
@@ -95,6 +103,7 @@ struct iface {
 #define IF_CHANGE_ADDR6	0x200		/* ... */
 #define IF_CHANGE_LLV6 0x400
 #define IF_CHANGE_SYSDEP 0x800
+#define IF_CHANGE_ATTRS 0x1000
 #define IF_CHANGE_TOO_MUCH 0x40000000	/* Used internally */
 
 #define IF_CHANGE_UPDOWN (IF_CHANGE_UP | IF_CHANGE_DOWN)
@@ -183,5 +192,28 @@ int iface_patts_equal(list *, list *, int (*)(struct iface_patt *, struct iface_
 
 
 u32 if_choose_router_id(struct iface_patt *mask, u32 old_id);
+
+
+/*
+ *	VLAN request queue
+ */
+
+struct vlan_req_data {
+  u32 vid;
+  u32 vni;
+};
+
+struct vlan_request {
+  struct iface *bridge;			/* Bridge device, name -> topic */
+  struct iface *iface;			/* Interface to add/remove VLANs */
+  uintptr_t owner;			/* Owner of the VLAN, proto ptr */
+  bool update;				/* Update / withdraw */
+  int vlan_count;			/* Number of VLANs */
+  struct vlan_req_data vlans[];
+};
+
+#define VLAN_REQUEST_LENGTH(n) (sizeof(struct vlan_request) + (n) * sizeof(struct vlan_req_data))
+
+extern ps_queue vlan_requests;
 
 #endif

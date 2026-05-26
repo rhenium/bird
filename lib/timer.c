@@ -118,13 +118,11 @@ tm_dump(struct dump_request *dreq, resource *r)
 }
 
 
-static struct resclass tm_class = {
-  "Timer",
-  sizeof(timer),
-  tm_free,
-  tm_dump,
-  NULL,
-  NULL
+static const struct resclass tm_class = {
+  .name = "Timer",
+  .size = sizeof(timer),
+  .free = tm_free,
+  .dump = tm_dump,
 };
 
 timer *
@@ -221,7 +219,7 @@ timers_fire(struct timeloop *loop)
 	when = loop->last_time + t->recurrent;
 
       if (t->randomize)
-	when += random() % (t->randomize + 1);
+	when += brandom() % (t->randomize + 1);
 
       tm_set(t, when);
     }

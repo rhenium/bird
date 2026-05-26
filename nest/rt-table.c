@@ -1248,6 +1248,10 @@ rte_validate(rte *e)
     if (net_is_flow(n->n.addr) && (e->attrs->dest == RTD_UNREACHABLE))
       return 1;
 
+    /* XXX hack */
+    if (n->n.addr->type == NET_EVPN)
+      return 1;
+
     log(L_WARN "Ignoring route %N with invalid dest %d received via %s",
 	n->n.addr, e->attrs->dest, e->sender->proto->name);
     return 0;
@@ -1578,6 +1582,19 @@ rte_recalculate(struct channel *c, net *net, rte *new, struct rte_src *src)
 
       rte_free_quick(old);
     }
+}
+
+rte *
+rte_find_old_best(net *net, rte *new, rte *old)
+{
+  u32 new_id = new ? new->id : 0;
+  rte *old_best = old;
+
+  for (rte *r = net->routes; r; r=r->next)
+    if ((r->id != new_id) && rte_better(r, old_best))
+      old_best = r;
+
+  return rte_is_valid(old_best) ? old_best: NULL;
 }
 
 static int rte_update_nest_cnt;		/* Nesting counter to allow recursive updates */
@@ -2214,13 +2231,11 @@ rt_res_dump(struct dump_request *dreq, resource *_r)
       r->name, net_label[r->addr_type], r->rt_count, r->use_count);
 }
 
-static struct resclass rt_class = {
+static const struct resclass rt_class = {
   .name = "Routing table",
   .size = sizeof(struct rtable),
   .free = rt_free,
   .dump = rt_res_dump,
-  .lookup = NULL,
-  .memsize = NULL,
 };
 
 rtable *
