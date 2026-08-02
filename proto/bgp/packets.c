@@ -922,12 +922,14 @@ bgp_rx_open(struct bgp_conn *conn, byte *pkt, uint len)
 
   /* Compute effective hold and keepalive times */
   uint hold_time = MIN(hold, p->cf->hold_time);
+  uint base_hold_time = p->cf->hold_time ?: 1;
+
   uint keepalive_time = p->cf->keepalive_time ?
-    (p->cf->keepalive_time * hold_time / p->cf->hold_time) :
+    (p->cf->keepalive_time * hold_time / base_hold_time) :
     hold_time / 3;
 
   uint send_hold_time = (p->cf->send_hold_time >= 0) ?
-    (p->cf->send_hold_time * hold_time / p->cf->hold_time) :
+    ((u64) p->cf->send_hold_time * hold_time / base_hold_time) :
     2 * hold_time;
 
   /* Keepalive time might be rounded down to zero */
@@ -2131,7 +2133,7 @@ bgp_decode_nlri_flow4(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
     uint pxlen = 0;
 
     /* Decode dst prefix */
-    if (data[0] == FLOW_TYPE_DST_PREFIX)
+    if (dlen && (data[0] == FLOW_TYPE_DST_PREFIX))
     {
       px = flow_read_ip4_part(data);
       pxlen = flow_read_pxlen(data);
@@ -2226,7 +2228,7 @@ bgp_decode_nlri_flow6(struct bgp_parse_state *s, byte *pos, uint len, rta *a)
     uint pxlen = 0;
 
     /* Decode dst prefix */
-    if (data[0] == FLOW_TYPE_DST_PREFIX)
+    if (dlen && (data[0] == FLOW_TYPE_DST_PREFIX))
     {
       px = flow_read_ip6_part(data);
       pxlen = flow_read_pxlen(data);
