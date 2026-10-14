@@ -1,17 +1,12 @@
-Version 2.19.2 (2026-07-30)
-  o BGP: Fix stack buffer overflow in Flowspec NLRI decoder
-  o BGP: Minor improvements in Flowspec parsing
-  o BGP: Fix minor issues with send hold timer
-  o Fix null byte handling in authentication keys
-  o Filter: Fix zero arg handling
-  o Update bird-users mailing list links
-
-Version 2.19.1 (2026-06-09)
-  o BGP: Fix several issues in Flowspec handling
-  o OSPF: Fix handling of LLS data length field
-  o OSPF: Fix OOB read in authentication check
-  o OSPF: Fix OOB read in Router-LSA validation
-  o Filters: Fix path matching when AS path is too long.
+Version 2.20.0 (2026-10-12)
+  o BGP: Allow ignoring OTC
+  o BGP: EVPN ESI attribute support
+  o Direct: Allow generating host routes
+  o RAdv: Add "show radv interfaces" CLI command
+  o Netlink: Improvements in error conditions
+  o Netlink: Learn interface MAC addresses
+  o Lib: Refactoring for later VPN route target merge
+  o Various fixes in code, comments, documentation and tooling
 
 Version 2.19.0 (2026-05-25)
   o BGP/MPLS Ethernet VPNs using VXLAN tunnels

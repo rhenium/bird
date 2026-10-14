@@ -457,7 +457,7 @@ bgp_encode_as_path(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
   if (!s->as4_session)
   {
     /* Prepare 16-bit AS_PATH (from 32-bit one) in a temporary buffer */
-    byte *dst = alloca(len);
+    byte *dst = tmp_alloc(len);
     len = as_path_32to16(dst, data, len);
     data = dst;
   }
@@ -481,7 +481,7 @@ bgp_decode_as_path(struct bgp_parse_state *s, uint code UNUSED, uint flags, byte
   {
     /* Prepare 32-bit AS_PATH (from 16-bit one) in a temporary buffer */
     byte *src = data;
-    data = alloca(2*len);
+    data = tmp_alloc(2 * len);
     len = as_path_16to32(data, src, len);
   }
 
@@ -1253,11 +1253,30 @@ bgp_attr_name(uint code)
  *	Attribute export
  */
 
+/* List of non-BGP attributes that are exported to bgp_bucket */
+static const u16 bgp_attr_export_list[] = { EA_EVPN_ESI };
+
+static inline bool
+bgp_alien_attr_wanted(u16 id)
+{
+  for (int i = 0; i < (int)ARRAY_SIZE(bgp_attr_export_list); i++)
+    if (id == bgp_attr_export_list[i])
+      return true;
+
+  return false;
+}
+
 static inline void
 bgp_export_attr(struct bgp_export_state *s, eattr *a, ea_list *to)
 {
   if (EA_PROTO(a->id) != PROTOCOL_BGP)
+  {
+    /* We keep some non-BGP attributes for later */
+    if (bgp_alien_attr_wanted(a->id))
+      to->attrs[to->count++] = *a;
+
     return;
+  }
 
   uint code = EA_ID(a->id);
 
@@ -1338,10 +1357,7 @@ static inline int
 bgp_encode_attr(struct bgp_write_state *s, eattr *a, byte *buf, uint size)
 {
   if (EA_PROTO(a->id) != PROTOCOL_BGP)
-    if (s->ignore_non_bgp_attrs)
-      return 0;
-    else
-      bug("Tried to encode a non-BGP attribute");
+    return 0;
 
   uint code = EA_ID(a->id);
 
@@ -1581,12 +1597,15 @@ bgp_finish_attrs(struct bgp_parse_state *s, rta *a)
     eattr *e = bgp_find_attr(a->eattrs, BA_ONLY_TO_CUSTOMER);
 
     /* Reject routes from downstream if they are leaked */
-    if (e && (p->cf->local_role == BGP_ROLE_PROVIDER ||
-	      p->cf->local_role == BGP_ROLE_RS_SERVER))
+    if (e && !s->channel->cf->ignore_otc
+	&& (p->cf->local_role == BGP_ROLE_PROVIDER ||
+	  p->cf->local_role == BGP_ROLE_RS_SERVER))
       WITHDRAW("Route leak detected - OTC attribute from downstream");
 
     /* Reject routes from peers if they are leaked */
-    if (e && (p->cf->local_role == BGP_ROLE_PEER) && (e->u.data != p->cf->remote_as))
+    if (e && !s->channel->cf->ignore_otc
+	&& (p->cf->local_role == BGP_ROLE_PEER)
+	&& (e->u.data != p->cf->remote_as))
       WITHDRAW("Route leak detected - OTC attribute with mismatched ASN (%u)",
 	       (uint) e->u.data);
 
@@ -1708,7 +1727,7 @@ bgp_get_withdraw_bucket(struct bgp_channel *c)
 {
   if (!c->withdraw_bucket)
   {
-    c->withdraw_bucket = mb_allocz(c->pool, sizeof(struct bgp_bucket));
+    c->withdraw_bucket = mb_allocz(c->pool, sizeof(struct bgp_bucket) + sizeof(ea_list));
     init_list(&c->withdraw_bucket->prefixes);
   }
 

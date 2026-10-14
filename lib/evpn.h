@@ -28,10 +28,34 @@ enum evpn_esi_type {
 #define EVPN_VNI_MAX	0x00ffffff
 #define EVPN_VID_MAX	0x00000fff
 
+
+/*
+ *	EVPN ESI
+ */
+
 typedef struct evpn_esi {
   u8 type;
   u8 value[9];
 } evpn_esi;
+
+#define EVPN_ESI_NONE ((evpn_esi){ })
+
+static inline bool evpn_esi_equal(evpn_esi a, evpn_esi b)
+{ return !memcmp(&a, &b, sizeof(evpn_esi)); }
+
+static inline bool evpn_esi_zero(evpn_esi a)
+{ return !memcmp(&a, &EVPN_ESI_NONE, sizeof(evpn_esi)); }
+
+static inline bool evpn_esi_nonzero(evpn_esi a)
+{ return !evpn_esi_zero(a); }
+
+static inline int evpn_esi_compare(evpn_esi a, evpn_esi b)
+{ return memcmp(&a, &b, sizeof(evpn_esi)); }
+
+
+/*
+ *	MAC address
+ */
 
 typedef struct mac_addr {
   u8 addr[6];
@@ -39,10 +63,28 @@ typedef struct mac_addr {
 
 #define MAC_NONE ((mac_addr){ })
 
-static inline int mac_zero(mac_addr a)
+static inline mac_addr mac_from_u64(u64 a)
+{
+  a = htobe64(a);
+  mac_addr result;
+  memcpy(result.addr, (u8 *)&a + 2, sizeof(mac_addr));
+  return result;
+}
+
+static inline u64 mac_to_u64(mac_addr a)
+{
+  u64 result = 0;
+  memcpy((u8 *)&result + 2, a.addr, sizeof(mac_addr));
+  return be64toh(result);
+}
+
+static inline bool mac_equal(mac_addr a, mac_addr b)
+{ return !memcmp(&a, &b, sizeof(mac_addr)); }
+
+static inline bool mac_zero(mac_addr a)
 { return !memcmp(&a, &MAC_NONE, sizeof(mac_addr)); }
 
-static inline int mac_nonzero(mac_addr a)
+static inline bool mac_nonzero(mac_addr a)
 { return !mac_zero(a); }
 
 static inline int mac_compare(mac_addr a, mac_addr b)
@@ -50,6 +92,11 @@ static inline int mac_compare(mac_addr a, mac_addr b)
 
 static inline bool mac_is_unicast(mac_addr a)
 { return !(a.addr[0] & 0x01); }
+
+
+/*
+ *	EVPN net functions
+ */
 
 union net_addr_evpn;
 uint evpn_format(char *buf, uint blen, const union net_addr_evpn *n);

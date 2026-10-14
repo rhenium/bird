@@ -543,6 +543,7 @@ const char *ea_custom_name(uint ea);
 #define EA_MPLS_POLICY		EA_CODE(PROTOCOL_NONE, 2)
 #define EA_MPLS_CLASS		EA_CODE(PROTOCOL_NONE, 3)
 #define EA_ASPA_PROVIDERS	EA_CODE(PROTOCOL_NONE, 4)
+#define EA_EVPN_ESI		EA_CODE(PROTOCOL_NONE, 5)
 
 #define EA_CODE_MASK 0xffff
 #define EA_CUSTOM_BIT 0x8000
@@ -557,6 +558,7 @@ const char *ea_custom_name(uint ea);
 #define EAF_TYPE_IP_ADDRESS 0x04	/* IP address */
 #define EAF_TYPE_ROUTER_ID 0x05		/* Router ID (4-octet positive integer) */
 #define EAF_TYPE_AS_PATH 0x06		/* BGP AS path (encoding per RFC 1771:4.3) */
+#define EAF_TYPE_MAC_ADDRESS 0x08	/* Ethernet MAC address */
 #define EAF_TYPE_BITFIELD 0x09		/* 32-bit embedded bitfield */
 #define EAF_TYPE_INT_SET 0x0a		/* Set of u32's (e.g., a community list) */
 #define EAF_TYPE_EC_SET 0x0e		/* Set of pairs of u32's - ext. community list */
@@ -564,7 +566,6 @@ const char *ea_custom_name(uint ea);
 #define EAF_TYPE_IFACE 0x14		/* Interface pointer stored in adata */
 #define EAF_TYPE_STRING 0x16		/* Text string */
 #define EAF_EMBEDDED 0x01		/* Data stored in eattr.u.data (part of type spec) */
-#define EAF_VAR_LENGTH 0x02		/* Attribute length is variable (part of type spec) */
 
 typedef struct adata {
   uint length;				/* Length of data */
@@ -620,6 +621,15 @@ int ea_same(ea_list *x, ea_list *y);	/* Test whether two ea_lists are identical 
 uint ea_hash(ea_list *e);	/* Calculate 16-bit hash value */
 ea_list *ea_append(ea_list *to, ea_list *what);
 void ea_format_bitfield(const struct eattr *a, byte *buf, int bufsize, const char **names, int min, int max);
+
+#define ea_get_val(ea, id, type, def)		   \
+  ({						   \
+    type _v = (def);				   \
+    eattr *_e = ea_find((ea), (id));		   \
+    if (_e && (_e->u.ptr->length == sizeof(type))) \
+      memcpy(&_v, _e->u.ptr->data, sizeof(type));  \
+    _v;						   \
+  })
 
 #define ea_normalize(ea) do { \
   if (ea->next) { \
@@ -683,11 +693,11 @@ ea_set_attr_u32(ea_list **to, struct linpool *pool, uint id, uint flags, uint ty
 { ea_set_attr(to, pool, id, flags, type, (uintptr_t) val); }
 
 static inline void
-ea_set_attr_ptr(ea_list **to, struct linpool *pool, uint id, uint flags, uint type, struct adata *val)
+ea_set_attr_ptr(ea_list **to, struct linpool *pool, uint id, uint flags, uint type, const struct adata *val)
 { ea_set_attr(to, pool, id, flags, type, (uintptr_t) val); }
 
 static inline void
-ea_set_attr_data(ea_list **to, struct linpool *pool, uint id, uint flags, uint type, void *data, uint len)
+ea_set_attr_data(ea_list **to, struct linpool *pool, uint id, uint flags, uint type, const void *data, uint len)
 {
   struct adata *a = lp_alloc_adata(pool, len);
   memcpy(a->data, data, len);

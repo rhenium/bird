@@ -124,10 +124,11 @@ CF_KEYWORDS(BGP, PASSWORDS, DESCRIPTION)
 CF_KEYWORDS(RELOAD, IN, OUT, MRTDUMP, MESSAGES, RESTRICT, MEMORY, IGP_METRIC, CLASS, DSCP)
 CF_KEYWORDS(TIMEFORMAT, ISO, SHORT, LONG, ROUTE, PROTOCOL, BASE, LOG, S, MS, US)
 CF_KEYWORDS(GRACEFUL, RESTART, WAIT, MAX, AS)
-CF_KEYWORDS(CHECK, LINK)
+CF_KEYWORDS(CHECK, LINK, HOST, PREFIX)
 CF_KEYWORDS(SORTED, TRIE, MIN, MAX, SETTLE, TIME, GC, THRESHOLD, PERIOD)
 CF_KEYWORDS(MPLS_LABEL, MPLS_POLICY, MPLS_CLASS)
 CF_KEYWORDS(ASPA_PROVIDERS)
+CF_KEYWORDS(EVPN_ESI)
 
 /* For r_args_channel */
 CF_KEYWORDS(IPV4, IPV4_MC, IPV4_MPLS, IPV6, IPV6_MC, IPV6_MPLS, IPV6_SADR, VPN4, VPN4_MC, VPN4_MPLS, VPN6, VPN6_MC, VPN6_MPLS, ROA4, ROA6, FLOW4, FLOW6, MPLS, PRI, SEC, ASPA)
@@ -480,6 +481,7 @@ proto: dev_proto '}' ;
 dev_proto_start: proto_start DIRECT {
      this_proto = proto_config_new(&proto_device, $1);
      init_list(&DIRECT_CFG->iface_list);
+     DIRECT_CFG->prefix_routes = 1;
    }
  ;
 
@@ -489,6 +491,8 @@ dev_proto:
  | dev_proto proto_channel ';'
  | dev_proto dev_iface_patt ';'
  | dev_proto CHECK LINK bool ';' { DIRECT_CFG->check_link = $4; }
+ | dev_proto HOST bool ';' { DIRECT_CFG->host_routes = $3; }
+ | dev_proto PREFIX bool ';' { DIRECT_CFG->prefix_routes = $3; }
  ;
 
 dev_iface_init:
@@ -999,6 +1003,8 @@ dynamic_attr: ASPA_PROVIDERS { $$ = f_new_dynamic_attr(EAF_TYPE_INT_SET, T_CLIST
 dynamic_attr: MPLS_LABEL  { $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_MPLS_LABEL); } ;
 dynamic_attr: MPLS_POLICY { $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_ENUM_MPLS_POLICY, EA_MPLS_POLICY); } ;
 dynamic_attr: MPLS_CLASS  { $$ = f_new_dynamic_attr(EAF_TYPE_INT, T_INT, EA_MPLS_CLASS); } ;
+
+dynamic_attr: EVPN_ESI { $$ = f_new_dynamic_attr(EAF_TYPE_OPAQUE, T_BYTESTRING, EA_EVPN_ESI); } ;
 
 
 CF_CODE

@@ -880,8 +880,9 @@ docker-ubuntu-26.04-amd64:
         if grep -qF "BIRD version ${STABLE_VERSION}+branch" version-expected; then
           true
         else
-          echo -n "Commit $CI_COMMIT_SHA message $CI_COMMIT_MESSAGE expects version "
+          echo -n "Commit $CI_COMMIT_SHA message $CI_COMMIT_MESSAGE claims version "
           cat version-expected
+          echo "Expected version ${STABLE_VERSION}+branch... instead"
           exit 1
         fi
       fi
@@ -902,8 +903,13 @@ docker-ubuntu-26.04-amd64:
     # Build docs when tools are available
     - if which linuxdoc pdflatex sgmlsasp >/dev/null ; then $MAKE docs ; fi
     # Check that the reported version is the right one
-    - ${CROSS_RUN} ./bird --version |& grep -v 'Cannot disable transparent huge pages' | tee obj/version-built
+    - ulimit -c unlimited; ${CROSS_RUN} ./bird --version |& grep -v 'Cannot disable transparent huge pages' | tee obj/version-built
     - diff obj/version-built version-expected
+  after_script:
+    - if find -name 'core' -or -name 'core.*'; then git clone https://gitlab.nic.cz/labs/bird-group/debugpack; pushd debugpack; pip install -e .; popd; find '(' -name 'core' -or -name 'core.*' ')' -exec debugpack pack '{}' ';'; fi
+  artifacts:
+    when: on_failure
+    untracked: true
 
 .build-docker-linux-amd64: &build-docker-linux-amd64
   <<: *build-base
@@ -2787,7 +2793,7 @@ build-netlab:
     - cd netlab
     - sudo ./stop
     - ulimit -f 1048576 # Protect the filesystem from overflowing by log bloat
-    - sudo ./runtest -s v2 -m check $TEST_NAME
+    - sudo ./runtest -s v2.17 -m check $TEST_NAME
   after_script:
     - DIR=$(pwd)
     - cd $TOOLS_DIR/netlab

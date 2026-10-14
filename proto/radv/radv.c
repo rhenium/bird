@@ -303,7 +303,7 @@ radv_prune_neighbors(struct radv_proto *p)
       if (expires <= now)
       {
 	/* Neighbor has expired, add to withdrawal list */
-	net_addr_nbr *nbr = (net_addr_nbr *) e->net;
+	net_addr_nbr *nbr = (net_addr_nbr *) n->n.addr;
 
 	struct expired_nbr *ep = tmp_allocz(sizeof(struct expired_nbr));
 	net_copy_nbr(&ep->n, nbr);
@@ -845,6 +845,33 @@ radv_copy_config(struct proto_config *dest, struct proto_config *src)
 
   /* We copy pref_list, shallow copy suffices */
   cfg_copy_list(&d->pref_list, &s->pref_list, sizeof(struct radv_prefix_config));
+}
+
+void
+radv_show_interfaces(struct proto *P, const char *iff)
+{
+  struct radv_proto *p = SKIP_BACK(struct radv_proto, p, P);
+  struct radv_iface *ifa = NULL;
+
+  if (p->p.proto_state != PS_UP)
+  {
+    cli_msg(-1028, "%s: is not up", p->p.name);
+    return;
+  }
+
+  cli_msg(-1028, "%s:", p->p.name);
+  cli_msg(-1028, "%-10s %-8s  %-12s  %-8s", "Interface", "Lifetime", "Last RA", "RA timer");
+
+  WALK_LIST(ifa, p->iface_list)
+  {
+    if (iff && !patmatch(iff, ifa->iface->name))
+      continue;
+
+    byte tbuf[TM_DATETIME_BUFFER_SIZE] = { 0 };
+    tm_format_time(tbuf, (this_cli->tf ?: &config->tf_proto), ifa->last);
+
+    cli_msg(-1028, "%-10s %8u  %-12s  %8t", ifa->iface->name, ifa->router_lifetime, tbuf, tm_remains(ifa->timer));
+  }
 }
 
 static void

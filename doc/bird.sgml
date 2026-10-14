@@ -1424,6 +1424,9 @@ This argument can be omitted if there exists only a single instance.
 	Show contents of an OSPF LSA database. Options could be used to filter
 	entries.
 
+	<tag><label id="cli-show-radv-interfaces">show radv interfaces [<m/name/] ["<m/interface/"]</tag>
+	Show detailed information about RAdv interfaces and associated state.
+
 	<tag><label id="cli-show-rip-interfaces">show rip interfaces [<m/name/] ["<m/interface/"]</tag>
 	Show detailed information about RIP interfaces.
 
@@ -1820,10 +1823,12 @@ in the foot).
 	(<cf/.ip/), EVPN tag (<cf/.evpn_tag/), Ethernet Segment Identifier
 	(<cf/.evpn_esi/), router IP (<cf/.router_ip/). Note that only fields
 	that are a part of primary key for given route subtype can be accessed
-	by these operators (e.g. <cf/.evpn_esi/ can be used for <cf/NET_EVPN_ES/,
-	but not for <cf/NET_EVPN_MAC/ or other types), remaining attributes are
-	stored outside prefix as other route attributes. See <ref id="evpn-routes"
-	name="EVPN routes"> for description of specific subtypes.
+	by these operators (e.g. <cf/.evpn_esi/ can be used for
+	<cf/NET_EVPN_ES/, but not for <cf/NET_EVPN_MAC/, where ESI is stored
+	in <ref id="rta-evpn-esi" name="evpn_esi"> attribute), remaining
+	attributes are stored outside prefix as other route attributes.
+	See <ref id="evpn-routes" name="EVPN routes"> for description of
+	specific subtypes.
 
 	<cf/NET_NEIGHBOR/ holds a single IP address and an interface index.
 	The IP address can be accessed by operator <cf/.ip/, while the access
@@ -2330,6 +2335,13 @@ Common route attributes are:
 	aggregation than just one based on next hops. When routes have different
 	value of this attribute, they will not be aggregated under one local
 	label even if they have the same next hops.
+
+	<tag><label id="rta-evpn-esi"><m/bytestring/ evpn_esi</tag>
+	EVPN Ethernet Segment Identifier (ESI). Some <ref id="evpn-routes"
+	name="EVPN route"> types (e.g. EVPN EAD routes) have ESI as a part
+	of <ref id="type-prefix" name="primary key">. Others (e.g. EVPN MAC
+	routes) have ESI as this optional route attribute. BIRD does not
+	currently use this attribute, but can pass it as a BGP route reflector.
 </descrip>
 
 <p>Protocol-specific route attributes are described in the corresponding
@@ -3073,6 +3085,7 @@ protocol bgp [<name>] {
 		require extended next hop <switch>;
 		add paths <switch>|rx|tx;
 		require add paths <switch>;
+		ignore otc <switch>;
 		aigp <switch>|originate;
 		cost <number>;
 		graceful restart <switch>;
@@ -4042,6 +4055,21 @@ allowed in dynamic BGP instances (those configured with <cf/neighbor range/).
 	configured locally, then the neighbor capability must announce RX.
 	Default: off.
 
+	<tag><label id="bgp-ignore-otc">ignore otc <m/switch/</tag>
+	When <ref id="bgp-local-role" name="BGP roles"> are set, BIRD automatically
+	drops leaked routes, as mandated by <rfc id="9234">. This option allows the
+	channel to accept routes with offending <ref id="bgp-otc" name="bgp_otc attribute">,
+	so that the user may do additional processing by the filter engine
+	before rejecting. Specifically, this option may be useful when
+	accompanied with
+	<ref id="proto-import-keep-filtered" name="keeping the filtered routes">
+	for inspection.
+
+	The sole existence of this option knowingly violates the requirements
+	stipulated in <rfc id="9234">, Section&nbsp;5, last sentence.
+	Do not set this option unless you really know what you are doing.
+	Default: off.
+
 	<tag><label id="bgp-aigp">aigp <m/switch/|originate</tag>
 	The BGP protocol does not use a common metric like other routing
 	protocols, instead it uses a set of criteria for route selection
@@ -4133,12 +4161,13 @@ direction (re-import of routes from the BGP neighbor):
 	<item><cf/next hop prefer/
 	<item><cf/aigp/
 	<item><cf/cost/
+	<item><cf/ignore otc/
 </itemize>
 
-<p>Note: Reload in the import direction requires either the <cf/route refresh/
-capability negotiated or the <cf/import table/ option enabled. If neither one is
-available, the reconfiguration will trigger a restart instead of a reload. This
-does not apply for export direction.
+<p>Note: Reload in the import direction requires the <cf/route refresh/
+capability negotiated, otherwise it will trigger a restart. In case of
+import filter change, routes will get reloaded from <cf/import table/
+instead, if enabled. None of these applies for export direction.
 
 <p>Changes in these channel options cause a reload of the channel in the export
 direction (re-export of routes to the BGP neighbor):
@@ -4306,7 +4335,15 @@ some of them (marked with `<tt/O/') are optional.
 	<tag><label id="bgp-otc">int bgp_otc [O]</tag>
 	This attribute is defined in <rfc id="9234">. OTC is a flag that marks
 	routes that should be sent only to customers. If <ref id="bgp-local-role"
-	name="local role"> is configured it set automatically.
+	name="local role"> is configured it is set and checked automatically.
+
+	The equivalent filter code for the OTC check to pass the route
+	in the provider or route server role, is: <cf/!defined(bgp_otc)/
+
+	The equivalent filter code for the OTC check to pass the route
+	in the peer role, is: <cf/(!defined(bgp_otc) || bgp_otc == their_asn)/
+	where <cf/their_asn/ stands for the configured AS number of the peer.
+
 </descrip>
 
 <p>For attributes unknown by BIRD, the user can assign a name (on top level) to
@@ -4651,6 +4688,17 @@ announce local networks.
 	consideration. Routes for directly connected networks are generated only
 	if link up is reported and they are withdrawn when link disappears
 	(e.g., an ethernet cable is unplugged). Default value is no.
+
+	<tag><label id="direct-host">host <m/switch/</tag>
+	If enabled, for each address on the interface (including those marked secondary),
+	a host route is created with the prefix length set to maximum.
+	Such a route should never end up in the kernel forwarding table,
+	and the user should take proper filtering actions to keep it safely away.
+	Default: no.
+
+	<tag><label id="direct-prefix">prefix <m/switch/</tag>
+	If enabled, a regular device route is created for the whole prefix.
+	Default: yes.
 </descrip>
 
 <p>Direct device routes don't contain any specific attributes.

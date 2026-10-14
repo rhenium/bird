@@ -854,6 +854,13 @@ get_generic_attr(const eattr *a, byte **buf, int buflen)
     *buf += int_set_format(a->u.ptr, ISF_NUMBERS, -1, *buf, end - *buf);
     return GA_FULL;
 
+  case EA_EVPN_ESI:
+    if (a->u.ptr->length == 10)
+      *buf += bsprintf(*buf, "evpn_esi: %10b", a->u.ptr->data);
+    else
+      *buf += bsprintf(*buf, "evpn_esi: <invalid>");
+    return GA_FULL;
+
   default:
     return GA_UNKNOWN;
   }
@@ -1007,6 +1014,9 @@ ea_show(struct cli *c, const eattr *e)
 	  break;
 	case EAF_TYPE_IP_ADDRESS:
 	  bsprintf(pos, "%I", *(ip_addr *) ad->data);
+	  break;
+	case EAF_TYPE_MAC_ADDRESS:
+	  bsprintf(pos, "%6b", ad->data);
 	  break;
 	case EAF_TYPE_ROUTER_ID:
 	  bsprintf(pos, "%R", e->u.data);
