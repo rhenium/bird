@@ -1,3 +1,10 @@
+bird2 (2.20.0-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Fix the autopkgtest with incus-lxc. (Closes: #1144804)
+
+ -- Marco d'Itri <md@linux.it>  Thu, 15 Oct 2026 14:28:06 +0200
+
 bird2 (2.19.2-1) unstable; urgency=medium
 
   * New upstream release.
