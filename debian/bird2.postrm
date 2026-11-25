@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+
+install_desired() {
+  dpkg-query --showformat='${Status}' --show "$1" 2> /dev/null | grep -qE '^install '
+}
+
+cleanup_config() {
+  # do not delete the configuration if bird or bird3 are being installed
+  if install_desired bird || install_desired bird3; then
+    return
+  fi
+
+  rm -f /etc/bird/bird.conf
+}
+
+case "$1" in
+  purge)
+    cleanup_config "$@"
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0

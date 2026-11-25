@@ -1,0 +1,4 @@
+Version: 5
+
+Source: https://bird.nic.cz/download/
+Matching-Pattern: bird-(2\.[\d.]+).tar.gz

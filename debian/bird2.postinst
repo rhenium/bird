@@ -1,0 +1,31 @@
+#!/bin/sh
+set -e
+
+upgrade_cleanup() {
+  [ "$2" ] || return 0
+
+  dpkg --compare-versions $2 lt 2.17.3-1~ || return 0
+
+  dpkg-statoverride --remove /etc/bird >/dev/null 2>/dev/null || true
+  dpkg-statoverride --remove /etc/bird/bird.conf >/dev/null 2>/dev/null || true
+
+  if command -v ucf > /dev/null; then
+    ucf --purge /etc/bird/bird.conf
+    ucfr --purge bird2 /etc/bird/bird.conf
+  fi
+
+  # update-rc.d removes symlinks even if LSB initscript exists, contrary to
+  # update-rc-d(8). See #680293. Can be removed once it is fixed.
+  [ -f /etc/init.d/bird ] && return 0
+  update-rc.d bird remove || true
+}
+
+case "$1" in
+  upgrade)
+    upgrade_cleanup "$@"
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,42 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/default.mk
+
+# enable verbose messages from the Makefiles
+export VERBOSE=1
+
+COMMON_FLAGS=\
+	--prefix=/usr \
+	--sysconfdir=/etc/bird \
+	--mandir=\$${prefix}/share/man \
+	--infodir=\$${prefix}/share/info \
+	--localstatedir=/var \
+	--runstatedir=/run/bird \
+	--enable-client --with-protocols=all
+
+DB2MAN = /usr/share/sgml/docbook/stylesheet/xsl/nwalsh/manpages/docbook.xsl
+XP     = xsltproc -''-nonet -''-param man.charmap.use.subset "0"
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	dh_auto_configure -- $(COMMON_FLAGS)
+
+override_dh_auto_build-indep:
+	dh_auto_build -- docs
+
+override_dh_auto_install:
+	dh_auto_install --destdir=debian/tmp
+
+override_dh_installsystemd:
+	dh_installsystemd --name=bird --restart-after-upgrade
+
+bird.8: debian/bird.xml
+	$(XP) $(DB2MAN) $<
+
+override_dh_installman: bird.8
+	dh_installman
+

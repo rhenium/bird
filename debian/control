@@ -1,0 +1,57 @@
+Source: bird2
+Section: net
+Build-Depends:
+ bison,
+ debhelper-compat (= 13),
+ dh-sequence-installsysusers,
+ docbook-xsl,
+ flex,
+ libncurses-dev,
+ libreadline-dev,
+ libssh-dev,
+ m4,
+ xsltproc,
+Build-Depends-Indep:
+ linuxdoc-tools-latex,
+ opensp,
+ texlive-latex-extra,
+Maintainer: Marco d'Itri <md@linux.it>
+Standards-Version: 4.7.4.1
+Vcs-Browser: https://salsa.debian.org/md/bird
+Vcs-Git: https://salsa.debian.org/md/bird.git -b debian/bird2/unstable
+Homepage: https://bird.nic.cz/
+
+Package: bird2
+Architecture: linux-any
+Pre-Depends:
+ ${misc:Pre-Depends},
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+Conflicts:
+ bird,
+Suggests:
+ bird2-doc,
+Description: Internet Routing Daemon
+ BIRD is an Internet routing daemon with full support for all the major
+ routing protocols. It allows redistribution between protocols with a
+ powerful route filtering syntax and an easy-to-use configuration
+ interface.
+ .
+ BIRD supports IPv4 and IPv6 versions of OSPF, RIP, BGP and Babel routing
+ protocols. It also supports supplementary protocols like BFD, RPKI-Router
+ and IPv6 router advertisements.
+
+Package: bird2-doc
+Architecture: all
+Multi-Arch: foreign
+Section: doc
+Depends:
+ ${misc:Depends},
+Description: Internet Routing Daemon - documentation
+ BIRD is an Internet routing daemon with full support for all the major
+ routing protocols. It allows redistribution between protocols with a
+ powerful route filtering syntax and an easy-to-use configuration
+ interface.
+ .
+ This package provides the user and developer documentation.
