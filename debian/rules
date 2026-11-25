@@ -32,7 +32,7 @@ override_dh_auto_install:
 	dh_auto_install --destdir=debian/tmp
 
 override_dh_installsystemd:
-	dh_installsystemd --name=bird --restart-after-upgrade
+	dh_installsystemd --name=bird --no-stop-on-upgrade --no-start --no-restart-after-upgrade
 
 bird.8: debian/bird.xml
 	$(XP) $(DB2MAN) $<
