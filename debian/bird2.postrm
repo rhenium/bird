@@ -11,6 +11,9 @@ cleanup_config() {
     return
   fi
 
+  # Do not touch configs
+  return
+
   rm -f /etc/bird/bird.conf
 }
 
